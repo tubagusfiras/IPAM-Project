@@ -501,7 +501,6 @@ export default function BlockDetail({ blockId, onBack }) {
   const [sites, setSites]           = useState([]);
   const [customers, setCustomers]   = useState([]);
   const [vlans, setVlans]           = useState([]);
-  const [showCalc, setShowCalc]     = useState(false);
   const [saveMsg, setSaveMsg]       = useState(null);
 
   const load = useCallback(()=>{
@@ -596,29 +595,89 @@ export default function BlockDetail({ blockId, onBack }) {
   const utilPct        = totalCount?Math.round(activeCount/totalCount*100):0;
   const utilColor      = utilPct>85?C.red:utilPct>60?C.amber:C.green;
 
+  const isV6block = data?.prefix?.includes(":");
+
+  const calcUsableRange = (prefix) => {
+    if (!prefix) return "";
+    try {
+      if (prefix.includes(":")) return prefix; // IPv6 - show as-is
+      const [addr, plenStr] = prefix.split("/");
+      const plen = parseInt(plenStr);
+      const parts = addr.split(".").map(Number);
+      const toInt = p => ((p[0]<<24)|(p[1]<<16)|(p[2]<<8)|p[3])>>>0;
+      const toIP = n => [(n>>>24)&255,(n>>>16)&255,(n>>>8)&255,n&255].join(".");
+      const base = toInt(parts);
+      const size = Math.pow(2, 32 - plen);
+      if (plen === 32) return addr;
+      if (plen === 31) return `${addr} – ${toIP((base+1)>>>0)}`;
+      const first = toIP((base+1)>>>0);
+      const last  = toIP((base+size-2)>>>0);
+      return `${first} – ${last}`;
+    } catch { return ""; }
+  };
+
+  const V4_MASKS = [24,25,26,27,28,29,30,31];
+  const V6_MASKS = [48,56,64,96,112,120,124,126,127];
+
+  const changeMask = async (alloc, newPlen) => {
+    const [addr] = alloc.prefix.split("/");
+    const newPrefix = `${addr}/${newPlen}`;
+    const payload = {
+      prefix:      newPrefix,
+      block_id:    blockId,
+      customer_id: alloc.customer_id||null,
+      vlan_id:     alloc.vlan_id||null,
+      status:      alloc.status,
+      description: alloc.description||"",
+      notes:       alloc.notes||"",
+    };
+    try {
+      await updateAllocation(alloc.id, payload);
+      setSaveMsg("Saved ✓");
+      setTimeout(()=>setSaveMsg(null),1500);
+      load();
+    } catch(e) {
+      setSaveMsg("Error: "+e.message);
+      setTimeout(()=>setSaveMsg(null),3000);
+    }
+  };
+
   const COLS = [
-    { label:"#",             width:36,  render:(_,i)=><span style={{color:C.text2,fontFamily:C.mono,fontSize:10}}>{i+1}</span> },
-    { label:"Prefix",        width:200, render:r=><Mono size={12}>{r.prefix}</Mono> },
-    { label:"Mask",          width:46,  render:r=><span style={{color:C.text2,fontFamily:C.mono,fontSize:11}}>/{r.prefix?.split("/")?.[1]}</span> },
-    { label:"Customer ✎",    width:200, render:r=>(
+    { label:"#",           width:36,  render:(_,i)=><span style={{color:C.text2,fontFamily:C.mono,fontSize:10}}>{i+1}</span> },
+    { label:"Customer ✎",  width:200, render:r=>(
       <InlineCell value={r.customer_name} placeholder="click to assign"
         suggestions={custNames} onCreate={v=>saveField(r.id,"customer_name",v)}
         onSave={v=>saveField(r.id,"customer_name",v)} />
     )},
-    { label:"VLAN ✎",        width:90,  render:r=>(
+    { label:"VLAN ✎",      width:80,  render:r=>(
       <InlineCell value={r.vlan_id?String(r.vlan_id):""} placeholder="—"
         suggestions={vlanVids} mono
         onSave={v=>saveField(r.id,"vlan_vid",v)} />
     )},
-    { label:"Description ✎", width:210, render:r=>(
+    { label:"Network IP",  width:150, render:r=><span style={{fontFamily:C.mono,fontSize:12,color:C.text0}}>{r.prefix?.split("/")?.[0]}</span> },
+    { label:"/Mask ▼",     width:80,  render:r=>(
+      <select value={r.prefix?.split("/")?.[1]||""}
+        onChange={e=>changeMask(r, parseInt(e.target.value))}
+        onClick={e=>e.stopPropagation()}
+        style={{background:"transparent",border:`1px solid ${C.border}`,color:C.cyan,
+          fontSize:11,fontFamily:C.mono,cursor:"pointer",outline:"none",
+          borderRadius:4,padding:"2px 4px"
+        }}>
+        {(isV6block?V6_MASKS:V4_MASKS).map(p=>(
+          <option key={p} value={p} style={{background:C.bg2,color:C.text0}}>/{p}</option>
+        ))}
+      </select>
+    )},
+    { label:"Usable Range", width:220, render:r=><span style={{fontFamily:C.mono,fontSize:11,color:C.text2}}>{calcUsableRange(r.prefix)}</span> },
+    { label:"Description ✎",width:180, render:r=>(
       <InlineCell value={r.description} placeholder="add description"
         onSave={v=>saveField(r.id,"description",v)} />
     )},
-    { label:"Notes ✎",       width:160, render:r=>(
+    { label:"Notes ✎",     width:140, render:r=>(
       <InlineCell value={r.notes} placeholder="add notes"
         onSave={v=>saveField(r.id,"notes",v)} />
     )},
-    { label:"Status ✎",      width:120, render:r=>(
+    { label:"Status ▼",    width:120, render:r=>(
       <select value={r.status}
         onChange={e=>saveField(r.id,"status",e.target.value)}
         onClick={e=>e.stopPropagation()}
@@ -631,7 +690,7 @@ export default function BlockDetail({ blockId, onBack }) {
         {statusOpts.map(o=><option key={o.value} value={o.value} style={{background:C.bg2,color:C.text0}}>{o.label}</option>)}
       </select>
     )},
-    { label:"Del",            width:50,  render:r=>(
+    { label:"Del",          width:50,  render:r=>(
       <Btn size="sm" variant="danger" onClick={e=>{e.stopPropagation();setConfirm(r);}}>✕</Btn>
     )},
   ];
@@ -662,9 +721,6 @@ export default function BlockDetail({ blockId, onBack }) {
             <StatusBadge status={data.status}/>
           </div>
           <div style={{display:"flex",gap:8}}>
-            <Btn size="sm" variant={showCalc?"primary":"ghost"} onClick={()=>setShowCalc(v=>!v)}>
-              🧮 Subnet Calculator
-            </Btn>
             <Btn size="sm" variant="ghost" onClick={()=>setEditModal(true)}>Edit Block</Btn>
             <Btn size="sm" onClick={()=>setAllocModal({})}>+ Add Allocation</Btn>
           </div>
@@ -693,18 +749,14 @@ export default function BlockDetail({ blockId, onBack }) {
         </div>
       </div>
 
-      {/* Subnet calculator */}
-      {showCalc && (
-        <SubnetCalculator
-          blockPrefix={data.prefix}
-          allocations={data.allocations||[]}
-          onSelect={prefix=>{
-            setAllocModal({prefix});
-            setShowCalc(false);
-          }}
-        />
-      )}
-
+      {/* Subnet calculator - always visible panel */}
+      <SubnetCalculator
+        blockPrefix={data.prefix}
+        allocations={data.allocations||[]}
+        onSelect={prefix=>{
+          setAllocModal({prefix});
+        }}
+      />
       {/* Allocation table */}
       <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:8,padding:14}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>

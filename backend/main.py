@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from typing import Optional, List
 from datetime import datetime
-import os, json
+import os, json, math, ipaddress
 
 import asyncpg
 from fastapi import FastAPI, HTTPException, Query, Depends
@@ -280,7 +280,7 @@ async def get_block(block_id: str, db=Depends(get_db)):
                b.prefix::text AS block_prefix, b.name AS block_name, b.asn AS block_asn,
                s.name AS site_name,
                c.id AS customer_id, c.name AS customer_name, c.code AS customer_code,
-               v.vid AS vlan_id, v.name AS vlan_name
+               v.vid AS vlan_vid, v.name AS vlan_name
         FROM allocations a
         JOIN ip_blocks b ON a.block_id = b.id
         LEFT JOIN sites s ON b.site_id = s.id
