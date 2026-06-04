@@ -21,25 +21,19 @@ def api_get(path):
         return json.loads(r.read())
 
 # ── PARSER HELPERS ────────────────────────────────────────────
-def calc_prefix_len(net_oct, bcast_oct, extra_cols):
-    EXT_COLS = [(4,29),(6,28),(8,27),(10,26),(12,25),(14,24)]
-    best = None
-    for col_idx, plen in EXT_COLS:
-        adj = col_idx - 2
-        if adj < len(extra_cols) and extra_cols[adj].isdigit():
-            best = plen
-    if best: return best
-    n = bcast_oct - net_oct + 1
-    if n <= 0: return 30
-    if n == 1: return 32
-    if n == 2: return 31
+def to_plen(size):
+    if size <= 0: return 30
     b = 1
-    while b < n: b <<= 1
+    while b < size: b <<= 1
+    import math
     return 32 - int(math.log2(b))
+
 
 def parse_ipv4(content):
     meta  = {"asn":None,"router":None,"operator":None,"prefix":None,"name":None}
-    allocs = []
+    data_rows = []
+    in_data = False
+
     for line in content.splitlines():
         cols = [c.strip() for c in line.split(",")]
         raw  = cols[0] if cols else ""
@@ -50,30 +44,64 @@ def parse_ipv4(content):
         elif raw.startswith("IP Name"):
             meta["operator"] = line.split(":",1)[1].strip().split(",")[0].strip(); continue
         try:
+            import ipaddress
             net = ipaddress.ip_network(raw, strict=False)
             if net.prefixlen <= 24 and not meta["prefix"]:
                 meta["prefix"] = str(net); meta["name"] = str(net)
             continue
         except ValueError: pass
-        if len(cols) < 4 or not meta["prefix"]: continue
-        if cols[0] in ("Alokasi","Mask (Dec) :") or cols[2] in ("Network","/30","/29","/28"): continue
-        if not cols[2].isdigit() or not cols[3].isdigit(): continue
-        net_oct, bcast_oct = int(cols[2]), int(cols[3])
-        customer = cols[0].strip() or None
-        notes    = cols[17].strip() if len(cols) > 17 else ""
-        vlan     = None
-        vr       = cols[1].strip()
+        if raw == "Alokasi": in_data = True; continue
+        if not in_data: continue
+        if len(cols) < 4: continue
+        if cols[2] in ("Network","/30","/29","/28","") or not cols[2].isdigit(): continue
+        if not cols[3].isdigit(): continue
+        data_rows.append({
+            "name":  cols[0],
+            "vlan":  cols[1],
+            "net":   int(cols[2]),
+            "bcast": int(cols[3]),
+            "extra": cols[4:16],
+            "notes": cols[17].strip() if len(cols) > 17 else "",
+        })
+
+    if not meta.get("prefix"):
+        return meta, []
+
+    import ipaddress
+    base_ip = str(ipaddress.ip_network(meta["prefix"],strict=False).network_address).rsplit(".",1)[0]
+
+    # Group: empty name AND empty vlan = continuation
+    groups = []
+    cur = None
+    for r in data_rows:
+        if r["name"] or r["vlan"]:
+            if cur: groups.append(cur)
+            cur = {"name":r["name"] or None,"vlan":r["vlan"],"notes":r["notes"],"rows":[r]}
+        else:
+            if cur: cur["rows"].append(r)
+            else:
+                cur = {"name":None,"vlan":"","notes":r["notes"],"rows":[r]}
+                groups.append(cur); cur = None
+    if cur: groups.append(cur)
+
+    allocs = []
+    for g in groups:
+        min_net   = min(r["net"]   for r in g["rows"])
+        max_bcast = max(r["bcast"] for r in g["rows"])
+        size      = max_bcast - min_net + 1
+        plen      = to_plen(size)
+        prefix    = f"{base_ip}.{min_net}/{plen}"
+        try: ipaddress.ip_network(prefix, strict=False)
+        except ValueError: continue
+        vlan = None
+        vr   = g["vlan"].strip()
         if vr.isdigit(): vlan = int(vr)
         elif " " in vr:
             for p in vr.split():
                 if p.isdigit(): vlan=int(p); break
-        base = str(ipaddress.ip_network(meta["prefix"],strict=False).network_address).rsplit(".",1)[0]
-        plen = calc_prefix_len(net_oct, bcast_oct, cols[2:])
-        prefix = f"{base}.{net_oct}/{plen}"
-        try: ipaddress.ip_network(prefix, strict=False)
-        except ValueError: continue
+        customer = g["name"]
         allocs.append({"prefix":prefix,"customer":customer,"vlan":vlan,
-                        "description":customer or "","notes":notes,
+                        "description":customer or "","notes":g["notes"],
                         "status":"active" if customer else "available"})
     return meta, allocs
 

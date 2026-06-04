@@ -400,34 +400,18 @@ async def delete_allocation(alloc_id: str, db=Depends(get_db)):
 import csv, io, ipaddress
 from fastapi import UploadFile, File, Form
 
-def calc_prefix_len(net_oct: int, bcast_oct: int, cols: list) -> int:
-    base_size = bcast_oct - net_oct + 1
-    if base_size <= 0: return 30
-    def s2p(s):
-        if s<=0: return 30
-        if s==1: return 32
-        if s==2: return 31
-        b=1
-        while b<s: b<<=1
-        return 32-int(math.log2(b))
-    base_plen = s2p(base_size)
-    if base_plen == 31:
-        for ci in [5,7,9,11,13,15]:
-            if ci < len(cols) and cols[ci].strip().isdigit():
-                return s2p(int(cols[ci].strip()) - net_oct + 1)
-        return 31
-    else:
-        best = None
-        for ci, plen in [(4,29),(6,28),(8,27),(10,26),(12,25),(14,24)]:
-            if ci < len(cols) and cols[ci].strip().isdigit():
-                best = plen
-        return best if best else base_plen
+def to_plen(size):
+    if size <= 0: return 30
+    b = 1
+    while b < size: b <<= 1
+    return 32 - int(math.log2(b))
 
 
 def parse_ipv4_csv(content: str):
     lines    = content.splitlines()
     meta     = {"asn":None,"router":None,"operator":None,"prefix":None,"name":None}
-    raw_rows = []
+    data_rows = []
+    in_data  = False
 
     for line in lines:
         cols = [c.strip() for c in line.split(",")]
@@ -448,90 +432,78 @@ def parse_ipv4_csv(content: str):
             continue
         except ValueError: pass
 
-        if len(cols) < 4 or not meta["prefix"]: continue
-        if cols[0] in ("Alokasi","Mask (Dec) :") or cols[2] in ("Network","/30"): continue
-        if not cols[2].isdigit() or not cols[3].isdigit(): continue
+        if raw == "Alokasi":
+            in_data = True; continue
+        if not in_data: continue
+        if len(cols) < 4: continue
+        if cols[2] in ("Network","/30","/29","/28","") or not cols[2].isdigit(): continue
+        if not cols[3].isdigit(): continue
 
-        net_oct   = int(cols[2])
-        bcast_oct = int(cols[3])
-        customer  = cols[0].strip() or None
-        notes     = cols[17].strip() if len(cols) > 17 else ""
-        vlan      = None
-        vr        = cols[1].strip()
+        data_rows.append({
+            "name":  cols[0],
+            "vlan":  cols[1],
+            "net":   int(cols[2]),
+            "bcast": int(cols[3]),
+            "extra": cols[4:16],
+            "notes": cols[17].strip() if len(cols) > 17 else "",
+        })
+
+    if not meta.get("prefix"):
+        return meta, []
+
+    base_ip = str(ipaddress.ip_network(meta["prefix"], strict=False).network_address).rsplit(".",1)[0]
+
+    # Group rows: empty name AND empty vlan = continuation of previous group
+    groups = []
+    cur = None
+    for r in data_rows:
+        if r["name"] or r["vlan"]:
+            if cur: groups.append(cur)
+            cur = {
+                "name":  r["name"] or None,
+                "vlan":  r["vlan"],
+                "notes": r["notes"],
+                "rows":  [r],
+            }
+        else:
+            if cur:
+                cur["rows"].append(r)
+            else:
+                cur = {"name": None, "vlan": "", "notes": r["notes"], "rows": [r]}
+                groups.append(cur)
+                cur = None
+    if cur: groups.append(cur)
+
+    # Build allocations from groups
+    allocations = []
+    for g in groups:
+        min_net   = min(r["net"]   for r in g["rows"])
+        max_bcast = max(r["bcast"] for r in g["rows"])
+        size      = max_bcast - min_net + 1
+        plen      = to_plen(size)
+        prefix    = f"{base_ip}.{min_net}/{plen}"
+
+        try: ipaddress.ip_network(prefix, strict=False)
+        except: continue
+
+        # Parse VLAN - handle /31 etc in vlan col
+        vlan = None
+        vr   = g["vlan"].strip()
         if vr.isdigit(): vlan = int(vr)
         elif " " in vr:
             for p in vr.split():
                 if p.isdigit(): vlan = int(p); break
 
-        plen   = calc_prefix_len(net_oct, bcast_oct, cols)
-        base   = str(ipaddress.ip_network(meta["prefix"],strict=False).network_address).rsplit(".",1)[0]
-        prefix = f"{base}.{net_oct}/{plen}"
-        try: ipaddress.ip_network(prefix, strict=False)
-        except: continue
-
-        raw_rows.append({
-            "net_oct":     net_oct,
-            "bcast_oct":   bcast_oct,
+        customer = g["name"]
+        allocations.append({
             "prefix":      prefix,
             "customer":    customer,
             "vlan":        vlan,
-            "notes":       notes,
+            "notes":       g["notes"],
             "plen":        plen,
             "status":      "active" if customer else "available",
             "description": customer or "",
         })
-
-    # ── Overlap correction ──────────────────────────────────────────────
-    base_ip   = str(ipaddress.ip_network(meta["prefix"],strict=False).network_address).rsplit(".",1)[0]
-    corrected = []
-    for i, r in enumerate(raw_rows):
-        if i + 1 < len(raw_rows) and r["plen"] < 30:
-            next_net = raw_rows[i+1]["net_oct"]
-            try:
-                claimed     = ipaddress.ip_network(r["prefix"], strict=False)
-                claimed_end = int(str(claimed.broadcast_address).split(".")[-1])
-                if claimed_end >= next_net:
-                    bs = r["bcast_oct"] - r["net_oct"] + 1
-                    if bs <= 0: bs = 4
-                    b = 1
-                    while b < bs: b <<= 1
-                    cp     = 32 - int(math.log2(b))
-                    cpfx   = f"{base_ip}.{r['net_oct']}/{cp}"
-                    try:
-                        ipaddress.ip_network(cpfx, strict=False)
-                        r = {**r, "prefix": cpfx, "plen": cp}
-                    except: pass
-            except: pass
-        corrected.append(r)
-
-    # ── Filter sub-rows ─────────────────────────────────────────────────
-    claimed_ranges = []
-    for r in corrected:
-        if r["customer"] and r["plen"] < 24:
-            try:
-                net = ipaddress.ip_network(r["prefix"], strict=False)
-                ln  = int(str(net.network_address).split(".")[-1])
-                lb  = int(str(net.broadcast_address).split(".")[-1])
-                claimed_ranges.append((ln, lb, r["plen"]))
-            except: pass
-
-    allocations = []
-    for r in corrected:
-        if r["customer"]:
-            allocations.append(r)
-        else:
-            try:
-                net = ipaddress.ip_network(r["prefix"], strict=False)
-                ln  = int(str(net.network_address).split(".")[-1])
-                lb  = int(str(net.broadcast_address).split(".")[-1])
-                is_sub = any(
-                    cplen < r["plen"] and ln >= cn and lb <= cb
-                    for cn, cb, cplen in claimed_ranges
-                )
-                if not is_sub:
-                    allocations.append(r)
-            except:
-                allocations.append(r)
 
     return meta, allocations
 
