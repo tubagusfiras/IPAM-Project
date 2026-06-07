@@ -424,6 +424,17 @@ def parse_ipv4_csv(content: str):
         elif raw.startswith("IP Name"):
             meta["operator"] = line.split(":",1)[1].strip().split(",")[0].strip(); continue
 
+        # Format lama: "163.61.201.0/24 | 153816" — prefix dan ASN di col0 dipisah pipe
+        if "|" in raw and not meta["prefix"]:
+            parts = raw.split("|")
+            try:
+                net = ipaddress.ip_network(parts[0].strip(), strict=False)
+                if net.prefixlen <= 24:
+                    meta["prefix"] = str(net); meta["name"] = str(net)
+                    if len(parts) > 1 and parts[1].strip().isdigit():
+                        meta["asn"] = parts[1].strip()
+                continue
+            except ValueError: pass
         try:
             net = ipaddress.ip_network(raw, strict=False)
             if net.prefixlen <= 24 and not meta["prefix"]:
