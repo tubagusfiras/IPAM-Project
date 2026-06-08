@@ -7,6 +7,7 @@ CREATE EXTENSION IF NOT EXISTS "citext";
 CREATE TYPE ip_version_t   AS ENUM ('IPv4', 'IPv6');
 CREATE TYPE block_status_t AS ENUM ('active', 'reserved', 'deprecated');
 CREATE TYPE alloc_status_t AS ENUM ('active', 'reserved', 'available', 'deprecated');
+CREATE TYPE owner_type_t  AS ENUM ('customer', 'internal', 'ptp', 'peering', 'management', 'reserved');
 CREATE TYPE vlan_status_t  AS ENUM ('active', 'reserved', 'deprecated');
 
 -- ------------------------------------------------------------
@@ -96,6 +97,7 @@ CREATE TABLE allocations (
     customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
     vlan_id     UUID REFERENCES vlans(id) ON DELETE SET NULL,
     status      alloc_status_t NOT NULL DEFAULT 'active',
+    owner_type  owner_type_t   NOT NULL DEFAULT 'customer',
     description TEXT,
     notes       TEXT,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -153,19 +155,23 @@ SELECT
     a.prefix::text,
     a.ip_version,
     a.status,
+    a.owner_type,
     a.description,
     a.notes,
     a.created_at,
     a.updated_at,
+    a.block_id,
     b.prefix::text AS block_prefix,
     b.name         AS block_name,
     b.asn          AS block_asn,
     b.router       AS block_router,
     s.name         AS site_name,
+    a.customer_id,
     c.name         AS customer_name,
     c.code         AS customer_code,
     c.contact_email AS customer_email,
-    v.vid          AS vlan_id,
+    a.vlan_id,
+    v.vid          AS vlan_vid,
     v.name         AS vlan_name
 FROM allocations a
 JOIN ip_blocks b  ON a.block_id    = b.id

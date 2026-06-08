@@ -247,6 +247,15 @@
     cursor: pointer;
   }
 
+  /* Fix dropdown option colors di dark mode */
+  select option {
+    background: var(--bg-secondary, var(--bg));
+    color: var(--text);
+  }
+  select option:disabled {
+    color: var(--text-dim);
+  }
+
   /* ── Sidebar ── */
   .sidebar-item {
     @apply flex items-center gap-3 font-medium;

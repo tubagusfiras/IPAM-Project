@@ -275,12 +275,12 @@ async def get_block(block_id: str, db=Depends(get_db)):
     """, block_id)
     if not row: raise HTTPException(404, "Block not found")
     allocs = await db.fetch("""
-        SELECT a.id, a.prefix::text, a.ip_version, a.status, a.description, a.notes,
+        SELECT a.id, a.prefix::text, a.ip_version, a.status, a.owner_type, a.description, a.notes,
                a.created_at, a.updated_at, a.block_id,
                b.prefix::text AS block_prefix, b.name AS block_name, b.asn AS block_asn,
                s.name AS site_name,
-               c.id AS customer_id, c.name AS customer_name, c.code AS customer_code,
-               v.vid AS vlan_vid, v.name AS vlan_name
+               a.customer_id, c.name AS customer_name, c.code AS customer_code,
+               a.vlan_id, v.vid AS vlan_vid, v.name AS vlan_name
         FROM allocations a
         JOIN ip_blocks b ON a.block_id = b.id
         LEFT JOIN sites s ON b.site_id = s.id
@@ -321,6 +321,7 @@ class AllocIn(BaseModel):
     customer_id: Optional[str] = None
     vlan_id: Optional[str] = None
     status: str = "active"
+    owner_type: str = "customer"
     description: Optional[str] = None
     notes: Optional[str] = None
 
@@ -350,12 +351,12 @@ async def list_allocations(
     where = " AND ".join(conditions)
     params.extend([limit, offset])
     rows = await db.fetch(f"""
-        SELECT a.id, a.prefix::text, a.ip_version, a.status, a.description, a.notes,
-               a.created_at, a.updated_at,
+        SELECT a.id, a.prefix::text, a.ip_version, a.status, a.owner_type, a.description, a.notes,
+               a.created_at, a.updated_at, a.block_id,
                b.prefix::text AS block_prefix, b.name AS block_name,
                s.name AS site_name,
-               c.id AS customer_id, c.name AS customer_name, c.code AS customer_code,
-               v.vid AS vlan_vid, v.name AS vlan_name
+               a.customer_id, c.name AS customer_name, c.code AS customer_code,
+               a.vlan_id, v.vid AS vlan_vid, v.name AS vlan_name
         FROM allocations a
         JOIN ip_blocks b ON a.block_id=b.id
         LEFT JOIN sites s ON b.site_id=s.id
@@ -376,16 +377,16 @@ async def list_allocations(
 @app.post("/api/v1/allocations", status_code=201)
 async def create_allocation(body: AllocIn, db=Depends(get_db)):
     row = await db.fetchrow(
-        "INSERT INTO allocations (prefix,block_id,customer_id,vlan_id,status,description,notes) VALUES ($1::cidr,$2::uuid,$3::uuid,$4::uuid,$5::alloc_status_t,$6,$7) RETURNING *",
-        body.prefix, body.block_id, body.customer_id, body.vlan_id, body.status, body.description, body.notes
+        "INSERT INTO allocations (prefix,block_id,customer_id,vlan_id,status,owner_type,description,notes) VALUES ($1::cidr,$2::uuid,$3::uuid,$4::uuid,$5::alloc_status_t,$6::owner_type_t,$7,$8) RETURNING *",
+        body.prefix, body.block_id, body.customer_id, body.vlan_id, body.status, body.owner_type, body.description, body.notes
     )
     return {**dict(row), "prefix": str(row["prefix"])}
 
 @app.put("/api/v1/allocations/{alloc_id}")
 async def update_allocation(alloc_id: str, body: AllocIn, db=Depends(get_db)):
     row = await db.fetchrow(
-        "UPDATE allocations SET prefix=$1::inet,block_id=$2::uuid,customer_id=$3::uuid,vlan_id=$4::uuid,status=$5::alloc_status_t,description=$6,notes=$7 WHERE id=$8::uuid RETURNING *",
-        body.prefix, body.block_id, body.customer_id, body.vlan_id, body.status, body.description, body.notes, alloc_id
+        "UPDATE allocations SET prefix=$1::inet,block_id=$2::uuid,customer_id=$3::uuid,vlan_id=$4::uuid,status=$5::alloc_status_t,owner_type=$6::owner_type_t,description=$7,notes=$8 WHERE id=$9::uuid RETURNING *",
+        body.prefix, body.block_id, body.customer_id, body.vlan_id, body.status, body.owner_type, body.description, body.notes, alloc_id
     )
     if not row: raise HTTPException(404, "Allocation not found")
     return {**dict(row), "prefix": str(row["prefix"])}
@@ -675,20 +676,22 @@ async def import_confirm(body: ImportConfirm, db=Depends(get_db)):
 
                     # upsert allocation
                     alloc_status = a.get("status") or "active"
+                    owner_type = a.get("owner_type") or ("customer" if customer_id else "internal")
                     await db.execute("""
                         INSERT INTO allocations
-                            (prefix, block_id, customer_id, vlan_id, status, description, notes)
-                        VALUES ($1::inet, $2, $3, $4, $5::alloc_status_t, $6, $7)
+                            (prefix, block_id, customer_id, vlan_id, status, owner_type, description, notes)
+                        VALUES ($1::inet, $2, $3, $4, $5::alloc_status_t, $6::owner_type_t, $7, $8)
                         ON CONFLICT (prefix) DO UPDATE SET
                             block_id=EXCLUDED.block_id,
                             customer_id=EXCLUDED.customer_id,
                             vlan_id=EXCLUDED.vlan_id,
                             status=EXCLUDED.status,
+                            owner_type=EXCLUDED.owner_type,
                             description=EXCLUDED.description,
                             notes=EXCLUDED.notes,
                             updated_at=NOW()
                     """, a["prefix"], block_id, customer_id, vlan_id,
-                         alloc_status, a.get("description") or "", a.get("notes") or "")
+                         alloc_status, owner_type, a.get("description") or "", a.get("notes") or "")
                     ok += 1
             except Exception as e:
                 print(f"SKIP alloc {a.get('prefix')}: {e}")
