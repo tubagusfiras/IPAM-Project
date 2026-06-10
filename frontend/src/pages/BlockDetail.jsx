@@ -1,14 +1,203 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { getBlock, updateBlock, getSites, getCustomers, getVlans,
-         createAllocation, updateAllocation, deleteAllocation } from "../api.js";
-import { C, Mono, StatusBadge, VersionBadge, Btn, Input, Select,
-         SearchBar, Modal, Confirm, Alert } from "../components/ui.jsx";
+         createAllocation, updateAllocation, deleteAllocation, createCustomer, createVlan } from "../api.js";
 
-// ── AUTOCOMPLETE INPUT ───────────────────────────────────────
-function AutocompleteInput({ value, onChange, suggestions=[], placeholder, mono, onCreate }) {
+// ── CONSTANTS ────────────────────────────────────────────────────────────────
+const OWNER_TYPES = [
+  { value:"customer",   label:"Customer",   color:"var(--accent)",   icon:"👤" },
+  { value:"internal",   label:"Internal",   color:"var(--accent2)",  icon:"🖥️" },
+  { value:"ptp",        label:"PTP",        color:"var(--warning)",  icon:"🔗" },
+  { value:"peering",    label:"Peering",    color:"#a855f7",         icon:"🌐" },
+  { value:"management", label:"Mgmt",       color:"var(--info)",     icon:"⚙️" },
+  { value:"reserved",   label:"Reserved",   color:"var(--text-dim)", icon:"🔒" },
+];
+
+const STATUS_OPTS = ["active","available","reserved","deprecated"];
+
+const STATUS_STYLE = {
+  active:     { color:"var(--success)", bg:"var(--success-surface)", border:"var(--success-border)" },
+  available:  { color:"var(--accent2)", bg:"rgba(56,232,198,0.1)",   border:"rgba(56,232,198,0.25)" },
+  reserved:   { color:"#a855f7",        bg:"rgba(168,85,247,0.1)",   border:"rgba(168,85,247,0.25)" },
+  deprecated: { color:"var(--warning)", bg:"var(--warning-surface)", border:"var(--warning-border)" },
+};
+
+const V4_MASKS = [24,25,26,27,28,29,30,31];
+const V6_MASKS = [48,56,64,96,112,120,124,126,127];
+
+// ── HELPERS ──────────────────────────────────────────────────────────────────
+// ── SUBNET VALIDATION ───────────────────────────────────────────────────────
+function ipToInt(ip) {
+  const p = ip.split(".").map(Number);
+  return ((p[0]<<24)|(p[1]<<16)|(p[2]<<8)|p[3])>>>0;
+}
+
+function intToIp(n) {
+  return [(n>>>24)&255,(n>>>16)&255,(n>>>8)&255,n&255].join(".");
+}
+
+function isAligned(ip, plen) {
+  // Check if IP is aligned to prefix boundary
+  const size = Math.pow(2, 32-plen);
+  const ipInt = ipToInt(ip);
+  return (ipInt % size) === 0;
+}
+
+function snapToBoundary(ip, plen) {
+  // Snap IP down to nearest aligned boundary for given plen
+  const size = Math.pow(2, 32-plen);
+  const ipInt = ipToInt(ip);
+  const aligned = Math.floor(ipInt / size) * size;
+  return intToIp(aligned>>>0);
+}
+
+function nextValidBoundary(ip, plen, allocations) {
+  // Find next aligned boundary that doesn't overlap existing allocations
+  const size = Math.pow(2, 32-plen);
+  let ipInt = ipToInt(ip);
+  // Align up
+  if (ipInt % size !== 0) ipInt = (Math.floor(ipInt/size)+1)*size;
+
+  for (let attempt=0; attempt<256; attempt++) {
+    const candidate = ipInt + (attempt * size);
+    const candEnd   = candidate + size - 1;
+    let overlaps = false;
+    for (const a of allocations) {
+      try {
+        const [addr, p] = a.prefix.split("/");
+        const aStart = ipToInt(addr);
+        const aEnd   = aStart + Math.pow(2, 32-parseInt(p)) - 1;
+        if (candidate <= aEnd && candEnd >= aStart) { overlaps=true; break; }
+      } catch {}
+    }
+    if (!overlaps) return intToIp(candidate>>>0);
+  }
+  return null;
+}
+
+function validateSubnet(prefix, allocations, blockPrefix) {
+  // Returns { valid, errors[], warnings[] }
+  const errors   = [];
+  const warnings = [];
+
+  if (!prefix || !prefix.includes("/")) return { valid:false, errors:["Invalid prefix format"], warnings };
+
+  try {
+    const [ip, plenStr] = prefix.split("/");
+    const plen = parseInt(plenStr);
+    const parts = ip.split(".").map(Number);
+    if (parts.length !== 4 || parts.some(p=>isNaN(p)||p<0||p>255))
+      return { valid:false, errors:["Invalid IP address"], warnings };
+    if (isNaN(plen) || plen < 1 || plen > 32)
+      return { valid:false, errors:["Invalid prefix length"], warnings };
+
+    const ipInt  = ipToInt(ip);
+    const size   = Math.pow(2, 32-plen);
+    const ipEnd  = (ipInt + size - 1)>>>0;
+
+    // Check block containment
+    if (blockPrefix) {
+      const [bAddr, bPlen] = blockPrefix.split("/");
+      const bStart = ipToInt(bAddr);
+      const bSize  = Math.pow(2, 32-parseInt(bPlen));
+      const bEnd   = (bStart+bSize-1)>>>0;
+      if (ipInt < bStart || ipEnd > bEnd)
+        errors.push(`Prefix is outside block ${blockPrefix}`);
+    }
+
+    // Check alignment
+    if (!isAligned(ip, plen)) {
+      const snapped = snapToBoundary(ip, plen);
+      errors.push(`Not aligned — should start at ${snapped}/${plen}`);
+    }
+
+    // Check overlaps
+    for (const a of (allocations||[])) {
+      try {
+        const [aAddr, aPlen] = a.prefix.split("/");
+        const aStart = ipToInt(aAddr);
+        const aSize  = Math.pow(2, 32-parseInt(aPlen));
+        const aEnd   = (aStart+aSize-1)>>>0;
+        if (ipInt <= aEnd && ipEnd >= aStart) {
+          if (ipInt===aStart && ipEnd===aEnd)
+            warnings.push(`Prefix already exists as ${a.prefix}`);
+          else
+            errors.push(`Overlaps with ${a.prefix} (${a.description||a.customer_name||"allocated"})`);
+        }
+      } catch {}
+    }
+
+  } catch(e) {
+    errors.push("Validation error: " + e.message);
+  }
+
+  return { valid: errors.length===0, errors, warnings };
+}
+
+function changeMaskAligned(currentPrefix, newPlen, allocations) {
+  // Change mask and snap to valid aligned boundary
+  if (!currentPrefix) return `0.0.0.0/${newPlen}`;
+  try {
+    const [ip] = currentPrefix.split("/");
+    const snapped = snapToBoundary(ip, newPlen);
+    // Check if snapped is free, if not find next
+    const size   = Math.pow(2, 32-newPlen);
+    const ipInt  = ipToInt(snapped);
+    const ipEnd  = (ipInt+size-1)>>>0;
+    let overlaps = false;
+    for (const a of (allocations||[])) {
+      try {
+        const [aAddr,aPlen] = a.prefix.split("/");
+        const aStart = ipToInt(aAddr);
+        const aEnd   = (aStart+Math.pow(2,32-parseInt(aPlen))-1)>>>0;
+        if (ipInt<=aEnd && ipEnd>=aStart) { overlaps=true; break; }
+      } catch {}
+    }
+    if (!overlaps) return `${snapped}/${newPlen}`;
+    // Find next valid
+    const next = nextValidBoundary(snapped, newPlen, allocations);
+    return next ? `${next}/${newPlen}` : `${snapped}/${newPlen}`;
+  } catch {
+    return `0.0.0.0/${newPlen}`;
+  }
+}
+
+function calcUsableRange(prefix) {
+  if (!prefix) return "";
+  try {
+    if (prefix.includes(":")) return prefix;
+    const [addr, plenStr] = prefix.split("/");
+    const plen = parseInt(plenStr);
+    const parts = addr.split(".").map(Number);
+    const toInt = p => ((p[0]<<24)|(p[1]<<16)|(p[2]<<8)|p[3])>>>0;
+    const toIP  = n => [(n>>>24)&255,(n>>>16)&255,(n>>>8)&255,n&255].join(".");
+    const base  = toInt(parts);
+    const size  = Math.pow(2, 32-plen);
+    if (plen === 32) return addr;
+    if (plen === 31) return `${addr} — ${toIP((base+1)>>>0)}`;
+    return `${toIP((base+1)>>>0)} — ${toIP((base+size-2)>>>0)}`;
+  } catch { return ""; }
+}
+
+function calcUsableCount(prefix) {
+  if (!prefix) return 0;
+  try {
+    if (prefix.includes(":")) return 2;
+    const plen = parseInt(prefix.split("/")[1]);
+    if (plen === 32) return 1;
+    if (plen === 31) return 2;
+    return Math.pow(2, 32-plen) - 2;
+  } catch { return 0; }
+}
+
+function ownerInfo(type) {
+  return OWNER_TYPES.find(o=>o.value===type) || OWNER_TYPES[0];
+}
+
+// ── AUTOCOMPLETE INPUT ───────────────────────────────────────────────────────
+function AutoInput({ value, onChange, suggestions=[], placeholder, mono, onCreate }) {
   const [open, setOpen]   = useState(false);
   const [query, setQuery] = useState(value||"");
-  const ref               = useRef();
+  const ref = useRef();
 
   useEffect(()=>{ setQuery(value||""); },[value]);
 
@@ -18,56 +207,48 @@ function AutocompleteInput({ value, onChange, suggestions=[], placeholder, mono,
 
   const select = v => { setQuery(v); onChange(v); setOpen(false); };
 
-  const handleKey = e => {
-    if (e.key==="Enter") {
-      if (filtered.length===1) select(filtered[0]);
-      else if (query && onCreate) { onCreate(query); setOpen(false); }
-      else if (query) onChange(query);
-    }
-    if (e.key==="Escape") setOpen(false);
-  };
-
   return (
-    <div ref={ref} style={{position:"relative"}}>
-      <input
-        value={query}
+    <div ref={ref} style={{position:"relative",width:"100%"}}>
+      <input value={query}
         onChange={e=>{ setQuery(e.target.value); onChange(e.target.value); setOpen(true); }}
         onFocus={()=>setOpen(true)}
         onBlur={()=>setTimeout(()=>setOpen(false),150)}
-        onKeyDown={handleKey}
-        placeholder={placeholder}
-        style={{
-          width:"100%", boxSizing:"border-box",
-          background:C.bg1, border:`1px solid ${C.border}`, color:C.text0,
-          padding:"7px 11px", borderRadius:5, fontSize:13, outline:"none",
-          fontFamily: mono?C.mono:"inherit",
+        onKeyDown={e=>{
+          if(e.key==="Enter") {
+            if(filtered.length===1) select(filtered[0]);
+            else if(query && onCreate) { onCreate(query); setOpen(false); }
+            else if(query) onChange(query);
+          }
+          if(e.key==="Escape") setOpen(false);
         }}
-        onFocus={e=>e.target.style.borderColor=C.blue}
-        onBlur={e=>e.target.style.borderColor=C.border}
+        placeholder={placeholder}
+        className="input"
+        style={{fontSize:12,padding:"4px 8px",fontFamily:mono?"var(--font-mono)":"inherit"}}
       />
       {open && (filtered.length>0 || (query && onCreate)) && (
         <div style={{
-          position:"absolute", top:"100%", left:0, right:0, zIndex:100,
-          background:C.bg2, border:`1px solid ${C.border2}`, borderRadius:5,
-          boxShadow:"0 8px 24px #0008", maxHeight:200, overflowY:"auto",
+          position:"absolute",top:"100%",left:0,right:0,zIndex:200,
+          background:"var(--bg-secondary,var(--bg))",
+          border:"1px solid var(--border-soft)",
+          borderRadius:"var(--radius-sm)",
+          boxShadow:"var(--shadow-lg)",
+          maxHeight:180,overflowY:"auto",
         }}>
           {filtered.map(s=>(
             <div key={s} onMouseDown={()=>select(s)} style={{
-              padding:"7px 12px", cursor:"pointer", fontSize:12,
-              color:C.text0, fontFamily:mono?C.mono:"inherit",
-              borderBottom:`1px solid ${C.border}`,
+              padding:"6px 10px",cursor:"pointer",fontSize:12,
+              color:"var(--text)",fontFamily:mono?"var(--font-mono)":"inherit",
+              borderBottom:"1px solid var(--border-subtle)",
             }}
-            onMouseEnter={e=>e.currentTarget.style.background=C.bg3}
+            onMouseEnter={e=>e.currentTarget.style.background="var(--surface-3)"}
             onMouseLeave={e=>e.currentTarget.style.background="transparent"}
             >{s}</div>
           ))}
           {query && !filtered.find(s=>s.toLowerCase()===query.toLowerCase()) && onCreate && (
             <div onMouseDown={()=>{ onCreate(query); setOpen(false); }} style={{
-              padding:"7px 12px", cursor:"pointer", fontSize:12,
-              color:C.green, borderTop:`1px solid ${C.border}`,
-            }}>
-              + Create "{query}"
-            </div>
+              padding:"6px 10px",cursor:"pointer",fontSize:12,
+              color:"var(--accent)",borderTop:"1px solid var(--border-subtle)",
+            }}>+ Create "{query}"</div>
           )}
         </div>
       )}
@@ -75,11 +256,11 @@ function AutocompleteInput({ value, onChange, suggestions=[], placeholder, mono,
   );
 }
 
-// ── INLINE CELL ──────────────────────────────────────────────
-function InlineCell({ value, onSave, type="text", mono, placeholder, suggestions=[], onCreate }) {
+// ── INLINE CELL ──────────────────────────────────────────────────────────────
+function InlineCell({ value, onSave, mono, placeholder, suggestions=[], onCreate, type="text" }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal]         = useState(value||"");
-  const ref                   = useRef();
+  const ref = useRef();
 
   useEffect(()=>{ setVal(value||""); },[value]);
   useEffect(()=>{ if(editing && ref.current) ref.current.focus(); },[editing]);
@@ -90,418 +271,560 @@ function InlineCell({ value, onSave, type="text", mono, placeholder, suggestions
     if (final !== (value||"")) await onSave(final||null);
   };
 
-  const cancel = ()=>{ setEditing(false); setVal(value||""); };
-
   if (!editing) return (
     <div onClick={()=>setEditing(true)} title="Click to edit" style={{
-      cursor:"text", padding:"2px 4px", borderRadius:3, minWidth:40,
-      color: value?C.text0:C.text2, fontSize:12,
-      fontFamily: mono?C.mono:"inherit",
-      fontStyle: value?"normal":"italic",
-      border:"1px solid transparent", transition:"border 0.1s",
+      cursor:"text", padding:"3px 6px", borderRadius:"var(--radius-sm)",
+      minWidth:40, color:value?"var(--text)":"var(--text-dim)",
+      fontSize:12, fontFamily:mono?"var(--font-mono)":"inherit",
+      fontStyle:value?"normal":"italic",
+      border:"1px solid transparent", transition:"border var(--transition)",
     }}
-    onMouseEnter={e=>e.currentTarget.style.borderColor=C.border2}
+    onMouseEnter={e=>e.currentTarget.style.borderColor="var(--border-soft)"}
     onMouseLeave={e=>e.currentTarget.style.borderColor="transparent"}
-    >{value||<span style={{color:C.text2,fontSize:11}}>{placeholder||"—"}</span>}</div>
+    >{value||<span style={{fontSize:11}}>{placeholder||"—"}</span>}</div>
   );
 
   if (suggestions.length>0) return (
-    <AutocompleteInput
-      value={val} onChange={v=>setVal(v)}
+    <AutoInput value={val} onChange={v=>setVal(v)}
       suggestions={suggestions} mono={mono}
-      placeholder={placeholder}
-      onCreate={onCreate}
+      placeholder={placeholder} onCreate={onCreate}
+      onBlur={()=>commit()}
     />
   );
 
   return (
-    <input ref={ref} value={val} autoFocus
+    <input ref={ref} value={val} autoFocus type={type}
       onChange={e=>setVal(e.target.value)}
       onBlur={()=>commit()}
-      onKeyDown={e=>{ if(e.key==="Enter") commit(); if(e.key==="Escape") cancel(); }}
-      style={{
-        background:C.bg3, border:`1px solid ${C.blue}`, color:C.text0,
-        padding:"2px 6px", borderRadius:3, fontSize:12, outline:"none",
-        fontFamily:mono?C.mono:"inherit", width:"100%", minWidth:60,
-      }}
+      onKeyDown={e=>{ if(e.key==="Enter") commit(); if(e.key==="Escape"){ setEditing(false); setVal(value||""); }}}
+      className="input"
+      style={{fontSize:12,padding:"3px 8px",fontFamily:mono?"var(--font-mono)":"inherit",minWidth:80}}
     />
   );
 }
 
-// ── SUBNET CALCULATOR ────────────────────────────────────────
-function calcAvailableSlots(blockPrefix, allocations, prefixLen) {
-  const isV6 = blockPrefix.includes(":");
-  if (isV6) {
-    // IPv6: show available slots from existing available allocations
-    return allocations
-      .filter(a=>a.status==="available")
-      .map(a=>a.prefix);
-  }
+// ── ALLOCATION MODAL (Add/Edit) ──────────────────────────────────────────────
+function AllocModal({ alloc, blockId, blockPrefix, prefillPrefix, customers, vlans, onClose, onSaved }) {
+  const isV6    = blockPrefix?.includes(":");
+  const isEdit  = !!alloc?.id;
+  const MASKS   = isV6 ? V6_MASKS : V4_MASKS;
 
-  try {
-    const [blockAddr, blockPlenStr] = blockPrefix.split("/");
-    const blockPlen = parseInt(blockPlenStr);
-    const slotSize  = Math.pow(2, 32-prefixLen);
-    if (prefixLen < blockPlen) return [];
+  const [prefix,      setPrefix]      = useState(prefillPrefix||alloc?.prefix||"");
+  const [ownerType,   setOwnerType]   = useState(alloc?.owner_type||"customer");
+  const [custName,    setCustName]    = useState(alloc?.customer_name||"");
+  const [vlanVid,     setVlanVid]     = useState(alloc?.vlan_vid?String(alloc.vlan_vid):"");
+  const [status,      setStatus]      = useState(alloc?.status||"active");
+  const [description, setDescription]= useState(alloc?.description||"");
+  const [notes,       setNotes]       = useState(alloc?.notes||"");
+  const [saving,      setSaving]      = useState(false);
+  const [err,         setErr]         = useState(null);
 
-    const toInt = ip => {
-      const p = ip.split(".").map(Number);
-      return ((p[0]<<24)|(p[1]<<16)|(p[2]<<8)|p[3])>>>0;
-    };
-    const toIP = n => [(n>>>24)&255,(n>>>16)&255,(n>>>8)&255,n&255].join(".");
+  const custNames = customers.map(c=>c.name);
+  const vlanVids  = vlans.map(v=>String(v.vid));
 
-    const blockStart = toInt(blockAddr);
-    const blockSize  = Math.pow(2, 32-blockPlen);
-    const blockEnd   = (blockStart+blockSize-1)>>>0;
-
-    // build used ranges from allocations
-    const used = allocations.map(a=>{
-      try {
-        const [addr,plen] = a.prefix.split("/");
-        const s = toInt(addr);
-        const sz = Math.pow(2,32-parseInt(plen));
-        return {start:s>>>0, end:(s+sz-1)>>>0};
-      } catch { return null; }
-    }).filter(Boolean).sort((a,b)=>a.start-b.start);
-
-    const slots = [];
-    let cursor = blockStart;
-    // align cursor to slot boundary
-    if (cursor%slotSize!==0) cursor=cursor-cursor%slotSize+slotSize;
-
-    const addSlot = () => {
-      if (cursor+slotSize-1<=blockEnd) {
-        slots.push(`${toIP(cursor)}/${prefixLen}`);
-      }
-    };
-
-    outer: while (cursor+slotSize-1<=blockEnd && slots.length<50) {
-      // check if cursor overlaps any used range
-      let overlaps = false;
-      for (const u of used) {
-        if (cursor<=u.end && cursor+slotSize-1>=u.start) {
-          // overlap — skip past this used range
-          cursor = (u.end+1)>>>0;
-          // realign
-          if (cursor%slotSize!==0) cursor=cursor-cursor%slotSize+slotSize;
-          overlaps=true;
-          break;
-        }
-      }
-      if (!overlaps) {
-        addSlot();
-        cursor=(cursor+slotSize)>>>0;
-      }
-    }
-    return slots;
-  } catch(e) {
-    console.error(e); return [];
-  }
-}
-
-function SubnetCalculator({ blockPrefix, allocations, onSelect }) {
-  const isV6 = blockPrefix?.includes(":");
-  const V4_SIZES = [24,25,26,27,28,29,30,31].map(p=>({value:p,label:`/${p} — ${Math.pow(2,32-p)} addr (${Math.pow(2,32-p)-2} usable)`}));
-  const V6_SIZES = [64,96,112,120,124,126,127].map(p=>({value:p,label:`/${p}`}));
-
-  const [prefixLen, setPrefixLen] = useState(isV6?127:30);
-  const [slots, setSlots]         = useState([]);
-  const [selected, setSelected]   = useState(null);
-
+  // Load allocations once
+  const [allocations, setAllocations] = useState([]);
   useEffect(()=>{
-    const s = calcAvailableSlots(blockPrefix, allocations, prefixLen);
-    setSlots(s);
-    setSelected(null);
-  },[prefixLen, allocations, blockPrefix]);
+    if (blockId) fetch(`/api/v1/blocks/${blockId}`)
+      .then(r=>r.json())
+      .then(d=>setAllocations((d.allocations||[]).filter(a=>!alloc?.id||a.id!==alloc?.id)));
+  },[blockId]);
+
+  // Debounced validation - validate 400ms after user stops typing
+  const [validationResult, setValidationResult] = useState(null);
+  const debounceRef = useRef(null);
+  useEffect(()=>{
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(()=>{
+      const complete = prefix && prefix.includes("/") && prefix.split("/")[1] !== "" &&
+        (prefix.includes(":") || prefix.split(".").length === 4);
+      if (complete) setValidationResult(validateSubnet(prefix, allocations, blockPrefix));
+      else setValidationResult(null);
+    }, 400);
+    return ()=>{ if(debounceRef.current) clearTimeout(debounceRef.current); };
+  },[prefix, allocations, blockPrefix]);
+
+  const isCompletePrefix = prefix && prefix.includes("/") && prefix.split("/")[1] !== "" &&
+    (prefix.includes(":") || prefix.split(".").length === 4);
+  const validation = validationResult;
+  const hasError   = validation && !validation.valid;
+  const hasWarning = validation && validation.warnings.length>0;
+
+  const handleMaskChange = (newPlen) => {
+    const newPrefix = changeMaskAligned(prefix, newPlen, allocations);
+    setPrefix(newPrefix);
+  };
+
+
+  const save = async () => {
+    if (!prefix) return setErr("Prefix is required");
+    if (hasError) return setErr(validation.errors[0]);
+    setSaving(true); setErr(null);
+    try {
+      let customer_id = null;
+      if (ownerType==="customer" && custName.trim()) {
+        let cust = customers.find(c=>c.name.toLowerCase()===custName.trim().toLowerCase());
+        if (!cust) {
+          const r = await fetch("/api/v1/customers",{
+            method:"POST",headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({name:custName.trim(),is_active:true})
+          });
+          cust = await r.json();
+        }
+        customer_id = cust.id;
+      }
+
+      let vlan_id = null;
+      if (vlanVid.trim() && !isNaN(parseInt(vlanVid))) {
+        const vid = parseInt(vlanVid);
+        let vlan = vlans.find(v=>v.vid===vid);
+        if (!vlan) {
+          const r = await fetch("/api/v1/vlans",{
+            method:"POST",headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({vid,name:"",status:"active"})
+          });
+          if (r.ok) vlan = await r.json();
+        }
+        vlan_id = vlan?.id||null;
+      }
+
+      const payload = {
+        prefix, block_id:blockId, customer_id, vlan_id,
+        status: ownerType==="reserved"?"available":status,
+        owner_type: ownerType,
+        description: description||(ownerType==="customer"?custName:""),
+        notes: notes||"",
+      };
+
+      if (isEdit) await updateAllocation(alloc.id, payload);
+      else        await createAllocation(payload);
+      onSaved();
+    } catch(e) { setErr(e.message); }
+    setSaving(false);
+  };
+
+  const LabelRow = ({label, required, children}) => (
+    <div>
+      <label style={{display:"block",fontSize:10,fontWeight:600,textTransform:"uppercase",
+        letterSpacing:"0.08em",color:"var(--text-muted)",marginBottom:6}}>
+        {label}{required&&<span style={{color:"var(--danger)",marginLeft:2}}>*</span>}
+      </label>
+      {children}
+    </div>
+  );
 
   return (
-    <div style={{background:C.bg2,border:`1px solid ${C.blue}33`,borderRadius:8,padding:18,marginBottom:12}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-        <div style={{color:C.text0,fontWeight:600,fontSize:13}}>
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal" style={{maxWidth:560}}>
+        <div className="modal-header">
+          <div>
+            <div style={{fontWeight:700,fontSize:15,color:"var(--text)"}}>
+              {isEdit?"Edit Allocation":"Add Allocation"}
+            </div>
+            <div style={{fontSize:11,color:"var(--text-muted)",marginTop:2}}>
+              {blockPrefix}
+            </div>
+          </div>
+          <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",
+            color:"var(--text-muted)",fontSize:18,padding:4}}>✕</button>
+        </div>
+
+        <div className="modal-body" style={{display:"flex",flexDirection:"column",gap:14}}>
+          {err&&<div style={{background:"var(--danger-surface)",border:"1px solid var(--danger-border)",
+            borderRadius:"var(--radius-sm)",padding:"10px 14px",color:"var(--danger)",fontSize:13}}>{err}</div>}
+
+          {/* Owner Type selector */}
+          <LabelRow label="Type / Owner">
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {OWNER_TYPES.map(ot=>(
+                <button key={ot.value} onClick={()=>setOwnerType(ot.value)}
+                  style={{
+                    display:"flex",alignItems:"center",gap:5,
+                    padding:"5px 10px",borderRadius:99,fontSize:11,fontWeight:600,
+                    cursor:"pointer",border:"1px solid",
+                    background: ownerType===ot.value ? ot.color+"22" : "var(--surface-2)",
+                    color:       ownerType===ot.value ? ot.color : "var(--text-muted)",
+                    borderColor: ownerType===ot.value ? ot.color : "var(--border-soft)",
+                    transition:"all var(--transition)",
+                  }}>
+                  <span>{ot.icon}</span>{ot.label}
+                </button>
+              ))}
+            </div>
+          </LabelRow>
+
+          {/* Prefix with smart mask selector */}
+          <LabelRow label="Prefix (CIDR)" required>
+            <div style={{display:"flex",gap:6}}>
+              <input value={prefix} onChange={e=>setPrefix(e.target.value)}
+                placeholder={isV6
+                  ? `e.g. ${blockPrefix?.split("/")?.[0]}1/127`
+                  : `e.g. ${blockPrefix?.split(".")?.[0]}.${blockPrefix?.split(".")?.[1]}.${blockPrefix?.split(".")?.[2]}.4/30`}
+                className="input" style={{
+                  fontFamily:"var(--font-mono)",flex:1,
+                  borderColor: prefix && hasError?"var(--danger)":prefix && hasWarning?"var(--warning)":"",
+                }}/>
+              {!isV6 && (
+                <select
+                  value={prefix?.split("/")?.[1]||"30"}
+                  onChange={e=>handleMaskChange(parseInt(e.target.value))}
+                  className="select"
+                  style={{width:80,fontFamily:"var(--font-mono)",fontSize:13}}>
+                  {V4_MASKS.map(p=><option key={p} value={p}>/{p}</option>)}
+                </select>
+              )}
+            </div>
+
+            {/* Validation feedback - only show when prefix is complete */}
+            {isCompletePrefix && validation && (
+              <div style={{marginTop:6,display:"flex",flexDirection:"column",gap:4}}>
+                {validation.errors.map((e,i)=>(
+                  <div key={i} style={{display:"flex",alignItems:"center",gap:6,
+                    fontSize:11,color:"var(--danger)"}}>
+                    <span>✕</span>{e}
+                  </div>
+                ))}
+                {validation.warnings.map((w,i)=>(
+                  <div key={i} style={{display:"flex",alignItems:"center",gap:6,
+                    fontSize:11,color:"var(--warning)"}}>
+                    <span>⚠</span>{w}
+                  </div>
+                ))}
+                {validation.valid && !hasWarning && (
+                  <div style={{display:"flex",alignItems:"center",gap:6,
+                    fontSize:11,color:"var(--success)"}}>
+                    <span>✓</span>Prefix is valid and available
+                  </div>
+                )}
+              </div>
+            )}
+          </LabelRow>
+
+          {/* Subnet breakdown info */}
+          {isCompletePrefix && !hasError && !isV6 && (()=>{
+            try {
+              const plen = parseInt(prefix.split("/")[1]);
+              const size = Math.pow(2, 32-plen);
+              const breakdowns = [];
+              if (plen < 31) breakdowns.push(`2× /${plen+1}`);
+              if (plen < 30) breakdowns.push(`4× /${plen+2}`);
+              if (plen < 29) breakdowns.push(`${Math.pow(2,Math.min(3,30-plen))}× /${Math.min(plen+3,31)}`);
+              return breakdowns.length>0 ? (
+                <div style={{marginTop:6,padding:"6px 10px",background:"var(--surface-1)",
+                  borderRadius:"var(--radius-sm)",border:"1px solid var(--border-subtle)"}}>
+                  <span style={{fontSize:10,color:"var(--text-dim)"}}>Can be split into: </span>
+                  {breakdowns.map((b,i)=>(
+                    <span key={i} style={{fontSize:11,fontFamily:"var(--font-mono)",
+                      color:"var(--accent)",marginLeft:8}}>{b}</span>
+                  ))}
+                </div>
+              ) : null;
+            } catch { return null; }
+          })()}
+
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            {/* Customer - only show if owner_type = customer */}
+            {ownerType==="customer" && (
+              <LabelRow label="Customer">
+                <AutoInput value={custName} onChange={setCustName}
+                  suggestions={custNames} placeholder="Type to search or create"
+                  onCreate={v=>setCustName(v)}/>
+              </LabelRow>
+            )}
+
+            {/* Description for non-customer */}
+            {ownerType!=="customer" && (
+              <LabelRow label="Description">
+                <input value={description} onChange={e=>setDescription(e.target.value)}
+                  placeholder="e.g. PTP Kediri-Jakarta" className="input" style={{fontSize:13}}/>
+              </LabelRow>
+            )}
+
+            {/* VLAN */}
+            <LabelRow label="VLAN ID">
+              <AutoInput value={vlanVid} onChange={setVlanVid}
+                suggestions={vlanVids} placeholder="e.g. 1336" mono/>
+            </LabelRow>
+
+            {/* Status */}
+            <LabelRow label="Status">
+              <select value={status} onChange={e=>setStatus(e.target.value)} className="select" style={{fontSize:13}}>
+                {STATUS_OPTS.map(s=><option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
+              </select>
+            </LabelRow>
+
+            {/* Notes */}
+            <div style={{gridColumn:"1/-1"}}>
+              <LabelRow label="Notes">
+                <input value={notes} onChange={e=>setNotes(e.target.value)}
+                  placeholder="Additional notes" className="input" style={{fontSize:13}}/>
+              </LabelRow>
+            </div>
+          </div>
+
+          {/* Preview - only show when prefix is complete and valid */}
+          {isCompletePrefix && !hasError && (
+            <div style={{
+              padding:"10px 14px",background:"var(--surface-1)",
+              borderRadius:"var(--radius-sm)",border:"1px solid var(--border-subtle)",
+              display:"flex",alignItems:"center",gap:16,flexWrap:"wrap",
+            }}>
+              <div>
+                <div style={{fontSize:10,color:"var(--text-dim)",marginBottom:2}}>PREFIX</div>
+                <div style={{fontFamily:"var(--font-mono)",fontSize:13,fontWeight:600,color:"var(--accent)"}}>{prefix}</div>
+              </div>
+              <div>
+                <div style={{fontSize:10,color:"var(--text-dim)",marginBottom:2}}>USABLE RANGE</div>
+                <div style={{fontFamily:"var(--font-mono)",fontSize:12,color:"var(--text-muted)"}}>
+                  {calcUsableRange(prefix)||"—"}
+                </div>
+              </div>
+              <div>
+                <div style={{fontSize:10,color:"var(--text-dim)",marginBottom:2}}>USABLE IPs</div>
+                <div style={{fontFamily:"var(--font-mono)",fontSize:12,color:"var(--text-muted)"}}>
+                  {calcUsableCount(prefix)}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="modal-footer">
+          <button onClick={onClose} className="btn btn-secondary">Cancel</button>
+          <button onClick={save} disabled={saving||!prefix} className="btn btn-primary">
+            {saving?"Saving…":isEdit?"Save Changes":"Add Allocation"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── CONFIRM MODAL ────────────────────────────────────────────────────────────
+function ConfirmModal({ message, onConfirm, onCancel }) {
+  return (
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onCancel()}>
+      <div className="modal" style={{maxWidth:380}}>
+        <div className="modal-header">
+          <div style={{fontWeight:700,fontSize:15,color:"var(--text)"}}>Confirm Delete</div>
+          <button onClick={onCancel} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-muted)",fontSize:18,padding:4}}>✕</button>
+        </div>
+        <div className="modal-body">
+          <p style={{fontSize:13,color:"var(--text-muted)",lineHeight:1.6,margin:0}}>{message}</p>
+        </div>
+        <div className="modal-footer">
+          <button onClick={onCancel}  className="btn btn-secondary">Cancel</button>
+          <button onClick={onConfirm} className="btn btn-danger">Delete</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── BLOCK EDIT MODAL ─────────────────────────────────────────────────────────
+function BlockEditModal({ block, sites, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    prefix:      block.prefix||"",
+    name:        block.name||"",
+    asn:         block.asn||"",
+    router:      block.router||"",
+    operator:    block.operator||"",
+    site_id:     block.site_id||"",
+    status:      block.status||"active",
+    description: block.description||"",
+  });
+  const [saving, setSaving] = useState(false);
+  const [err,    setErr]    = useState(null);
+  const set = k => v => setForm(f=>({...f,[k]:v}));
+
+  const save = async () => {
+    setSaving(true); setErr(null);
+    try { await updateBlock(block.id,form); onSaved(); }
+    catch(e) { setErr(e.message); }
+    setSaving(false);
+  };
+
+  const Field = ({label,k,placeholder,mono}) => (
+    <div>
+      <label style={{display:"block",fontSize:10,fontWeight:600,textTransform:"uppercase",
+        letterSpacing:"0.08em",color:"var(--text-muted)",marginBottom:6}}>{label}</label>
+      <input value={form[k]} onChange={e=>set(k)(e.target.value)} placeholder={placeholder}
+        className="input" style={{fontFamily:mono?"var(--font-mono)":"inherit"}}/>
+    </div>
+  );
+
+  return (
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal" style={{maxWidth:520}}>
+        <div className="modal-header">
+          <div style={{fontWeight:700,fontSize:15,color:"var(--text)"}}>Edit IP Block</div>
+          <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-muted)",fontSize:18,padding:4}}>✕</button>
+        </div>
+        <div className="modal-body" style={{display:"flex",flexDirection:"column",gap:14}}>
+          {err&&<div style={{background:"var(--danger-surface)",border:"1px solid var(--danger-border)",
+            borderRadius:"var(--radius-sm)",padding:"10px 14px",color:"var(--danger)",fontSize:13}}>{err}</div>}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <Field label="Prefix" k="prefix" placeholder="114.198.242.0/24" mono/>
+            <Field label="Name"   k="name"   placeholder="Block name"/>
+            <Field label="ASN"    k="asn"    placeholder="56246" mono/>
+            <Field label="Router" k="router" placeholder="mx204-kediri" mono/>
+            <div style={{gridColumn:"1/-1"}}><Field label="Operator" k="operator" placeholder="PT Sumber Data Indonesia"/></div>
+            <div>
+              <label style={{display:"block",fontSize:10,fontWeight:600,textTransform:"uppercase",
+                letterSpacing:"0.08em",color:"var(--text-muted)",marginBottom:6}}>Site</label>
+              <select value={form.site_id} onChange={e=>set("site_id")(e.target.value)} className="select">
+                <option value="">— No site —</option>
+                {sites.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{display:"block",fontSize:10,fontWeight:600,textTransform:"uppercase",
+                letterSpacing:"0.08em",color:"var(--text-muted)",marginBottom:6}}>Status</label>
+              <select value={form.status} onChange={e=>set("status")(e.target.value)} className="select">
+                {["active","reserved","deprecated"].map(s=>(
+                  <option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button onClick={onClose} className="btn btn-secondary">Cancel</button>
+          <button onClick={save} disabled={saving} className="btn btn-primary">
+            {saving?"Saving…":"Save Changes"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── SUBNET CALCULATOR ────────────────────────────────────────────────────────
+function SubnetCalc({ blockPrefix, allocations, onSelect }) {
+  const isV6    = blockPrefix?.includes(":");
+  const SIZES   = isV6 ? V6_MASKS : V4_MASKS;
+  const [plen, setPlen] = useState(isV6?127:30);
+  const [slots, setSlots] = useState([]);
+  const [selected, setSelected] = useState(null);
+
+  useEffect(()=>{
+    if (isV6) { setSlots(allocations.filter(a=>a.status==="available").map(a=>a.prefix)); return; }
+    try {
+      const [blockAddr, blockPlenStr] = blockPrefix.split("/");
+      const blockPlen = parseInt(blockPlenStr);
+      if (plen < blockPlen) { setSlots([]); return; }
+      const slotSize = Math.pow(2, 32-plen);
+      const toInt = ip => { const p=ip.split(".").map(Number); return ((p[0]<<24)|(p[1]<<16)|(p[2]<<8)|p[3])>>>0; };
+      const toIP  = n  => [(n>>>24)&255,(n>>>16)&255,(n>>>8)&255,n&255].join(".");
+      const blockStart = toInt(blockAddr);
+      const blockSize  = Math.pow(2, 32-blockPlen);
+      const blockEnd   = (blockStart+blockSize-1)>>>0;
+      const used = allocations
+        .filter(a=> a.status !== "available" && a.prefix !== blockPrefix)
+        .map(a=>{
+          try { const [addr,p]=a.prefix.split("/"); const s=toInt(addr); return {start:s>>>0,end:(s+Math.pow(2,32-parseInt(p))-1)>>>0}; }
+          catch { return null; }
+        }).filter(Boolean).sort((a,b)=>a.start-b.start);
+      const found = []; let cursor = blockStart;
+      if (cursor%slotSize!==0) cursor=cursor-cursor%slotSize+slotSize;
+      outer: while (cursor+slotSize-1<=blockEnd && found.length<50) {
+        let overlaps=false;
+        for (const u of used) {
+          if (cursor<=u.end && cursor+slotSize-1>=u.start) {
+            cursor=(u.end+1)>>>0;
+            if(cursor%slotSize!==0) cursor=cursor-cursor%slotSize+slotSize;
+            overlaps=true; break;
+          }
+        }
+        if (!overlaps) { found.push(`${toIP(cursor)}/${plen}`); cursor=(cursor+slotSize)>>>0; }
+      }
+      setSlots(found); setSelected(null);
+    } catch { setSlots([]); }
+  },[plen, allocations, blockPrefix]);
+
+  return (
+    <div style={{
+      background:"var(--surface-1)",border:"1px solid var(--border-subtle)",
+      borderRadius:"var(--radius)",padding:16,
+    }}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+        <div style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>
           🧮 Subnet Calculator
-          <span style={{color:C.text2,fontWeight:400,fontSize:11,marginLeft:8}}>
-            — find available address space in {blockPrefix}
+          <span style={{fontSize:11,color:"var(--text-muted)",fontWeight:400,marginLeft:8}}>
+            find available space in {blockPrefix}
           </span>
         </div>
       </div>
 
-      <div style={{display:"flex",gap:12,alignItems:"flex-end",marginBottom:14}}>
+      <div style={{display:"flex",alignItems:"flex-end",gap:12,marginBottom:12,flexWrap:"wrap"}}>
         <div>
-          <div style={{color:C.text2,fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:5}}>Requested Prefix Size</div>
-          <select value={prefixLen} onChange={e=>setPrefixLen(parseInt(e.target.value))}
-            style={{background:C.bg1,border:`1px solid ${C.border}`,color:C.text0,padding:"7px 14px",borderRadius:5,fontSize:13,minWidth:280}}>
-            {(isV6?V6_SIZES:V4_SIZES).map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
+          <label style={{display:"block",fontSize:10,fontWeight:600,textTransform:"uppercase",
+            letterSpacing:"0.08em",color:"var(--text-muted)",marginBottom:6}}>Prefix Size</label>
+          <select value={plen} onChange={e=>setPlen(parseInt(e.target.value))}
+            className="select" style={{minWidth:200,fontSize:13}}>
+            {SIZES.map(p=>(
+              <option key={p} value={p}>
+                /{p} — {isV6?`2^${128-p} IPs`:`${Math.pow(2,32-p)} IPs (${p<31?Math.pow(2,32-p)-2:Math.pow(2,32-p)} usable)`}
+              </option>
+            ))}
           </select>
         </div>
-        <div style={{color:C.text2,fontSize:11,paddingBottom:8}}>
+        <div style={{fontSize:12,paddingBottom:4}}>
           {slots.length===0
-            ? <span style={{color:C.amber}}>⚠ No available slots</span>
-            : <span style={{color:C.green}}>✓ {slots.length} slot{slots.length>1?"s":""} available</span>
+            ? <span style={{color:"var(--warning)"}}>⚠ No available slots</span>
+            : <span style={{color:"var(--success)"}}>✓ {slots.length} slot{slots.length>1?"s":""} available</span>
           }
         </div>
       </div>
 
       {slots.length>0 && (
-        <>
-          <div style={{color:C.text2,fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>
-            Available Slots — click to select
-          </div>
-          <div style={{display:"flex",flexWrap:"wrap",gap:6,maxHeight:160,overflowY:"auto",marginBottom:12}}>
+        <div>
+          <div style={{fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.08em",
+            color:"var(--text-muted)",marginBottom:8}}>Available Slots — click to select</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:6,maxHeight:120,overflowY:"auto",marginBottom:10}}>
             {slots.map(s=>(
-              <div key={s} onClick={()=>setSelected(s===selected?null:s)}
-                style={{
-                  fontFamily:C.mono, fontSize:12, padding:"5px 12px", borderRadius:4,
-                  border:`1px solid ${s===selected?C.blue:C.border}`,
-                  background: s===selected?"#1d4ed822":C.bg1,
-                  color: s===selected?C.blue:C.text1,
-                  cursor:"pointer", transition:"all 0.1s",
-                }}>
-                {s}
-              </div>
+              <div key={s} onClick={()=>setSelected(s===selected?null:s)} style={{
+                fontFamily:"var(--font-mono)",fontSize:11,padding:"4px 10px",
+                borderRadius:"var(--radius-sm)",cursor:"pointer",
+                border:`1px solid ${s===selected?"var(--accent)":"var(--border-soft)"}`,
+                background: s===selected?"var(--accent-dim)":"var(--surface-2)",
+                color: s===selected?"var(--accent)":"var(--text-muted)",
+                transition:"all var(--transition)",
+              }}>{s}</div>
             ))}
           </div>
-        </>
-      )}
-
-      {selected && (
-        <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:C.bg1,borderRadius:6,border:`1px solid ${C.green}44`}}>
-          <span style={{color:C.text2,fontSize:12}}>Selected:</span>
-          <Mono color={C.green} size={13}>{selected}</Mono>
-          <Btn size="sm" variant="success" onClick={()=>onSelect(selected)}>
-            Use This Prefix →
-          </Btn>
-          <Btn size="sm" variant="ghost" onClick={()=>setSelected(null)}>Clear</Btn>
+          {selected && (
+            <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",
+              background:"var(--surface-2)",borderRadius:"var(--radius-sm)",
+              border:"1px solid var(--success-border)"}}>
+              <span style={{fontSize:12,color:"var(--text-muted)"}}>Selected:</span>
+              <span style={{fontFamily:"var(--font-mono)",fontSize:13,color:"var(--success)",fontWeight:600}}>{selected}</span>
+              <button onClick={()=>onSelect(selected)} className="btn btn-primary btn-sm">Use This →</button>
+              <button onClick={()=>setSelected(null)} className="btn btn-ghost btn-sm">Clear</button>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-// ── ADD/EDIT ALLOCATION MODAL ────────────────────────────────
-function AllocModal({ alloc, blockId, blockPrefix, prefillPrefix, customers, vlans, onClose, onSaved }) {
-  const isV6      = blockPrefix?.includes(":");
-  const V4_SIZES  = [24,25,26,27,28,29,30,31];
-  const V6_SIZES  = [64,96,112,120,124,126,127];
-  const SIZES     = isV6?V6_SIZES:V4_SIZES;
-
-  const parsePrefixLen = p => parseInt((p||"").split("/")?.[1]||( isV6?127:30));
-
-  const [prefixMode, setPrefixMode]   = useState(prefillPrefix?"manual":"calc");
-  const [prefixLen, setPrefixLen]     = useState(parsePrefixLen(prefillPrefix||alloc?.prefix));
-  const [selectedSlot, setSelectedSlot] = useState(prefillPrefix||"");
-  const [manualPrefix, setManualPrefix] = useState(alloc?.prefix||prefillPrefix||"");
-  const [customerName, setCustomerName] = useState(alloc?.customer_name||"");
-  const [vlanVid, setVlanVid]         = useState(alloc?.vlan_id?String(alloc.vlan_id):"");
-  const [status, setStatus]           = useState(alloc?.status||"active");
-  const [description, setDescription] = useState(alloc?.description||"");
-  const [notes, setNotes]             = useState(alloc?.notes||"");
-  const [saving, setSaving]           = useState(false);
-  const [err, setErr]                 = useState(null);
-  const [allocations, setAllocations] = useState([]);
-
-  const custNames = customers.map(c=>c.name);
-  const vlanVids  = vlans.map(v=>String(v.vid));
-
-  useEffect(()=>{
-    // load block allocations for calculator
-    if (blockId) {
-      fetch(`/api/v1/blocks/${blockId}`)
-        .then(r=>r.json())
-        .then(d=>setAllocations(d.allocations||[]));
-    }
-  },[blockId]);
-
-  const finalPrefix = prefixMode==="manual" ? manualPrefix : selectedSlot;
-
-  const save = async () => {
-    if (!finalPrefix) return setErr("Prefix is required — select from calculator or enter manually");
-    setSaving(true); setErr(null);
-    try {
-      // resolve or create customer
-      let customer_id = null;
-      if (customerName.trim()) {
-        let cust = customers.find(c=>c.name.toLowerCase()===customerName.trim().toLowerCase());
-        if (!cust) {
-          const r = await fetch("/api/v1/customers",{
-            method:"POST", headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({name:customerName.trim(),is_active:true})
-          });
-          if (!r.ok) throw new Error("Failed to create customer");
-          cust = await r.json();
-        }
-        customer_id = cust.id;
-      }
-
-      // resolve or create VLAN
-      let vlan_id = null;
-      if (vlanVid.trim() && !isNaN(parseInt(vlanVid))) {
-        const vid = parseInt(vlanVid);
-        let vlan = vlans.find(v=>v.vid===vid);
-        if (!vlan) {
-          // create VLAN without site
-          const r = await fetch("/api/v1/vlans",{
-            method:"POST", headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({vid, name:"", status:"active"})
-          });
-          if (r.ok) { vlan = await r.json(); }
-        }
-        vlan_id = vlan?.id||null;
-      }
-
-      const payload = {
-        prefix:      finalPrefix,
-        block_id:    blockId,
-        customer_id, vlan_id,
-        status:      customerName.trim() ? "active" : status,
-        description: description||customerName||"",
-        notes:       notes||"",
-      };
-
-      if (alloc?.id) await updateAllocation(alloc.id, payload);
-      else           await createAllocation(payload);
-      onSaved();
-    } catch(e) { setErr(e.message); }
-    setSaving(false);
-  };
-
-  return (
-    <Modal title={alloc?.id?"Edit Allocation":"Add Allocation"} onClose={onClose} width={620}>
-      {err && <Alert type="error" message={err}/>}
-
-      {/* Prefix selection */}
-      <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:6,padding:14,marginBottom:14}}>
-        <div style={{display:"flex",gap:8,marginBottom:12}}>
-          <Btn size="sm" variant={prefixMode==="calc"?"primary":"ghost"} onClick={()=>setPrefixMode("calc")}>
-            🧮 From Calculator
-          </Btn>
-          <Btn size="sm" variant={prefixMode==="manual"?"primary":"ghost"} onClick={()=>setPrefixMode("manual")}>
-            ✏ Manual Input
-          </Btn>
-        </div>
-
-        {prefixMode==="calc" ? (
-          <>
-            <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:10}}>
-              <div style={{flex:1}}>
-                <div style={{color:C.text2,fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:5}}>Prefix Size</div>
-                <select value={prefixLen} onChange={e=>{ setPrefixLen(parseInt(e.target.value)); setSelectedSlot(""); }}
-                  style={{width:"100%",background:C.bg2,border:`1px solid ${C.border}`,color:C.text0,padding:"7px 10px",borderRadius:5,fontSize:13}}>
-                  {SIZES.map(p=>{
-                    const hosts = isV6 ? `2^${128-p}` : `${Math.pow(2,32-p)} addr`;
-                    return <option key={p} value={p}>/{p} — {hosts}</option>;
-                  })}
-                </select>
-              </div>
-            </div>
-
-            {/* Available slots */}
-            {allocations.length>0 && (()=>{
-              const slots = calcAvailableSlots(blockPrefix, allocations, prefixLen);
-              return slots.length>0 ? (
-                <div>
-                  <div style={{color:C.text2,fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:6}}>
-                    Available Slots ({slots.length}) — click to select
-                  </div>
-                  <div style={{display:"flex",flexWrap:"wrap",gap:5,maxHeight:120,overflowY:"auto"}}>
-                    {slots.map(s=>(
-                      <div key={s} onClick={()=>setSelectedSlot(s===selectedSlot?"":s)}
-                        style={{
-                          fontFamily:C.mono, fontSize:12, padding:"4px 10px", borderRadius:4,
-                          border:`1px solid ${s===selectedSlot?C.green:C.border}`,
-                          background: s===selectedSlot?"#15803d22":C.bg2,
-                          color: s===selectedSlot?C.green:C.text1,
-                          cursor:"pointer",
-                        }}>
-                        {s}
-                      </div>
-                    ))}
-                  </div>
-                  {selectedSlot && (
-                    <div style={{marginTop:8,display:"flex",alignItems:"center",gap:8}}>
-                      <span style={{color:C.text2,fontSize:11}}>Selected:</span>
-                      <Mono color={C.green}>{selectedSlot}</Mono>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div style={{color:C.amber,fontSize:12,padding:"8px 0"}}>
-                  ⚠ No available /{prefixLen} slots in this block
-                </div>
-              );
-            })()}
-          </>
-        ) : (
-          <Input label="Prefix (CIDR)" value={manualPrefix} onChange={setManualPrefix}
-            placeholder={isV6?"e.g. 2404:fd00:36::2/127":"e.g. 114.198.242.4/30"} mono required/>
-        )}
-
-        {finalPrefix && (
-          <div style={{marginTop:10,padding:"6px 10px",background:C.bg0,borderRadius:4,display:"flex",alignItems:"center",gap:8}}>
-            <span style={{color:C.text2,fontSize:11}}>Will allocate:</span>
-            <Mono color={C.green} size={13}>{finalPrefix}</Mono>
-          </div>
-        )}
-      </div>
-
-      {/* Customer */}
-      <div style={{marginBottom:14}}>
-        <div style={{color:C.text2,fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:5}}>
-          Customer <span style={{color:C.text2,fontWeight:400,textTransform:"none",letterSpacing:0}}>(type to search or create new)</span>
-        </div>
-        <AutocompleteInput
-          value={customerName}
-          onChange={setCustomerName}
-          suggestions={custNames}
-          placeholder="Customer name — type to search or create new"
-          onCreate={v=>setCustomerName(v)}
-        />
-      </div>
-
-      {/* VLAN */}
-      <div style={{marginBottom:14}}>
-        <div style={{color:C.text2,fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:5}}>
-          VLAN ID <span style={{color:C.text2,fontWeight:400,textTransform:"none",letterSpacing:0}}>(type VID — existing or new)</span>
-        </div>
-        <AutocompleteInput
-          value={vlanVid}
-          onChange={setVlanVid}
-          suggestions={vlanVids}
-          placeholder="e.g. 1336"
-          mono
-        />
-      </div>
-
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
-        <Select label="Status" value={status} onChange={setStatus}
-          options={["active","available","reserved","deprecated"].map(s=>({value:s,label:s}))}/>
-        <Input label="Description" value={description} onChange={setDescription} placeholder="Usage description"/>
-      </div>
-      <Input label="Notes" value={notes} onChange={setNotes} placeholder="Additional notes"/>
-
-      <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:12}}>
-        <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
-        <Btn onClick={save} disabled={saving||!finalPrefix}>
-          {saving?"Saving…":alloc?.id?"Save Changes":"Add Allocation"}
-        </Btn>
-      </div>
-    </Modal>
-  );
-}
-
-// ── MAIN PAGE ────────────────────────────────────────────────
+// ── MAIN PAGE ────────────────────────────────────────────────────────────────
 export default function BlockDetail({ blockId, onBack }) {
-  const [data, setData]             = useState(null);
-  const [search, setSearch]         = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [loading, setLoading]       = useState(true);
-  const [err, setErr]               = useState(null);
-  const [editModal, setEditModal]   = useState(false);
-  const [allocModal, setAllocModal] = useState(null);
-  const [confirm, setConfirm]       = useState(null);
-  const [sites, setSites]           = useState([]);
-  const [customers, setCustomers]   = useState([]);
-  const [vlans, setVlans]           = useState([]);
-  const [saveMsg, setSaveMsg]       = useState(null);
+  const [data,      setData]      = useState(null);
+  const [search,    setSearch]    = useState("");
+  const [ownerFilter, setOwnerFilter] = useState("");
+  const [statusFilter,setStatusFilter]= useState("");
+  const [loading,   setLoading]   = useState(true);
+  const [err,       setErr]       = useState(null);
+  const [editModal, setEditModal] = useState(false);
+  const [allocModal,setAllocModal]= useState(null);
+  const [confirm,   setConfirm]   = useState(null);
+  const [sites,     setSites]     = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [vlans,     setVlans]     = useState([]);
+  const [showCalc,  setShowCalc]  = useState(false);
+  const [saveMsg,   setSaveMsg]   = useState(null);
 
   const load = useCallback(()=>{
     setLoading(true);
@@ -527,6 +850,7 @@ export default function BlockDetail({ blockId, onBack }) {
       customer_id: alloc.customer_id||null,
       vlan_id:     alloc.vlan_id||null,
       status:      alloc.status,
+      owner_type:  alloc.owner_type||"customer",
       description: alloc.description||"",
       notes:       alloc.notes||"",
     };
@@ -534,280 +858,428 @@ export default function BlockDetail({ blockId, onBack }) {
     if (field==="customer_name") {
       if (!value) { payload.customer_id=null; }
       else {
-        let cust = customers.find(c=>c.name.toLowerCase()===value.toLowerCase());
+        let cust=customers.find(c=>c.name.toLowerCase()===value.toLowerCase());
         if (!cust) {
-          const r = await fetch("/api/v1/customers",{
-            method:"POST",headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({name:value,is_active:true})
-          });
-          cust = await r.json();
+          const r=await fetch("/api/v1/customers",{method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({name:value,is_active:true})});
+          cust=await r.json();
           setCustomers(prev=>[...prev,cust]);
         }
-        payload.customer_id = cust.id;
-        payload.status = "active";
+        payload.customer_id=cust.id;
+        payload.status="active";
       }
     } else if (field==="vlan_vid") {
       if (!value) { payload.vlan_id=null; }
       else {
-        const vid = parseInt(value);
-        let vlan = vlans.find(v=>v.vid===vid);
+        const vid=parseInt(value);
+        let vlan=vlans.find(v=>v.vid===vid);
         if (!vlan) {
-          const r = await fetch("/api/v1/vlans",{
-            method:"POST",headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({vid,name:"",status:"active"})
-          });
-          if (r.ok) { vlan=await r.json(); setVlans(prev=>[...prev,vlan]); }
+          const r=await fetch("/api/v1/vlans",{method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({vid,name:"",status:"active"})});
+          if(r.ok){vlan=await r.json();setVlans(prev=>[...prev,vlan]);}
         }
-        payload.vlan_id = vlan?.id||null;
+        payload.vlan_id=vlan?.id||null;
       }
-    } else if (field==="status")      { payload.status=value; }
+    } else if (field==="owner_type")  { payload.owner_type=value; }
+    else if (field==="status")        { payload.status=value; }
     else if (field==="description")   { payload.description=value||""; }
     else if (field==="notes")         { payload.notes=value||""; }
-
+    else if (field==="mask") {
+      if (String(value).includes("__")) {
+        const [plen, newIp] = String(value).split("__");
+        payload.prefix = `${newIp}/${plen}`;
+      } else {
+        const [addr] = alloc.prefix.split("/");
+        payload.prefix = `${addr}/${value}`;
+      }
+    }
     try {
       await updateAllocation(allocId,payload);
-      setSaveMsg("Saved ✓");
-      setTimeout(()=>setSaveMsg(null),1500);
+      setSaveMsg("Saved ✓"); setTimeout(()=>setSaveMsg(null),1500);
       load();
     } catch(e) {
-      setSaveMsg("Error: "+e.message);
-      setTimeout(()=>setSaveMsg(null),3000);
+      setSaveMsg("Error: "+e.message); setTimeout(()=>setSaveMsg(null),3000);
     }
   };
 
+  // Filter allocations
   const allocs = (data?.allocations||[]).filter(a=>{
     const ms = !search ||
       a.prefix?.includes(search) ||
       (a.customer_name||"").toLowerCase().includes(search.toLowerCase()) ||
       (a.description||"").toLowerCase().includes(search.toLowerCase()) ||
-      String(a.vlan_id||"").includes(search);
+      String(a.vlan_vid||"").includes(search);
     const mf = !statusFilter || a.status===statusFilter;
-    return ms && mf;
+    const mo = !ownerFilter  || a.owner_type===ownerFilter;
+    return ms && mf && mo;
   });
 
   const custNames = customers.map(c=>c.name);
   const vlanVids  = vlans.map(v=>String(v.vid));
-  const statusOpts= ["active","available","reserved","deprecated"].map(s=>({value:s,label:s}));
+  const isV6      = data?.prefix?.includes(":");
 
-  const activeCount    = (data?.allocations||[]).filter(a=>a.status==="active").length;
-  const availableCount = (data?.allocations||[]).filter(a=>a.status==="available").length;
-  const totalCount     = (data?.allocations||[]).length;
-  const utilPct        = totalCount?Math.round(activeCount/totalCount*100):0;
-  const utilColor      = utilPct>85?C.red:utilPct>60?C.amber:C.green;
+  // Stats
+  const totalAllocs   = (data?.allocations||[]).length;
+  const activeAllocs  = (data?.allocations||[]).filter(a=>a.status==="active").length;
+  const availAllocs   = (data?.allocations||[]).filter(a=>a.status==="available").length;
+  const usedIps       = parseFloat(data?.used_ips||0);
+  const totalIps      = parseFloat(data?.total_ips||1);
+  const utilPct       = totalIps ? Math.round(usedIps/totalIps*100) : 0;
+  const utilColor     = utilPct>85?"var(--danger)":utilPct>60?"var(--warning)":"var(--success)";
 
-  const isV6block = data?.prefix?.includes(":");
+  // Owner type breakdown
+  const ownerBreakdown = OWNER_TYPES.map(ot=>({
+    ...ot,
+    count:(data?.allocations||[]).filter(a=>a.owner_type===ot.value).length
+  })).filter(o=>o.count>0);
 
-  const calcUsableRange = (prefix) => {
-    if (!prefix) return "";
-    try {
-      if (prefix.includes(":")) return prefix; // IPv6 - show as-is
-      const [addr, plenStr] = prefix.split("/");
-      const plen = parseInt(plenStr);
-      const parts = addr.split(".").map(Number);
-      const toInt = p => ((p[0]<<24)|(p[1]<<16)|(p[2]<<8)|p[3])>>>0;
-      const toIP = n => [(n>>>24)&255,(n>>>16)&255,(n>>>8)&255,n&255].join(".");
-      const base = toInt(parts);
-      const size = Math.pow(2, 32 - plen);
-      if (plen === 32) return addr;
-      if (plen === 31) return `${addr} – ${toIP((base+1)>>>0)}`;
-      const first = toIP((base+1)>>>0);
-      const last  = toIP((base+size-2)>>>0);
-      return `${first} – ${last}`;
-    } catch { return ""; }
-  };
+  if (loading) return (
+    <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:240,gap:12,flexDirection:"column"}}>
+      <div style={{width:32,height:32,borderRadius:"50%",border:"2px solid var(--accent-dim)",
+        borderTopColor:"var(--accent)",animation:"spin 0.8s linear infinite"}}/>
+      <span style={{fontSize:13,color:"var(--text-muted)"}}>Loading block...</span>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    </div>
+  );
 
-  const V4_MASKS = [24,25,26,27,28,29,30,31];
-  const V6_MASKS = [48,56,64,96,112,120,124,126,127];
+  if (err) return (
+    <div style={{background:"var(--danger-surface)",border:"1px solid var(--danger-border)",
+      borderRadius:"var(--radius)",padding:"16px 20px",color:"var(--danger)",fontSize:14}}>
+      Error: {err}
+    </div>
+  );
 
-  const changeMask = async (alloc, newPlen) => {
-    const [addr] = alloc.prefix.split("/");
-    const newPrefix = `${addr}/${newPlen}`;
-    const payload = {
-      prefix:      newPrefix,
-      block_id:    blockId,
-      customer_id: alloc.customer_id||null,
-      vlan_id:     alloc.vlan_id||null,
-      status:      alloc.status,
-      description: alloc.description||"",
-      notes:       alloc.notes||"",
-    };
-    try {
-      await updateAllocation(alloc.id, payload);
-      setSaveMsg("Saved ✓");
-      setTimeout(()=>setSaveMsg(null),1500);
-      load();
-    } catch(e) {
-      setSaveMsg("Error: "+e.message);
-      setTimeout(()=>setSaveMsg(null),3000);
-    }
-  };
-
-  const COLS = [
-    { label:"#",           width:36,  render:(_,i)=><span style={{color:C.text2,fontFamily:C.mono,fontSize:10}}>{i+1}</span> },
-    { label:"Customer ✎",  width:200, render:r=>(
-      <InlineCell value={r.customer_name} placeholder="click to assign"
-        suggestions={custNames} onCreate={v=>saveField(r.id,"customer_name",v)}
-        onSave={v=>saveField(r.id,"customer_name",v)} />
-    )},
-    { label:"VLAN ✎",      width:80,  render:r=>(
-      <InlineCell value={r.vlan_id?String(r.vlan_id):""} placeholder="—"
-        suggestions={vlanVids} mono
-        onSave={v=>saveField(r.id,"vlan_vid",v)} />
-    )},
-    { label:"Network IP",  width:150, render:r=><span style={{fontFamily:C.mono,fontSize:12,color:C.text0}}>{r.prefix?.split("/")?.[0]}</span> },
-    { label:"/Mask ▼",     width:80,  render:r=>(
-      <select value={r.prefix?.split("/")?.[1]||""}
-        onChange={e=>changeMask(r, parseInt(e.target.value))}
-        onClick={e=>e.stopPropagation()}
-        style={{background:"transparent",border:`1px solid ${C.border}`,color:C.cyan,
-          fontSize:11,fontFamily:C.mono,cursor:"pointer",outline:"none",
-          borderRadius:4,padding:"2px 4px"
-        }}>
-        {(isV6block?V6_MASKS:V4_MASKS).map(p=>(
-          <option key={p} value={p} style={{background:C.bg2,color:C.text0}}>/{p}</option>
-        ))}
-      </select>
-    )},
-    { label:"Usable Range", width:220, render:r=><span style={{fontFamily:C.mono,fontSize:11,color:C.text2}}>{calcUsableRange(r.prefix)}</span> },
-    { label:"Description ✎",width:180, render:r=>(
-      <InlineCell value={r.description} placeholder="add description"
-        onSave={v=>saveField(r.id,"description",v)} />
-    )},
-    { label:"Notes ✎",     width:140, render:r=>(
-      <InlineCell value={r.notes} placeholder="add notes"
-        onSave={v=>saveField(r.id,"notes",v)} />
-    )},
-    { label:"Status ▼",    width:120, render:r=>(
-      <select value={r.status}
-        onChange={e=>saveField(r.id,"status",e.target.value)}
-        onClick={e=>e.stopPropagation()}
-        style={{background:"transparent",border:"none",color:
-          r.status==="active"?C.green:r.status==="available"?C.cyan:
-          r.status==="reserved"?C.purple:C.amber,
-          fontSize:11,fontFamily:C.mono,cursor:"pointer",outline:"none",
-          textTransform:"uppercase",fontWeight:600,letterSpacing:"0.04em"
-        }}>
-        {statusOpts.map(o=><option key={o.value} value={o.value} style={{background:C.bg2,color:C.text0}}>{o.label}</option>)}
-      </select>
-    )},
-    { label:"Del",          width:50,  render:r=>(
-      <Btn size="sm" variant="danger" onClick={e=>{e.stopPropagation();setConfirm(r);}}>✕</Btn>
-    )},
-  ];
-
-  if (loading) return <div style={{color:C.text2,padding:60,textAlign:"center"}}>Loading…</div>;
-  if (err)     return <Alert type="error" message={err}/>;
-  if (!data)   return null;
+  if (!data) return null;
 
   return (
-    <div>
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+
+      {/* Save toast */}
       {saveMsg && (
         <div style={{
           position:"fixed",top:16,right:20,zIndex:999,
-          background:saveMsg.startsWith("Error")?C.red+"22":"#052010",
-          border:`1px solid ${saveMsg.startsWith("Error")?C.red:C.green}`,
-          color:saveMsg.startsWith("Error")?C.red:C.green,
-          padding:"8px 16px",borderRadius:6,fontSize:12,fontFamily:C.mono,
-          boxShadow:"0 4px 12px #0006",
+          background: saveMsg.startsWith("Error") ? "var(--danger)" : "var(--success)",
+          color:"#fff",padding:"8px 16px",borderRadius:"var(--radius)",
+          fontSize:12,fontFamily:"var(--font-mono)",
+          boxShadow:"var(--shadow-lg)",animation:"slideFromTop 0.2s ease-out",
         }}>{saveMsg}</div>
       )}
 
-      {/* Block header */}
-      <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:8,padding:18,marginBottom:12}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
+      {/* Block header card */}
+      <div className="card" style={{padding:20}}>
+        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:16}}>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
-            <VersionBadge v={data.ip_version}/>
-            <Mono size={20} color={C.text0}>{data.prefix}</Mono>
-            <StatusBadge status={data.status}/>
+            {/* Version badge */}
+            <span style={{
+              padding:"3px 8px",borderRadius:99,fontSize:11,fontWeight:700,
+              background: isV6?"var(--success-surface)":"var(--info-surface)",
+              color:       isV6?"var(--success)":"var(--info)",
+              border:`1px solid ${isV6?"var(--success-border)":"var(--info-border)"}`,
+            }}>{data.ip_version}</span>
+            <span style={{fontFamily:"var(--font-mono)",fontSize:22,fontWeight:700,color:"var(--text)"}}>
+              {data.prefix}
+            </span>
+            <span style={{
+              padding:"3px 8px",borderRadius:99,fontSize:11,fontWeight:600,
+              background: data.status==="active"?"var(--success-surface)":"var(--warning-surface)",
+              color:       data.status==="active"?"var(--success)":"var(--warning)",
+              border:`1px solid ${data.status==="active"?"var(--success-border)":"var(--warning-border)"}`,
+              textTransform:"capitalize",
+            }}>{data.status}</span>
           </div>
           <div style={{display:"flex",gap:8}}>
-            <Btn size="sm" variant="ghost" onClick={()=>setEditModal(true)}>Edit Block</Btn>
-            <Btn size="sm" onClick={()=>setAllocModal({})}>+ Add Allocation</Btn>
+            <button onClick={()=>setShowCalc(v=>!v)}
+              className={`btn ${showCalc?"btn-primary":"btn-secondary"} btn-sm`}>
+              🧮 Subnet Calc
+            </button>
+            <button onClick={()=>setEditModal(true)} className="btn btn-secondary btn-sm">
+              Edit Block
+            </button>
+            <button onClick={()=>setAllocModal({})} className="btn btn-primary btn-sm">
+              + Add Allocation
+            </button>
           </div>
         </div>
 
-        <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8,marginBottom:12}}>
-          {[["Name",data.name],["ASN",data.asn],["Router",data.router],["Operator",data.operator],["Site",data.site_name]].map(([k,v])=>(
-            <div key={k} style={{background:C.bg1,borderRadius:5,padding:"8px 12px",border:`1px solid ${C.border}`}}>
-              <div style={{color:C.text2,fontSize:9,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:3}}>{k}</div>
-              <div style={{color:C.text0,fontFamily:C.mono,fontSize:12,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{v||"—"}</div>
+        {/* Block metadata */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8,marginBottom:16}}>
+          {[
+            ["Name",     data.name],
+            ["ASN",      data.asn ? `AS${data.asn}` : null],
+            ["Router",   data.router],
+            ["Operator", data.operator],
+            ["Site",     data.site_name],
+          ].map(([k,v])=>(
+            <div key={k} style={{
+              background:"var(--surface-1)",borderRadius:"var(--radius-sm)",
+              padding:"8px 12px",border:"1px solid var(--border-subtle)",
+            }}>
+              <div style={{fontSize:9,fontWeight:600,textTransform:"uppercase",
+                letterSpacing:"0.08em",color:"var(--text-dim)",marginBottom:3}}>{k}</div>
+              <div style={{fontSize:12,fontFamily:"var(--font-mono)",color:"var(--text)",
+                overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                {v||"—"}
+              </div>
             </div>
           ))}
         </div>
 
-        <div style={{display:"flex",alignItems:"center",gap:16}}>
-          <div style={{flex:1,height:4,background:C.bg1,borderRadius:2,overflow:"hidden"}}>
-            <div style={{width:`${utilPct}%`,height:"100%",background:utilColor,borderRadius:2,transition:"width 0.4s"}}/>
+        {/* Utilization bar */}
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
+          <div style={{flex:1,height:6,background:"var(--surface-3)",borderRadius:99,overflow:"hidden"}}>
+            <div style={{width:`${utilPct}%`,height:"100%",background:utilColor,
+              borderRadius:99,transition:"width 0.5s"}}/>
           </div>
-          <span style={{color:utilColor,fontFamily:C.mono,fontSize:11,minWidth:36}}>{utilPct}%</span>
-          {[["Total",totalCount,C.text1],["Active",activeCount,C.green],["Available",availableCount,C.cyan]].map(([l,v,c])=>(
-            <div key={l} style={{display:"flex",alignItems:"center",gap:4}}>
-              <span style={{color:C.text2,fontSize:11}}>{l}:</span>
-              <span style={{color:c,fontFamily:C.mono,fontSize:12,fontWeight:600}}>{v}</span>
+          <span style={{fontFamily:"var(--font-mono)",fontSize:12,color:utilColor,
+            fontWeight:700,minWidth:36,textAlign:"right"}}>{utilPct}%</span>
+        </div>
+
+        {/* Stats row */}
+        <div style={{display:"flex",alignItems:"center",gap:20,flexWrap:"wrap"}}>
+          {[
+            ["Used IPs",  `${parseInt(usedIps).toLocaleString()} / ${parseInt(totalIps).toLocaleString()}`, utilColor],
+            ["Active",    activeAllocs, "var(--success)"],
+            ["Available", availAllocs,  "var(--accent2)"],
+            ["Total",     totalAllocs,  "var(--text-muted)"],
+          ].map(([l,v,c])=>(
+            <div key={l} style={{display:"flex",alignItems:"center",gap:6}}>
+              <span style={{fontSize:11,color:"var(--text-dim)"}}>{l}:</span>
+              <span style={{fontFamily:"var(--font-mono)",fontSize:13,fontWeight:700,color:c}}>{v}</span>
             </div>
           ))}
+          {/* Owner type pills */}
+          <div style={{marginLeft:"auto",display:"flex",gap:6,flexWrap:"wrap"}}>
+            {ownerBreakdown.map(o=>(
+              <div key={o.value} style={{
+                display:"flex",alignItems:"center",gap:4,
+                padding:"2px 8px",borderRadius:99,fontSize:10,fontWeight:600,
+                background:`${o.color}18`,color:o.color,
+                border:`1px solid ${o.color}44`,
+              }}>
+                <span>{o.icon}</span>{o.label}: {o.count}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Subnet calculator - always visible panel */}
-      <SubnetCalculator
-        blockPrefix={data.prefix}
-        allocations={data.allocations||[]}
-        onSelect={prefix=>{
-          setAllocModal({prefix});
-        }}
-      />
+      {/* Subnet calculator */}
+      {showCalc && (
+        <SubnetCalc
+          blockPrefix={data.prefix}
+          allocations={data.allocations||[]}
+          onSelect={prefix=>{ setAllocModal({prefix}); setShowCalc(false); }}
+        />
+      )}
+
       {/* Allocation table */}
-      <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:8,padding:14}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-          <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            <SearchBar value={search} onChange={setSearch} placeholder="Search prefix, customer, VLAN…" width={260}/>
-            <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}
-              style={{background:C.bg1,border:`1px solid ${C.border}`,color:C.text1,padding:"6px 10px",borderRadius:5,fontSize:11}}>
-              <option value="">All Status</option>
-              {["active","available","reserved","deprecated"].map(s=><option key={s} value={s}>{s}</option>)}
-            </select>
-            <span style={{color:C.text2,fontSize:11}}>{allocs.length} rows</span>
+      <div className="card" style={{overflow:"hidden"}}>
+        {/* Toolbar */}
+        <div style={{display:"flex",alignItems:"center",gap:8,padding:"12px 16px",
+          borderBottom:"1px solid var(--border-subtle)",flexWrap:"wrap"}}>
+          {/* Search */}
+          <div style={{position:"relative",flex:1,minWidth:200,maxWidth:300}}>
+            <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",
+              color:"var(--text-dim)",pointerEvents:"none",fontSize:13}}>🔍</span>
+            <input value={search} onChange={e=>setSearch(e.target.value)}
+              placeholder="Search prefix, customer, VLAN..."
+              className="input" style={{paddingLeft:32,height:32,fontSize:12}}/>
           </div>
-          <span style={{color:C.text2,fontSize:10,fontStyle:"italic"}}>✎ Click any cell to edit inline</span>
+
+          {/* Owner filter */}
+          <select value={ownerFilter} onChange={e=>setOwnerFilter(e.target.value)}
+            className="select" style={{height:32,fontSize:12,minWidth:120}}>
+            <option value="">All Types</option>
+            {OWNER_TYPES.map(o=><option key={o.value} value={o.value}>{o.icon} {o.label}</option>)}
+          </select>
+
+          {/* Status filter */}
+          <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}
+            className="select" style={{height:32,fontSize:12,minWidth:120}}>
+            <option value="">All Status</option>
+            {STATUS_OPTS.map(s=><option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
+          </select>
+
+          <span style={{fontSize:11,color:"var(--text-muted)",marginLeft:"auto"}}>
+            {allocs.length} of {totalAllocs} rows
+          </span>
+          <span style={{fontSize:10,color:"var(--text-dim)",fontStyle:"italic"}}>
+            ✎ Click cell to edit inline
+          </span>
         </div>
 
-        <div style={{overflowX:"auto",overflowY:"auto",maxHeight:"calc(100vh - 360px)"}}>
+        {/* Table */}
+        <div style={{overflowX:"auto",overflowY:"auto",maxHeight:"calc(100vh - 420px)"}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
             <thead style={{position:"sticky",top:0,zIndex:10}}>
-              <tr style={{background:C.bg1,borderBottom:`2px solid ${C.border2}`}}>
-                {COLS.map((col,i)=>(
+              <tr style={{background:"var(--surface-1)",borderBottom:"2px solid var(--border-soft)"}}>
+                {["#","Type","Network IP","/Mask","Usable Range","Owner / Customer","VLAN","Description","Notes","Status",""].map((h,i)=>(
                   <th key={i} style={{
-                    textAlign:"left",padding:"7px 10px",
-                    color:C.text2,fontSize:10,fontWeight:600,
-                    textTransform:"uppercase",letterSpacing:"0.07em",
-                    whiteSpace:"nowrap",borderRight:`1px solid ${C.border}`,
-                    minWidth:col.width||80,
-                  }}>{col.label}</th>
+                    textAlign:"left",padding:"8px 10px",whiteSpace:"nowrap",
+                    fontSize:10,fontWeight:600,textTransform:"uppercase",
+                    letterSpacing:"0.07em",color:"var(--text-muted)",
+                    borderRight:"1px solid var(--border-subtle)",
+                  }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {allocs.length===0
-                ? <tr><td colSpan={COLS.length} style={{padding:"48px 0",textAlign:"center",color:C.text2}}>No allocations found.</td></tr>
-                : allocs.map((row,i)=>(
-                  <tr key={row.id}
-                    style={{borderBottom:`1px solid ${C.border}`,background:i%2===0?C.bg1:C.bg0}}
-                    onMouseEnter={e=>e.currentTarget.style.background=C.bg3}
-                    onMouseLeave={e=>e.currentTarget.style.background=i%2===0?C.bg1:C.bg0}
-                  >
-                    {COLS.map((col,j)=>(
-                      <td key={j} style={{
-                        padding:"4px 10px",borderRight:`1px solid ${C.border}`,
-                        whiteSpace:"nowrap",maxWidth:col.width||240,
-                        overflow:"hidden",
-                      }}>
-                        {col.render(row,i)}
-                      </td>
-                    ))}
+              {allocs.length===0 ? (
+                <tr><td colSpan={11}>
+                  <div style={{display:"flex",flexDirection:"column",alignItems:"center",
+                    justifyContent:"center",padding:"48px 0",gap:8}}>
+                    <div style={{fontSize:28}}>📋</div>
+                    <div style={{fontSize:13,color:"var(--text-muted)"}}>No allocations found</div>
+                  </div>
+                </td></tr>
+              ) : allocs.map((row,i)=>{
+                const oi = ownerInfo(row.owner_type);
+                const ss = STATUS_STYLE[row.status]||STATUS_STYLE.available;
+                const rowBg = row.status==="available"
+                  ? "rgba(56,232,198,0.03)"
+                  : row.status==="reserved"
+                  ? "rgba(168,85,247,0.03)"
+                  : i%2===0?"var(--surface-1)":"transparent";
+
+                return (
+                  <tr key={row.id} style={{
+                    borderBottom:"1px solid var(--border-subtle)",
+                    background:rowBg,
+                    transition:"background var(--transition)",
+                  }}
+                  onMouseEnter={e=>e.currentTarget.style.background="var(--surface-3)"}
+                  onMouseLeave={e=>e.currentTarget.style.background=rowBg}>
+
+                    {/* # */}
+                    <td style={{padding:"6px 10px",color:"var(--text-dim)",
+                      fontFamily:"var(--font-mono)",fontSize:10,borderRight:"1px solid var(--border-subtle)"}}>
+                      {i+1}
+                    </td>
+
+                    {/* Type */}
+                    <td style={{padding:"6px 8px",borderRight:"1px solid var(--border-subtle)"}}>
+                      <select value={row.owner_type||"customer"}
+                        onChange={e=>saveField(row.id,"owner_type",e.target.value)}
+                        onClick={e=>e.stopPropagation()}
+                        style={{
+                          background:"transparent",border:"none",
+                          color:oi.color,fontSize:11,fontWeight:600,
+                          cursor:"pointer",outline:"none",
+                        }}>
+                        {OWNER_TYPES.map(o=>(
+                          <option key={o.value} value={o.value} style={{background:"var(--bg-secondary,var(--bg))",color:"var(--text)"}}>
+                            {o.icon} {o.label}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+
+                    {/* Network IP */}
+                    <td style={{padding:"6px 10px",borderRight:"1px solid var(--border-subtle)"}}>
+                      <span style={{fontFamily:"var(--font-mono)",fontSize:12,fontWeight:600,color:"var(--accent)"}}>
+                        {row.prefix?.split("/")?.[0]}
+                      </span>
+                    </td>
+
+                    {/* Mask */}
+                    <td style={{padding:"6px 8px",borderRight:"1px solid var(--border-subtle)"}}>
+                      <select value={row.prefix?.split("/")?.[1]||""}
+                        onChange={e=>{
+                          const newPlen = parseInt(e.target.value);
+                          const newPrefix = changeMaskAligned(row.prefix, newPlen, data?.allocations?.filter(a=>a.id!==row.id)||[]);
+                          saveField(row.id,"mask",newPrefix.split("/")[1]+"__"+newPrefix.split("/")[0]);
+                        }}
+                        onClick={e=>e.stopPropagation()}
+                        style={{
+                          background:"transparent",border:"1px solid var(--border-soft)",
+                          color:"var(--accent2)",fontSize:11,fontFamily:"var(--font-mono)",
+                          cursor:"pointer",outline:"none",borderRadius:"var(--radius-sm)",
+                          padding:"2px 4px",
+                        }}>
+                        {(isV6?V6_MASKS:V4_MASKS).map(p=>(
+                          <option key={p} value={p} style={{background:"var(--bg-secondary,var(--bg))",color:"var(--text)"}}>/{p}</option>
+                        ))}
+                      </select>
+                    </td>
+
+                    {/* Usable Range */}
+                    <td style={{padding:"6px 10px",borderRight:"1px solid var(--border-subtle)"}}>
+                      <span style={{fontFamily:"var(--font-mono)",fontSize:11,color:"var(--text-muted)"}}>
+                        {calcUsableRange(row.prefix)}
+                      </span>
+                    </td>
+
+                    {/* Owner / Customer */}
+                    <td style={{padding:"4px 8px",borderRight:"1px solid var(--border-subtle)",minWidth:160}}>
+                      {row.owner_type==="customer" ? (
+                        <InlineCell value={row.customer_name} placeholder="assign customer"
+                          suggestions={custNames}
+                          onCreate={v=>saveField(row.id,"customer_name",v)}
+                          onSave={v=>saveField(row.id,"customer_name",v)}/>
+                      ) : (
+                        <InlineCell value={row.description} placeholder="description"
+                          onSave={v=>saveField(row.id,"description",v)}/>
+                      )}
+                    </td>
+
+                    {/* VLAN */}
+                    <td style={{padding:"4px 8px",borderRight:"1px solid var(--border-subtle)"}}>
+                      <InlineCell value={row.vlan_vid?String(row.vlan_vid):""} placeholder="—"
+                        suggestions={vlanVids} mono
+                        onSave={v=>saveField(row.id,"vlan_vid",v)}/>
+                    </td>
+
+                    {/* Description */}
+                    <td style={{padding:"4px 8px",borderRight:"1px solid var(--border-subtle)",maxWidth:160}}>
+                      <InlineCell value={row.description} placeholder="—"
+                        onSave={v=>saveField(row.id,"description",v)}/>
+                    </td>
+
+                    {/* Notes */}
+                    <td style={{padding:"4px 8px",borderRight:"1px solid var(--border-subtle)",maxWidth:120}}>
+                      <InlineCell value={row.notes} placeholder="—"
+                        onSave={v=>saveField(row.id,"notes",v)}/>
+                    </td>
+
+                    {/* Status */}
+                    <td style={{padding:"6px 8px",borderRight:"1px solid var(--border-subtle)"}}>
+                      <select value={row.status}
+                        onChange={e=>saveField(row.id,"status",e.target.value)}
+                        onClick={e=>e.stopPropagation()}
+                        style={{
+                          background:"transparent",border:"none",
+                          color:ss.color,fontSize:11,fontFamily:"var(--font-mono)",
+                          cursor:"pointer",outline:"none",fontWeight:600,
+                          textTransform:"uppercase",letterSpacing:"0.04em",
+                        }}>
+                        {STATUS_OPTS.map(s=>(
+                          <option key={s} value={s} style={{background:"var(--bg-secondary,var(--bg))",color:"var(--text)"}}>
+                            {s}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+
+                    {/* Actions */}
+                    <td style={{padding:"4px 8px"}} onClick={e=>e.stopPropagation()}>
+                      <div style={{display:"flex",gap:4}}>
+                        <button onClick={()=>setAllocModal(row)}
+                          className="btn btn-ghost btn-sm"
+                          style={{padding:"3px 8px",fontSize:11}}>Edit</button>
+                        <button onClick={()=>setConfirm(row)}
+                          style={{
+                            padding:"3px 8px",fontSize:11,
+                            background:"var(--danger-surface)",color:"var(--danger)",
+                            border:"1px solid var(--danger-border)",
+                            borderRadius:"var(--radius-sm)",cursor:"pointer",
+                          }}>Del</button>
+                      </div>
+                    </td>
                   </tr>
-                ))
-              }
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -815,8 +1287,9 @@ export default function BlockDetail({ blockId, onBack }) {
 
       {/* Modals */}
       {editModal && (
-        <BlockEditModal block={data} siteOpts={sites.map(s=>({value:s.id,label:s.name}))}
-          onClose={()=>setEditModal(false)} onSaved={()=>{setEditModal(false);load();}}/>
+        <BlockEditModal block={data} sites={sites}
+          onClose={()=>setEditModal(false)}
+          onSaved={()=>{ setEditModal(false); load(); }}/>
       )}
       {allocModal!==null && (
         <AllocModal
@@ -827,57 +1300,17 @@ export default function BlockDetail({ blockId, onBack }) {
           customers={customers} vlans={vlans}
           onClose={()=>setAllocModal(null)}
           onSaved={()=>{
-            setAllocModal(null);
-            load();
+            setAllocModal(null); load();
             getCustomers("",500).then(d=>setCustomers(d.items||[]));
             getVlans("","",500).then(d=>setVlans(d.items||[]));
-          }}
-        />
+          }}/>
       )}
       {confirm && (
-        <Confirm
+        <ConfirmModal
           message={`Delete allocation ${confirm.prefix}?`}
           onConfirm={async()=>{ await deleteAllocation(confirm.id); setConfirm(null); load(); }}
-          onCancel={()=>setConfirm(null)}
-        />
+          onCancel={()=>setConfirm(null)}/>
       )}
     </div>
-  );
-}
-
-function BlockEditModal({ block, siteOpts, onClose, onSaved }) {
-  const [form, setForm] = useState({
-    prefix:block.prefix||"", name:block.name||"", asn:block.asn||"",
-    router:block.router||"", operator:block.operator||"",
-    site_id:block.site_id||"", status:block.status||"active", description:block.description||"",
-  });
-  const [saving, setSaving] = useState(false);
-  const [err, setErr]       = useState(null);
-  const set = k => v => setForm(f=>({...f,[k]:v}));
-  const save = async () => {
-    setSaving(true); setErr(null);
-    try { await updateBlock(block.id,form); onSaved(); }
-    catch(e) { setErr(e.message); }
-    setSaving(false);
-  };
-  return (
-    <Modal title="Edit IP Block" onClose={onClose}>
-      {err && <Alert type="error" message={err}/>}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
-        <Input label="Prefix" value={form.prefix} onChange={set("prefix")} mono required/>
-        <Input label="Name" value={form.name} onChange={set("name")}/>
-        <Input label="ASN" value={form.asn} onChange={set("asn")} mono/>
-        <Input label="Router" value={form.router} onChange={set("router")} mono/>
-        <div style={{gridColumn:"1/-1"}}><Input label="Operator" value={form.operator} onChange={set("operator")}/></div>
-        <Select label="Site" value={form.site_id} onChange={set("site_id")} options={siteOpts}/>
-        <Select label="Status" value={form.status} onChange={set("status")}
-          options={["active","reserved","deprecated"].map(s=>({value:s,label:s}))}/>
-        <div style={{gridColumn:"1/-1"}}><Input label="Description" value={form.description} onChange={set("description")}/></div>
-      </div>
-      <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:8}}>
-        <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
-        <Btn onClick={save} disabled={saving}>{saving?"Saving…":"Save"}</Btn>
-      </div>
-    </Modal>
   );
 }
