@@ -64,7 +64,7 @@ async def dashboard_stats(db=Depends(get_db)):
             COUNT(a.id) AS total_allocations,
             COUNT(a.id) FILTER (WHERE a.status = 'active') AS active_allocations,
             CASE WHEN family(b.prefix) = 4 THEN
-                COALESCE(SUM(CASE WHEN a.status != 'available' AND a.prefix::cidr != b.prefix
+                COALESCE(SUM(CASE WHEN a.status = 'active' AND a.prefix::cidr != b.prefix
                     AND NOT EXISTS (
                         SELECT 1 FROM allocations a2
                         WHERE a2.block_id = b.id AND a2.id != a.id
@@ -73,7 +73,7 @@ async def dashboard_stats(db=Depends(get_db)):
                     )
                     THEN (2::bigint ^ (32 - masklen(a.prefix::cidr))) ELSE 0 END), 0)
             ELSE
-                COALESCE(SUM(CASE WHEN a.status != 'available' AND a.prefix::cidr != b.prefix
+                COALESCE(SUM(CASE WHEN a.status = 'active' AND a.prefix::cidr != b.prefix
                     AND NOT EXISTS (
                         SELECT 1 FROM allocations a2
                         WHERE a2.block_id = b.id AND a2.id != a.id
@@ -289,7 +289,7 @@ async def list_blocks(
                COUNT(a.id) AS total_allocations,
                COUNT(a.id) FILTER (WHERE a.status='active') AS active_allocations,
                CASE WHEN family(b.prefix) = 4 THEN
-                   COALESCE(SUM(CASE WHEN a.status != 'available' AND a.prefix::cidr != b.prefix
+                   COALESCE(SUM(CASE WHEN a.status = 'active' AND a.prefix::cidr != b.prefix
                        AND NOT EXISTS (
                            SELECT 1 FROM allocations a2
                            WHERE a2.block_id = b.id AND a2.id != a.id
@@ -298,7 +298,7 @@ async def list_blocks(
                        )
                        THEN (2::bigint ^ (32 - masklen(a.prefix::cidr))) ELSE 0 END), 0)::numeric
                ELSE
-                   COALESCE(SUM(CASE WHEN a.status != 'available' AND a.prefix::cidr != b.prefix
+                   COALESCE(SUM(CASE WHEN a.status = 'active' AND a.prefix::cidr != b.prefix
                        AND NOT EXISTS (
                            SELECT 1 FROM allocations a2
                            WHERE a2.block_id = b.id AND a2.id != a.id
@@ -326,8 +326,36 @@ async def list_blocks(
 @app.get("/api/v1/blocks/{block_id}")
 async def get_block(block_id: str, db=Depends(get_db)):
     row = await db.fetchrow("""
-        SELECT b.*, s.name AS site_name FROM ip_blocks b
-        LEFT JOIN sites s ON b.site_id=s.id WHERE b.id=$1::uuid
+        SELECT b.*, s.name AS site_name,
+               CASE WHEN family(b.prefix) = 4 THEN
+                   COALESCE(SUM(CASE WHEN a.status = 'active' AND a.prefix::cidr != b.prefix
+                       AND NOT EXISTS (
+                           SELECT 1 FROM allocations a2
+                           WHERE a2.block_id = b.id AND a2.id != a.id
+                           AND a2.prefix::cidr >> a.prefix::cidr
+                           AND a2.status != 'available'
+                       )
+                       THEN (2::bigint ^ (32 - masklen(a.prefix::cidr))) ELSE 0 END), 0)::numeric
+               ELSE
+                   COALESCE(SUM(CASE WHEN a.status = 'active' AND a.prefix::cidr != b.prefix
+                       AND NOT EXISTS (
+                           SELECT 1 FROM allocations a2
+                           WHERE a2.block_id = b.id AND a2.id != a.id
+                           AND a2.prefix::cidr >> a.prefix::cidr
+                           AND a2.status != 'available'
+                       )
+                       THEN (2::numeric ^ (128 - masklen(a.prefix::cidr))) ELSE 0 END), 0)
+               END AS used_ips,
+               CASE WHEN family(b.prefix) = 4 THEN
+                   (2::bigint ^ (32 - masklen(b.prefix)))::numeric
+               ELSE
+                   (2::numeric ^ (128 - masklen(b.prefix)))
+               END AS total_ips
+        FROM ip_blocks b
+        LEFT JOIN sites s ON b.site_id=s.id
+        LEFT JOIN allocations a ON a.block_id=b.id
+        WHERE b.id=$1::uuid
+        GROUP BY b.id, s.name
     """, block_id)
     if not row: raise HTTPException(404, "Block not found")
     allocs = await db.fetch("""

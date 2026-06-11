@@ -269,8 +269,14 @@ function Loading() {
 }
 
 export default function App() {
-  const [active,    setActive]    = useState("dashboard");
-  const [route,     setRoute]     = useState(null);
+  const parseHash = () => {
+    const h = window.location.hash.replace("#","");
+    if (h.startsWith("block-detail/")) return { page:"block-detail", id:h.split("/")[1] };
+    if (h) return { active: h };
+    return null;
+  };
+  const [active,    setActive]    = useState(()=>{ const p=parseHash(); return p?.active||"dashboard"; });
+  const [route,     setRoute]     = useState(()=>{ const p=parseHash(); return p?.page==="block-detail"?p:null; });
   const [dark,      setDark]      = useState(()=>document.documentElement.classList.contains("dark"));
   const [collapsed, setCollapsed] = useState(false);
 
@@ -283,20 +289,36 @@ export default function App() {
   };
 
   const navigate = (page, params={}) => {
-    if (page === "block-detail") setRoute({ page, ...params });
-    else { setRoute(null); setActive(page); }
+    if (page === "block-detail") {
+      window.location.hash = "block-detail/" + params.id;
+      setRoute({ page, ...params });
+    } else {
+      window.location.hash = page;
+      setRoute(null); setActive(page);
+    }
   };
 
   const goBack = () => {
-    if (route?.from) { setActive(route.from); setRoute(null); }
-    else setRoute(null);
+    const from = route?.from || "ipv4";
+    window.location.hash = from;
+    setActive(from); setRoute(null);
   };
+
+  useEffect(()=>{
+    const onHash = () => {
+      const p = parseHash();
+      if (p?.page==="block-detail") setRoute(p);
+      else if (p?.active) { setRoute(null); setActive(p.active); }
+    };
+    window.addEventListener("hashchange", onHash);
+    return ()=>window.removeEventListener("hashchange", onHash);
+  }, []);
 
   const allItems = NAV_GROUPS.flatMap(g=>g.items);
   const pageTitle = route?.page === "block-detail"
     ? (route.prefix || "Block Detail")
     : allItems.find(n=>n.id===active)?.label || "IPAM";
-  const pageSubtitle = route?.page === "block-detail" ? "Block Detail" : null;
+  const pageSubtitle = null;
 
   const renderPage = () => {
     if (route?.page === "block-detail")

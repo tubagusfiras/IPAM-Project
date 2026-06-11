@@ -39,6 +39,24 @@ function UtilBar({ active, total }) {
   );
 }
 
+function Field({ label, k, placeholder, mono, required, form, set }) {
+  return (
+    <div>
+      <label style={{
+        display:"block", fontSize:10, fontWeight:600,
+        textTransform:"uppercase", letterSpacing:"0.08em",
+        color:"var(--text-muted)", marginBottom:6,
+      }}>{label}{required && <span style={{color:"var(--danger)",marginLeft:2}}>*</span>}</label>
+      <input
+        value={form[k]} onChange={e=>set(k)(e.target.value)}
+        placeholder={placeholder}
+        className="input"
+        style={{fontFamily:mono?"var(--font-mono)":"var(--font-main)"}}
+      />
+    </div>
+  );
+}
+
 function BlockFormModal({ block, sites, onClose, onSaved }) {
   const isEdit = !!block?.id;
   const [form, setForm] = useState({
@@ -67,21 +85,7 @@ function BlockFormModal({ block, sites, onClose, onSaved }) {
     setSaving(false);
   };
 
-  const Field = ({ label, k, placeholder, mono, required }) => (
-    <div>
-      <label style={{
-        display:"block", fontSize:10, fontWeight:600,
-        textTransform:"uppercase", letterSpacing:"0.08em",
-        color:"var(--text-muted)", marginBottom:6,
-      }}>{label}{required && <span style={{color:"var(--danger)",marginLeft:2}}>*</span>}</label>
-      <input
-        value={form[k]} onChange={e=>set(k)(e.target.value)}
-        placeholder={placeholder}
-        className="input"
-        style={{fontFamily:mono?"var(--font-mono)":"var(--font-main)"}}
-      />
-    </div>
-  );
+  // Field defined outside — see top of file
 
   return (
     <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
@@ -111,12 +115,12 @@ function BlockFormModal({ block, sites, onClose, onSaved }) {
           )}
 
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-            <Field label="Prefix (CIDR)" k="prefix" placeholder="e.g. 114.198.242.0/24" mono required/>
-            <Field label="Name" k="name" placeholder="e.g. Kediri Block"/>
-            <Field label="ASN" k="asn" placeholder="e.g. 56246" mono/>
-            <Field label="Router" k="router" placeholder="e.g. mx204-kediri" mono/>
+            <Field label="Prefix (CIDR)" k="prefix" placeholder="e.g. 114.198.242.0/24" mono required form={form} set={set}/>
+            <Field label="Name" k="name" placeholder="e.g. Kediri Block" form={form} set={set}/>
+            <Field label="ASN" k="asn" placeholder="e.g. 56246" mono form={form} set={set}/>
+            <Field label="Router" k="router" placeholder="e.g. mx204-kediri" mono form={form} set={set}/>
             <div style={{gridColumn:"1/-1"}}>
-              <Field label="Operator" k="operator" placeholder="e.g. PT Sumber Data Indonesia"/>
+              <Field label="Operator" k="operator" placeholder="e.g. PT Sumber Data Indonesia" form={form} set={set}/>
             </div>
             <div>
               <label style={{
@@ -142,7 +146,7 @@ function BlockFormModal({ block, sites, onClose, onSaved }) {
               </select>
             </div>
             <div style={{gridColumn:"1/-1"}}>
-              <Field label="Description" k="description" placeholder="Optional description"/>
+              <Field label="Description" k="description" placeholder="Optional description" form={form} set={set}/>
             </div>
           </div>
         </div>
@@ -359,7 +363,7 @@ export default function Blocks({ ipVersion="", onSelectBlock }) {
                   <td className="table-cell">
                     {block.asn && (
                       <div style={{fontFamily:"var(--font-mono)",fontSize:11,color:"var(--text-muted)"}}>
-                        AS{block.asn}
+                        {block.asn}
                       </div>
                     )}
                     {block.router && (
@@ -378,7 +382,7 @@ export default function Blocks({ ipVersion="", onSelectBlock }) {
 
                   <td className="table-cell" style={{minWidth:160}}>
                     <div style={{marginBottom:4}}>
-                      <UtilBar active={block.active_allocations||0} total={block.total_allocations||0}/>
+                      <UtilBar active={parseFloat(block.used_ips||0)} total={parseFloat(block.total_ips||1)}/>
                     </div>
                     <div style={{fontSize:11,color:"var(--text-dim)",fontVariantNumeric:"tabular-nums"}}>
                       {block.active_allocations||0} active · {block.total_allocations||0} total
