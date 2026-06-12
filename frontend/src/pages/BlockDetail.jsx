@@ -241,7 +241,7 @@ function AutoInput({ value, onChange, suggestions=[], placeholder, mono, onCreat
             <div key={s} onMouseDown={()=>select(s)} style={{
               padding:"6px 10px",cursor:"pointer",fontSize:12,
               color:"var(--text)",fontFamily:mono?"var(--font-mono)":"inherit",
-              borderBottom:"1px solid var(--border-subtle)",
+              borderBottom:"1px solid var(--border-soft)",
             }}
             onMouseEnter={e=>e.currentTarget.style.background="var(--surface-3)"}
             onMouseLeave={e=>e.currentTarget.style.background="transparent"}
@@ -544,13 +544,14 @@ export default function BlockDetail({ blockId, onBack, dark }) {
             ["Site",     data.site_name],
           ].map(([k,v])=>(
             <div key={k} style={{
-              background:"var(--surface-1)",borderRadius:"var(--radius-sm)",
-              padding:"8px 12px",border:"1px solid var(--border-subtle)",
+              background:"var(--surface-2)",borderRadius:"var(--radius-sm)",
+              padding:"10px 14px",border:"1px solid var(--border-soft)",
+              boxShadow:"inset 0 1px 0 rgba(255,255,255,0.5)",
             }}>
-              <div style={{fontSize:9,fontWeight:600,textTransform:"uppercase",
-                letterSpacing:"0.08em",color:"var(--text-dim)",marginBottom:3}}>{k}</div>
+              <div style={{fontSize:9,fontWeight:700,textTransform:"uppercase",
+                letterSpacing:"0.08em",color:"var(--text-dim)",marginBottom:4}}>{k}</div>
               <div style={{fontSize:12,fontFamily:"var(--font-mono)",color:"var(--text)",
-                overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                 {v||"—"}
               </div>
             </div>
@@ -618,7 +619,7 @@ export default function BlockDetail({ blockId, onBack, dark }) {
       <div className="card" style={{overflow:"hidden"}}>
         {/* Toolbar */}
         <div style={{display:"flex",alignItems:"center",gap:8,padding:"12px 16px",
-          borderBottom:"1px solid var(--border-subtle)",flexWrap:"wrap"}}>
+          borderBottom:"1px solid var(--border-soft)",flexWrap:"wrap"}}>
           {/* Search */}
           <div style={{position:"relative",flex:1,minWidth:200,maxWidth:300}}>
             <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",
@@ -650,13 +651,13 @@ export default function BlockDetail({ blockId, onBack, dark }) {
         <div style={{overflowX:"auto",overflowY:"auto",maxHeight:"calc(100vh - 420px)"}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
             <thead style={{position:"sticky",top:0,zIndex:10}}>
-              <tr style={{background:"var(--surface-1)",borderBottom:"2px solid var(--border-soft)"}}>
+              <tr style={{background:"var(--surface-2)",borderBottom:"2px solid var(--border-medium)"}}>
                 {["#","Type","Prefix","Usable Range","Owner / Customer","VLAN","End Device XC","Status",""].map((h,i)=>(
                   <th key={i} style={{
                     textAlign:"left",padding:"8px 10px",whiteSpace:"nowrap",
                     fontSize:10,fontWeight:600,textTransform:"uppercase",
                     letterSpacing:"0.07em",color:"var(--text-muted)",
-                    borderRight:"1px solid var(--border-subtle)",
+                    borderRight:"1px solid var(--border-soft)",
                   }}>{h}</th>
                 ))}
               </tr>
@@ -683,10 +684,10 @@ export default function BlockDetail({ blockId, onBack, dark }) {
                 let allocIdx = 0;
                 return rows.map((row,i)=>{
                   if (row._type==="gap") return (
-                    <tr key={"gap-"+i} style={{borderBottom:"1px solid var(--border-subtle)",opacity:0.6}}>
-                      <td style={{padding:"5px 10px",color:"var(--text-dim)",fontFamily:"var(--font-mono)",fontSize:10,borderRight:"1px solid var(--border-subtle)"}}>—</td>
-                      <td style={{padding:"5px 8px",borderRight:"1px solid var(--border-subtle)"}}><span style={{fontSize:10,color:"var(--text-dim)",fontStyle:"italic"}}>free</span></td>
-                      <td style={{padding:"5px 10px",borderRight:"1px solid var(--border-subtle)"}}>
+                    <tr key={"gap-"+i} style={{borderBottom:"1px solid var(--border-soft)",opacity:0.6}}>
+                      <td style={{padding:"5px 10px",color:"var(--text-dim)",fontFamily:"var(--font-mono)",fontSize:10,borderRight:"1px solid var(--border-soft)"}}>—</td>
+                      <td style={{padding:"5px 8px",borderRight:"1px solid var(--border-soft)"}}><span style={{fontSize:10,color:"var(--text-dim)",fontStyle:"italic"}}>free</span></td>
+                      <td style={{padding:"5px 10px",borderRight:"1px solid var(--border-soft)"}}>
                         <span style={{fontFamily:"var(--font-mono)",fontSize:11,color:"var(--text-dim)"}}>
                           {row.startIp} — {row.endIp}
                         </span>
@@ -710,7 +711,7 @@ export default function BlockDetail({ blockId, onBack, dark }) {
 
                 return (
                   <tr key={row.id} style={{
-                    borderBottom:"1px solid var(--border-subtle)",
+                    borderBottom:"1px solid var(--border-soft)",
                     background:rowBg,
                     transition:"background var(--transition)",
                   }}
@@ -719,12 +720,12 @@ export default function BlockDetail({ blockId, onBack, dark }) {
 
                     {/* # */}
                     <td style={{padding:"6px 10px",color:"var(--text-dim)",
-                      fontFamily:"var(--font-mono)",fontSize:10,borderRight:"1px solid var(--border-subtle)"}}>
+                      fontFamily:"var(--font-mono)",fontSize:10,borderRight:"1px solid var(--border-soft)"}}>
                       {i+1}
                     </td>
 
                     {/* Type */}
-                    <td style={{padding:"6px 8px",borderRight:"1px solid var(--border-subtle)"}}>
+                    <td style={{padding:"6px 8px",borderRight:"1px solid var(--border-soft)"}}>
                       <select value={row.owner_type||"customer"}
                         onChange={e=>saveField(row.id,"owner_type",e.target.value)}
                         onClick={e=>e.stopPropagation()}
@@ -742,7 +743,7 @@ export default function BlockDetail({ blockId, onBack, dark }) {
                     </td>
 
                     {/* Prefix */}
-                    <td style={{padding:"6px 10px",borderRight:"1px solid var(--border-subtle)"}}>
+                    <td style={{padding:"6px 10px",borderRight:"1px solid var(--border-soft)"}}>
                       <div style={{display:"flex",alignItems:"center",gap:4}}>
                         <span style={{fontFamily:"var(--font-mono)",fontSize:12,fontWeight:600,color:"var(--accent)"}}>
                           {row.prefix?.split("/")?.[0]}
@@ -768,14 +769,14 @@ export default function BlockDetail({ blockId, onBack, dark }) {
                     </td>
 
                     {/* Usable Range */}
-                    <td style={{padding:"6px 10px",borderRight:"1px solid var(--border-subtle)"}}>
+                    <td style={{padding:"6px 10px",borderRight:"1px solid var(--border-soft)"}}>
                       <span style={{fontFamily:"var(--font-mono)",fontSize:11,color:"var(--text-muted)"}}>
                         {calcUsableRange(row.prefix)}
                       </span>
                     </td>
 
                     {/* Owner / Customer */}
-                    <td style={{padding:"4px 8px",borderRight:"1px solid var(--border-subtle)",minWidth:160}}>
+                    <td style={{padding:"4px 8px",borderRight:"1px solid var(--border-soft)",minWidth:160}}>
                       {row.owner_type==="customer" ? (
                         <InlineCell value={row.customer_name} placeholder="assign customer"
                           suggestions={custNames}
@@ -788,20 +789,20 @@ export default function BlockDetail({ blockId, onBack, dark }) {
                     </td>
 
                     {/* VLAN */}
-                    <td style={{padding:"4px 8px",borderRight:"1px solid var(--border-subtle)"}}>
+                    <td style={{padding:"4px 8px",borderRight:"1px solid var(--border-soft)"}}>
                       <InlineCell value={row.vlan_vid?String(row.vlan_vid):""} placeholder="—"
                         suggestions={vlanVids} mono
                         onSave={v=>saveField(row.id,"vlan_vid",v)}/>
                     </td>
 
                     {/* End Device XC */}
-                    <td style={{padding:"4px 8px",borderRight:"1px solid var(--border-subtle)",maxWidth:160}}>
+                    <td style={{padding:"4px 8px",borderRight:"1px solid var(--border-soft)",maxWidth:160}}>
                       <InlineCell value={row.description} placeholder="—"
                         onSave={v=>saveField(row.id,"description",v)}/>
                     </td>
 
                     {/* Status */}
-                    <td style={{padding:"6px 8px",borderRight:"1px solid var(--border-subtle)"}}>
+                    <td style={{padding:"6px 8px",borderRight:"1px solid var(--border-soft)"}}>
                       <select value={row.status}
                         onChange={e=>saveField(row.id,"status",e.target.value)}
                         onClick={e=>e.stopPropagation()}

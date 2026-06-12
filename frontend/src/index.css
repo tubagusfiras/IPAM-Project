@@ -6,49 +6,50 @@
 
 /* ── CSS Variables — sync dengan SDI Monitoring v2 ── */
 :root {
-  --bg:            #dce4f0;
-  --bg-secondary:  #e6edf7;
-  --bg-tertiary:   #d2daea;
-  --border:        rgba(0,0,0,0.09);
-  --border-hover:  rgba(37,99,180,0.4);
+  /* Light theme — warm white, subtle depth like Claude sandbox */
+  --bg:            #f2f3f5;
+  --bg-secondary:  #eaebee;
+  --bg-tertiary:   #e0e2e7;
+  --border:        rgba(0,0,0,0.08);
+  --border-hover:  rgba(37,99,235,0.35);
   --border-subtle: rgba(0,0,0,0.05);
-  --border-soft:   rgba(0,0,0,0.13);
-  --border-medium: rgba(0,0,0,0.20);
-  --accent:        #2563b1;
-  --accent-dim:    rgba(37,99,177,0.16);
-  --accent2:       #0d9488;
-  --accent3:       #ea6c10;
+  --border-soft:   rgba(0,0,0,0.10);
+  --border-medium: rgba(0,0,0,0.16);
+  --accent:        #2563eb;
+  --accent-dim:    rgba(37,99,235,0.12);
+  --accent2:       #0891b2;
+  --accent3:       #ea580c;
   --success:       #16a34a;
   --warning:       #d97706;
   --danger:        #dc2626;
-  --info:          #2563b1;
-  --text:          #0f1923;
-  --text-muted:    rgba(15,25,35,0.75);
-  --text-dim:      rgba(15,25,35,0.55);
-  --surface-1:     rgba(0,0,0,0.018);
-  --surface-2:     rgba(0,0,0,0.055);
-  --surface-3:     rgba(0,0,0,0.08);
-  --surface-4:     rgba(37,99,177,0.08);
-  --surface-5:     rgba(37,99,177,0.14);
-  --modal-bg:      #e6edf7;
-  --modal-border:  rgba(0,0,0,0.12);
-  --input-bg:      rgba(0,0,0,0.04);
-  --input-border:  rgba(0,0,0,0.13);
-  --scrollbar-bg:  rgba(0,0,0,0.05);
-  --scrollbar-thumb: rgba(0,0,0,0.18);
+  --info:          #2563eb;
+  --text:          #111827;
+  --text-muted:    #374151;
+  --text-dim:      #6b7280;
+  --surface-1:     #ffffff;
+  --surface-2:     #f9fafb;
+  --surface-3:     #f3f4f6;
+  --surface-4:     rgba(37,99,235,0.06);
+  --surface-5:     rgba(37,99,235,0.12);
+  --modal-bg:      #ffffff;
+  --modal-border:  rgba(0,0,0,0.10);
+  --input-bg:      #ffffff;
+  --input-border:  rgba(0,0,0,0.15);
+  --scrollbar-bg:  rgba(0,0,0,0.04);
+  --scrollbar-thumb: rgba(0,0,0,0.15);
   --skeleton-base: rgba(0,0,0,0.06);
-  --skeleton-shine:rgba(0,0,0,0.03);
-  --overlay-bg:    rgba(0,0,0,0.5);
-  --success-surface: rgba(22,163,74,0.1);
-  --warning-surface: rgba(217,119,6,0.1);
-  --danger-surface:  rgba(220,38,38,0.1);
-  --info-surface:    rgba(37,99,177,0.1);
+  --skeleton-shine:rgba(255,255,255,0.8);
+  --overlay-bg:    rgba(0,0,0,0.40);
+  --success-surface: rgba(22,163,74,0.08);
+  --warning-surface: rgba(217,119,6,0.08);
+  --danger-surface:  rgba(220,38,38,0.08);
+  --info-surface:    rgba(37,99,235,0.08);
   --success-border:  rgba(22,163,74,0.25);
   --warning-border:  rgba(217,119,6,0.25);
-  --danger-border:   rgba(220,38,38,0.25);
-  --info-border:     rgba(37,99,177,0.25);
-  --shadow:        0 2px 12px rgba(0,0,0,0.07);
-  --shadow-lg:     0 8px 32px rgba(0,0,0,0.11);
+  --danger-border:   rgba(220,38,38,0.22);
+  --info-border:     rgba(37,99,235,0.22);
+  --shadow:        0 1px 0 rgba(255,255,255,0.8) inset, 0 2px 4px rgba(0,0,0,0.06), 0 6px 16px rgba(0,0,0,0.07);
+  --shadow-lg:     0 1px 0 rgba(255,255,255,0.8) inset, 0 8px 24px rgba(0,0,0,0.12), 0 2px 6px rgba(0,0,0,0.07);
   --radius:        10px;
   --radius-sm:     6px;
   --radius-lg:     14px;
@@ -80,9 +81,9 @@
   --text:          #e2eaf7;
   --text-muted:    rgba(226,234,247,0.70);
   --text-dim:      rgba(226,234,247,0.45);
-  --surface-1:     rgba(255,255,255,0.02);
-  --surface-2:     rgba(255,255,255,0.04);
-  --surface-3:     rgba(255,255,255,0.06);
+  --surface-1:     #131c2e;
+  --surface-2:     #1a2540;
+  --surface-3:     #1f2d4a;
   --surface-4:     rgba(255,255,255,0.08);
   --surface-5:     rgba(255,255,255,0.12);
   --modal-bg:      linear-gradient(135deg,#0d1b3e 0%,#0a2444 100%);
@@ -138,15 +139,15 @@
 
   /* ── Cards ── */
   .card {
-    background: var(--surface-2);
-    border: 1px solid var(--border-soft);
+    background: var(--surface-1);
+    border: 1px solid var(--border-medium);
     border-radius: var(--radius);
     box-shadow: var(--shadow);
     transition: border-color var(--transition), box-shadow var(--transition);
   }
   .card-hover {
-    background: var(--surface-2);
-    border: 1px solid var(--border-soft);
+    background: var(--surface-1);
+    border: 1px solid var(--border-medium);
     border-radius: var(--radius);
     box-shadow: var(--shadow);
     cursor: pointer;
@@ -155,7 +156,7 @@
   .card-hover:hover {
     border-color: var(--border-hover);
     box-shadow: var(--shadow-lg);
-    transform: translateY(-1px);
+    transform: translateY(-2px);
   }
 
   /* ── Buttons ── */
@@ -269,7 +270,7 @@
     color: var(--text-muted);
   }
   .sidebar-item:hover {
-    background: var(--surface-3);
+    background: var(--surface-2);
     color: var(--text);
   }
   .sidebar-item-active {
@@ -308,23 +309,25 @@
   .table-wrap { @apply w-full; border-collapse: collapse; font-size: 0.875rem; }
   .table-header {
     font-size: 0.7rem;
-    font-weight: 600;
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--text-muted);
     padding: 0.625rem 1rem;
     text-align: left;
-    background: var(--surface-1);
-    border-bottom: 1px solid var(--border-soft);
+    background: var(--surface-2);
+    border-bottom: 2px solid var(--border-medium);
     white-space: nowrap;
   }
   .table-cell {
     padding: 0.75rem 1rem;
     color: var(--text);
-    border-bottom: 1px solid var(--border-subtle);
+    border-bottom: 1px solid var(--border-soft);
+    vertical-align: middle;
   }
   .table-row { transition: background var(--transition); }
-  .table-row:hover { background: var(--surface-3); }
+  .table-row:nth-child(even) { background: var(--surface-2); }
+  .table-row:hover { background: var(--surface-3) !important; }
 
   /* ── Status dots ── */
   .status-dot { @apply inline-block w-2 h-2 rounded-full; }
