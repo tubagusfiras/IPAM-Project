@@ -1049,59 +1049,71 @@ async def export_summary(db=Depends(get_db)):
 # PDF EXPORT HELPERS
 # ------------------------------------------------------------------
 
-def _build_pdf_html(block: dict, allocs: list) -> str:
-    prefix     = block.get("prefix", "")
-    name       = block.get("name", "") or ""
-    site       = block.get("site_name", "") or ""
-    asn        = block.get("asn", "") or ""
-    router     = block.get("router", "") or ""
-    status     = str(block.get("status", "")).upper()
-    used       = int(block.get("used_ips", 0) or 0)
-    total      = int(block.get("total_ips", 1) or 1)
-    free       = total - used
-    pct        = round(used / total * 100, 1) if total else 0
-    bar_color  = "#ef4444" if pct > 85 else "#f59e0b" if pct > 60 else "#22c55e"
+def _get_theme_colors(dark: bool) -> dict:
+    if dark:
+        return {
+            "bg":         "#0f172a",
+            "surface":    "#1e293b",
+            "surface2":   "#334155",
+            "text":       "#f1f5f9",
+            "text_muted": "#94a3b8",
+            "border":     "#334155",
+            "th_bg":      "#0f172a",
+            "th_text":    "#f1f5f9",
+            "td_alt":     "#1a2744",
+            "card_bg":    "#1e293b",
+            "card_border":"#334155",
+        }
+    else:
+        return {
+            "bg":         "#ffffff",
+            "surface":    "#f8fafc",
+            "surface2":   "#f1f5f9",
+            "text":       "#0f172a",
+            "text_muted": "#64748b",
+            "border":     "#e2e8f0",
+            "th_bg":      "#1e293b",
+            "th_text":    "#ffffff",
+            "td_alt":     "#f8fafc",
+            "card_bg":    "#ffffff",
+            "card_border":"#e2e8f0",
+        }
+
+
+def _build_block_section(block: dict, allocs: list, theme: dict, is_first: bool = True) -> str:
+    prefix    = block.get("prefix", "")
+    name      = block.get("name", "") or ""
+    site      = block.get("site_name", "") or ""
+    asn       = block.get("asn", "") or ""
+    router    = block.get("router", "") or ""
+    status    = str(block.get("status", "")).upper()
+    used      = int(block.get("used_ips", 0) or 0)
+    total     = int(block.get("total_ips", 1) or 1)
+    free      = total - used
+    pct       = round(used / total * 100, 1) if total else 0
+    bar_color = "#ef4444" if pct > 85 else "#f59e0b" if pct > 60 else "#22c55e"
+    t         = theme
+    page_break = "" if is_first else '<div style="page-break-before:always"></div>'
 
     rows_html = ""
     for a in allocs:
-        typ     = a.get("owner_type", "") or ""
-        typ_colors = {"customer":"#3b82f6","infrastructure":"#8b5cf6","reserved":"#f59e0b","free":"#6b7280"}
-        tc      = typ_colors.get(typ, "#6b7280")
+        typ  = a.get("owner_type", "") or ""
+        tc   = {"customer":"#3b82f6","infrastructure":"#8b5cf6","reserved":"#f59e0b","free":"#6b7280"}.get(typ, "#6b7280")
         rows_html += f"""
         <tr>
-          <td>{a.get('prefix','')}</td>
+          <td style="font-family:monospace;font-size:11px">{a.get('prefix','')}</td>
           <td>{a.get('customer_name','') or '-'}</td>
-          <td><span style="background:{tc};color:#fff;padding:2px 8px;border-radius:4px;font-size:11px">{typ}</span></td>
+          <td><span style="background:{tc};color:#fff;padding:1px 7px;border-radius:4px;font-size:10px">{typ}</span></td>
           <td>{a.get('vlan_name','') or '-'}</td>
           <td>{str(a.get('status','')).upper()}</td>
           <td>{a.get('description','') or '-'}</td>
         </tr>"""
 
-    html = f"""<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8"/>
-<style>
-  body {{ font-family: Arial, sans-serif; font-size: 13px; color: #1e293b; margin: 32px; }}
-  h1   {{ font-size: 20px; margin: 0 0 4px 0; color: #0f172a; }}
-  .sub {{ color: #64748b; font-size: 12px; margin-bottom: 20px; }}
-  .cards {{ display: flex; gap: 16px; margin-bottom: 24px; }}
-  .card {{ flex: 1; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; }}
-  .card .label {{ font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: .5px; }}
-  .card .value {{ font-size: 22px; font-weight: bold; color: #0f172a; margin-top: 4px; }}
-  .bar-wrap {{ background:#e2e8f0; border-radius:4px; height:14px; margin-bottom:24px; }}
-  .bar-fill {{ background:{bar_color}; height:14px; border-radius:4px; width:{pct}%; }}
-  .bar-label {{ font-size:11px; color:#64748b; margin-bottom:4px; }}
-  table {{ width:100%; border-collapse:collapse; font-size:12px; }}
-  th {{ background:#1e293b; color:#fff; padding:8px 10px; text-align:left; }}
-  tr:nth-child(even) td {{ background:#f8fafc; }}
-  td {{ padding:7px 10px; border-bottom:1px solid #e2e8f0; }}
-  .footer {{ margin-top:24px; font-size:11px; color:#94a3b8; text-align:right; }}
-</style>
-</head>
-<body>
-  <h1>{prefix} — {name}</h1>
-  <div class="sub">Site: {site} &nbsp;|&nbsp; ASN: {asn} &nbsp;|&nbsp; Router: {router} &nbsp;|&nbsp; Status: {status}</div>
+    return f"""{page_break}
+  <div class="block-header">
+    <h1>{prefix}{' — ' + name if name else ''}</h1>
+    <div class="sub">Site: {site or '-'} &nbsp;|&nbsp; ASN: {asn or '-'} &nbsp;|&nbsp; Router: {router or '-'} &nbsp;|&nbsp; Status: {status}</div>
+  </div>
   <div class="cards">
     <div class="card"><div class="label">Total IPs</div><div class="value">{total}</div></div>
     <div class="card"><div class="label">Used</div><div class="value" style="color:#3b82f6">{used}</div></div>
@@ -1109,18 +1121,52 @@ def _build_pdf_html(block: dict, allocs: list) -> str:
     <div class="card"><div class="label">Utilization</div><div class="value" style="color:{bar_color}">{pct}%</div></div>
   </div>
   <div class="bar-label">Utilization — {pct}%</div>
-  <div class="bar-wrap"><div class="bar-fill"></div></div>
+  <div class="bar-wrap"><div class="bar-fill" style="width:{pct}%;background:{bar_color}"></div></div>
   <table>
     <thead><tr><th>Prefix</th><th>Customer</th><th>Type</th><th>VLAN</th><th>Status</th><th>End Device XC</th></tr></thead>
     <tbody>{rows_html}</tbody>
   </table>
-  <div class="footer">Generated by IPAM SDI &mdash; {__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M')}</div>
-</body>
+  <div class="footer">Generated by IPAM SDI &mdash; {__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M')}</div>"""
+
+
+def _wrap_html(body: str, theme: dict) -> str:
+    t = theme
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<style>
+  @page {{ size: A4; margin: 20mm 18mm; }}
+  body {{ font-family: Arial, sans-serif; font-size: 12px; color: {t['text']}; background: {t['bg']}; margin: 0; }}
+  h1   {{ font-size: 18px; margin: 0 0 3px 0; color: {t['text']}; }}
+  .sub {{ color: {t['text_muted']}; font-size: 11px; margin-bottom: 14px; }}
+  .block-header {{ margin-bottom: 12px; }}
+  .cards {{ display: flex; gap: 12px; margin-bottom: 16px; }}
+  .card {{ flex: 1; border: 1px solid {t['card_border']}; border-radius: 6px; padding: 10px 14px; background: {t['card_bg']}; }}
+  .card .label {{ font-size: 10px; color: {t['text_muted']}; text-transform: uppercase; letter-spacing: .5px; }}
+  .card .value {{ font-size: 20px; font-weight: bold; color: {t['text']}; margin-top: 2px; }}
+  .bar-wrap {{ background:{t['border']}; border-radius:4px; height:10px; margin-bottom:16px; }}
+  .bar-fill {{ height:10px; border-radius:4px; }}
+  .bar-label {{ font-size:10px; color:{t['text_muted']}; margin-bottom:3px; }}
+  table {{ width:100%; border-collapse:collapse; font-size:11px; }}
+  th {{ background:{t['th_bg']}; color:{t['th_text']}; padding:6px 8px; text-align:left; }}
+  tr:nth-child(even) td {{ background:{t['td_alt']}; }}
+  td {{ padding:5px 8px; border-bottom:1px solid {t['border']}; color:{t['text']}; }}
+  .footer {{ margin-top:16px; font-size:10px; color:{t['text_muted']}; text-align:right; }}
+</style>
+</head>
+<body>{body}</body>
 </html>"""
-    return html
 
 
-def _build_summary_pdf_html(all_blocks: list) -> str:
+def _build_pdf_html(block: dict, allocs: list, dark: bool = False) -> str:
+    theme = _get_theme_colors(dark)
+    body  = _build_block_section(block, allocs, theme, is_first=True)
+    return _wrap_html(body, theme)
+
+
+def _build_summary_pdf_html(all_blocks: list, dark: bool = False) -> str:
+    t = _get_theme_colors(dark)
     rows_html = ""
     for i, b in enumerate(all_blocks, 1):
         used  = int(b.get("used_ips", 0) or 0)
@@ -1130,7 +1176,7 @@ def _build_summary_pdf_html(all_blocks: list) -> str:
         rows_html += f"""
         <tr>
           <td>{i}</td>
-          <td>{b.get('prefix','')}</td>
+          <td style="font-family:monospace;font-size:11px">{b.get('prefix','')}</td>
           <td>{b.get('name','') or '-'}</td>
           <td>{b.get('asn','') or '-'}</td>
           <td>{b.get('site_name','') or '-'}</td>
@@ -1140,32 +1186,23 @@ def _build_summary_pdf_html(all_blocks: list) -> str:
           <td>{str(b.get('status','')).upper()}</td>
         </tr>"""
 
-    html = f"""<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8"/>
-<style>
-  body {{ font-family: Arial, sans-serif; font-size: 13px; color: #1e293b; margin: 32px; }}
-  h1   {{ font-size: 20px; margin: 0 0 4px 0; }}
-  .sub {{ color: #64748b; font-size: 12px; margin-bottom: 24px; }}
-  table {{ width:100%; border-collapse:collapse; font-size:12px; }}
-  th {{ background:#1e293b; color:#fff; padding:8px 10px; text-align:left; }}
-  tr:nth-child(even) td {{ background:#f8fafc; }}
-  td {{ padding:7px 10px; border-bottom:1px solid #e2e8f0; }}
-  .footer {{ margin-top:24px; font-size:11px; color:#94a3b8; text-align:right; }}
-</style>
-</head>
-<body>
+    body = f"""
   <h1>IPAM Summary Report</h1>
   <div class="sub">Generated: {__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M')} &nbsp;|&nbsp; Total Blocks: {len(all_blocks)}</div>
   <table>
     <thead><tr><th>#</th><th>Prefix</th><th>Name</th><th>ASN</th><th>Site</th><th>Used</th><th>Total</th><th>Util%</th><th>Status</th></tr></thead>
     <tbody>{rows_html}</tbody>
   </table>
-  <div class="footer">Generated by IPAM SDI</div>
-</body>
-</html>"""
-    return html
+  <div class="footer">Generated by IPAM SDI &mdash; {__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M')}</div>"""
+    return _wrap_html(body, t)
+
+
+def _build_multi_pdf_html(blocks_allocs: list, dark: bool = False) -> str:
+    theme   = _get_theme_colors(dark)
+    sections = []
+    for i, (block, allocs) in enumerate(blocks_allocs):
+        sections.append(_build_block_section(block, allocs, theme, is_first=(i == 0)))
+    return _wrap_html("".join(sections), theme)
 
 
 # ------------------------------------------------------------------

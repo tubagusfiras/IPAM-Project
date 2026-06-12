@@ -112,6 +112,8 @@ export default function Export() {
     try {
       if (type==="single" && preview) {
         window.location.href = `/api/v1/export/block/${preview.id}`;
+      } else if (type==="single-pdf" && preview) {
+        window.location.href = `/api/v1/export/block/${preview.id}/pdf`;
       } else if (type==="multi") {
         const res = await fetch("/api/v1/export/blocks",{
           method:"POST", headers:{"Content-Type":"application/json"},
@@ -124,6 +126,8 @@ export default function Export() {
         URL.revokeObjectURL(url);
       } else if (type==="summary") {
         window.location.href = "/api/v1/export/summary";
+      } else if (type==="summary-pdf") {
+        window.location.href = "/api/v1/export/summary/pdf";
       }
     } catch(e) { console.error(e); }
     setExporting(false);
@@ -161,15 +165,15 @@ export default function Export() {
         <div>
           <h1 style={{fontSize:20,fontWeight:700,color:"var(--text)",margin:0}}>Export</h1>
           <p style={{fontSize:12,color:"var(--text-muted)",margin:"3px 0 0"}}>
-            Pilih block, preview detail, lalu export ke Excel
+            Pilih block, preview detail, lalu export ke PDF
           </p>
         </div>
         <div style={{display:"flex",gap:8}}>
-          <button onClick={()=>doExport("summary")} disabled={exporting}
-            className="btn btn-secondary btn-sm">📊 Export Summary</button>
+          <button onClick={()=>doExport("summary-pdf")} disabled={exporting}
+            className="btn btn-secondary btn-sm">📋 Summary PDF</button>
           <button onClick={()=>doExport("multi")} disabled={!someSelected||exporting}
             className="btn btn-primary btn-sm">
-            ⬇ Export Selected ({selectedIds.length})
+            ⬇ Export Selected Excel ({selectedIds.length})
           </button>
         </div>
       </div>
@@ -277,10 +281,12 @@ export default function Export() {
                     ):null)}
                   </div>
                 </div>
-                <button onClick={()=>doExport("single")} disabled={exporting}
-                  className="btn btn-primary" style={{whiteSpace:"nowrap",flexShrink:0}}>
-                  ⬇ Export Excel
-                </button>
+                <div style={{display:"flex",gap:8,flexShrink:0}}>
+                  <button onClick={()=>doExport("single-pdf")} disabled={exporting}
+                    className="btn btn-primary" style={{whiteSpace:"nowrap"}}>
+                    📄 Export PDF
+                  </button>
+                </div>
               </div>
 
               {/* Stats row */}

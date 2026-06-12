@@ -1,13 +1,14 @@
 import { useState } from "react";
 
+// Semua used = redup gelap, free = biru menyala
 const OWNER_COLOR = {
-  customer:   { bg:"#1e40af22", border:"#3b82f6", dot:"#3b82f6", label:"Customer" },
-  internal:   { bg:"#14532d22", border:"#22c55e", dot:"#22c55e", label:"Internal" },
-  ptp:        { bg:"#78350f22", border:"#f59e0b", dot:"#f59e0b", label:"PTP" },
-  peering:    { bg:"#4c1d9522", border:"#a855f7", dot:"#a855f7", label:"Peering" },
-  management: { bg:"#0c4a6e22", border:"#0ea5e9", dot:"#0ea5e9", label:"Mgmt" },
-  reserved:   { bg:"#3f3f4622", border:"#71717a", dot:"#71717a", label:"Reserved" },
-  free:       { bg:"transparent", border:"#ffffff0f", dot:"#ffffff18", label:"Free" },
+  customer:       { bg:"rgba(71,85,105,0.35)",  border:"#475569", dot:"#94a3b8", label:"Customer"       },
+  infrastructure: { bg:"rgba(71,85,105,0.35)",  border:"#475569", dot:"#94a3b8", label:"Infrastructure" },
+  ptp:            { bg:"rgba(71,85,105,0.35)",  border:"#475569", dot:"#94a3b8", label:"PTP"            },
+  peering:        { bg:"rgba(71,85,105,0.35)",  border:"#475569", dot:"#94a3b8", label:"Peering"        },
+  management:     { bg:"rgba(71,85,105,0.35)",  border:"#475569", dot:"#94a3b8", label:"Mgmt"           },
+  reserved:       { bg:"rgba(51,65,85,0.50)",   border:"#334155", dot:"#64748b", label:"Reserved"       },
+  free:           { bg:"rgba(37,99,235,0.15)",  border:"#3b82f6", dot:"#60a5fa", label:"Free"           },
 };
 
 function ipToInt(ip) {
@@ -20,7 +21,7 @@ function intToIp(n) {
 function calcUsable(prefix) {
   try {
     const [addr, plen] = prefix.split("/");
-    const p = parseInt(plen);
+    const p    = parseInt(plen);
     const base = ipToInt(addr);
     const size = Math.pow(2, 32-p);
     if (size <= 2) return `${intToIp(base)} — ${intToIp((base+size-1)>>>0)}`;
@@ -29,51 +30,81 @@ function calcUsable(prefix) {
 }
 
 const SLOT_SIZES = [
-  { label:"/31", value:2  },
-  { label:"/30", value:4  },
-  { label:"/29", value:8  },
-  { label:"/28", value:16 },
-  { label:"/27", value:32 },
-  { label:"/26", value:64 },
-  { label:"/25", value:128},
-  { label:"/24", value:256},
+  { label:"/31", value:2   },
+  { label:"/30", value:4   },
+  { label:"/29", value:8   },
+  { label:"/28", value:16  },
+  { label:"/27", value:32  },
+  { label:"/26", value:64  },
+  { label:"/25", value:128 },
+  { label:"/24", value:256 },
 ];
 
-// Zoom levels: tile min-width in px
 const ZOOM_SIZES = [28, 38, 52, 70];
 
 export default function IPGrid({ blockPrefix, allocations, onAllocate, onEdit }) {
   const [hover,    setHover]    = useState(null);
   const [slotSize, setSlotSize] = useState(4);
-  const [zoom,     setZoom]     = useState(1); // index into ZOOM_SIZES
+  const [zoom,     setZoom]     = useState(1);
 
   if (!blockPrefix || blockPrefix.includes(":")) return null;
 
   const [bAddr, bPlen] = blockPrefix.split("/");
-  const bStart = ipToInt(bAddr);
-  const bSize  = Math.pow(2, 32 - parseInt(bPlen));
-  const step   = slotSize;
+  const bStart  = ipToInt(bAddr);
+  const bPlenN  = parseInt(bPlen);
+  const bSize   = Math.pow(2, 32 - bPlenN);
+  const step    = slotSize;
+  const slotPlen = 32 - Math.log2(step);
+
+  // Jika slotSize lebih besar dari block, disable
+  if (step > bSize) {
+    return (
+      <div style={{background:"var(--surface-1)",border:"1px solid var(--border-soft)",borderRadius:"var(--radius)",padding:24,textAlign:"center"}}>
+        <span style={{fontSize:12,color:"var(--text-muted)"}}>Slot size lebih besar dari block. Pilih slot yang lebih kecil.</span>
+      </div>
+    );
+  }
+
+  // Build allocation index: range → alloc
+  const allocList = (allocations || []).map(a => {
+    const [aAddr, aPlen] = a.prefix.split("/");
+    const aStart = ipToInt(aAddr);
+    const aSize  = Math.pow(2, 32 - parseInt(aPlen));
+    const aEnd   = (aStart + aSize - 1) >>> 0;
+    return { ...a, aStart, aEnd };
+  });
 
   const slots = [];
   for (let i = 0; i < bSize; i += step) {
     const slotStart = (bStart + i) >>> 0;
     const slotEnd   = (slotStart + step - 1) >>> 0;
-    const plen      = 32 - Math.log2(step);
-    const prefix    = `${intToIp(slotStart)}/${plen}`;
+
+    // Pastikan slot align dengan boundary slotSize
+    // (skip slot yang tidak align — misal /25 harus mulai di kelipatan 128)
+    const alignOk = (slotStart % step) === 0;
 
     let match = null, partial = false;
-    for (const a of (allocations||[])) {
-      const [aAddr, aPlen] = a.prefix.split("/");
-      const aStart = ipToInt(aAddr);
-      const aSize  = Math.pow(2, 32 - parseInt(aPlen));
-      const aEnd   = (aStart + aSize - 1) >>> 0;
-      if (aStart <= slotStart && aEnd >= slotEnd) { match = a; break; }
-      if (aStart <= slotEnd && aEnd >= slotStart) { partial = true; }
+    let bestMatchSize = Infinity;
+    for (const a of allocList) {
+      const aSize = a.aEnd - a.aStart + 1;
+      // Full cover: alokasi mencakup seluruh slot
+      if (a.aStart <= slotStart && a.aEnd >= slotEnd) {
+        // Pilih alokasi terkecil (paling spesifik)
+        if (aSize < bestMatchSize) { match = a; bestMatchSize = aSize; }
+      } else if (a.aStart <= slotEnd && a.aEnd >= slotStart) {
+        // Partial: overlap tapi tidak wrap penuh
+        if (!match) partial = true;
+      }
     }
+
+    // Jika slot tidak align → paksa partial (tidak available)
+    if (!alignOk && !match) partial = true;
+
+    const prefix = `${intToIp(slotStart)}/${slotPlen}`;
     slots.push({ prefix, slotStart, slotEnd, match, partial, idx: i/step });
   }
 
-  const usedSlots = slots.filter(s => s.match && s.match.status !== "available").length;
+  const usedSlots = slots.filter(s => s.match).length;
   const freeSlots = slots.filter(s => !s.match && !s.partial).length;
   const tileSize  = ZOOM_SIZES[zoom];
   const showLabel = tileSize >= 38;
@@ -88,26 +119,35 @@ export default function IPGrid({ blockPrefix, allocations, onAllocate, onEdit })
       {/* Header */}
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,flexWrap:"wrap"}}>
         <span style={{fontSize:11,fontWeight:700,color:"var(--text)",letterSpacing:"0.08em",textTransform:"uppercase"}}>IP Map</span>
-        <span style={{fontSize:11,color:"var(--text-dim)"}}>
-          {usedSlots}/{slots.length} used · <span style={{color:"var(--success)"}}>{freeSlots} free</span>
+        <span style={{fontSize:11,color:"var(--text-muted)"}}>
+          {usedSlots}/{slots.length} used ·{" "}
+          <span style={{color:"var(--success)"}}>{freeSlots} free</span>
         </span>
 
         <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:8}}>
-          {/* Slot size */}
+          {/* Slot size selector */}
           <div style={{display:"flex",gap:2}}>
-            {SLOT_SIZES.map(s=>(
-              <button key={s.value} onClick={()=>setSlotSize(s.value)}
-                style={{
-                  padding:"2px 7px",fontSize:10,borderRadius:4,cursor:"pointer",
-                  fontFamily:"var(--font-mono)",fontWeight:600,
-                  background: slotSize===s.value ? "var(--accent)" : "var(--surface-2)",
-                  color: slotSize===s.value ? "#fff" : "var(--text-dim)",
-                  border: slotSize===s.value ? "1px solid var(--accent)" : "1px solid var(--border-soft)",
-                  transition:"all 0.15s",
-                }}>
-                {s.label}
-              </button>
-            ))}
+            {SLOT_SIZES.map(s => {
+              const active = slotSize === s.value;
+              const tooLarge = s.value > bSize;
+              return (
+                <button key={s.value}
+                  onClick={() => !tooLarge && setSlotSize(s.value)}
+                  disabled={tooLarge}
+                  style={{
+                    padding:"2px 7px", fontSize:10, borderRadius:4,
+                    cursor: tooLarge ? "not-allowed" : "pointer",
+                    fontFamily:"var(--font-mono)", fontWeight:600,
+                    background: active ? "var(--accent)" : "var(--surface-2)",
+                    color: active ? "#fff" : tooLarge ? "var(--text-dim)" : "var(--text-muted)",
+                    border: active ? "1px solid var(--accent)" : "1px solid var(--border-soft)",
+                    opacity: tooLarge ? 0.35 : 1,
+                    transition:"all 0.15s",
+                  }}>
+                  {s.label}
+                </button>
+              );
+            })}
           </div>
 
           {/* Zoom */}
@@ -135,8 +175,8 @@ export default function IPGrid({ blockPrefix, allocations, onAllocate, onEdit })
         <div style={{display:"flex",gap:10,flexWrap:"wrap",width:"100%",marginTop:2}}>
           {Object.entries(OWNER_COLOR).map(([k,v])=>(
             <div key={k} style={{display:"flex",alignItems:"center",gap:4}}>
-              <div style={{width:8,height:8,borderRadius:2,background:v.dot,border:`1px solid ${v.border}`}}/>
-              <span style={{fontSize:10,color:"var(--text-dim)"}}>{v.label}</span>
+              <div style={{width:8,height:8,borderRadius:2,background:v.dot}}/>
+              <span style={{fontSize:10,color:"var(--text-muted)"}}>{v.label}</span>
             </div>
           ))}
         </div>
@@ -150,11 +190,13 @@ export default function IPGrid({ blockPrefix, allocations, onAllocate, onEdit })
       }}>
         {slots.map((slot,i)=>{
           const isHovered = hover === i;
-          const c = slot.match
+          const c = (slot.match && slot.match.status !== "available")
             ? (OWNER_COLOR[slot.match.owner_type] || OWNER_COLOR.reserved)
             : slot.partial ? OWNER_COLOR.reserved : OWNER_COLOR.free;
-          const isFree = !slot.match && !slot.partial;
-          const label  = slot.prefix.split("/")[0].split(".").slice(-1)[0];
+          const isAvailable = slot.match?.status === "available";
+          const isFree = (!slot.match && !slot.partial) || isAvailable;
+          // Ambil octet terakhir dari slotStart
+          const lastOctet = (slot.slotStart & 0xff).toString();
 
           return (
             <div key={i} style={{position:"relative"}}>
@@ -168,7 +210,7 @@ export default function IPGrid({ blockPrefix, allocations, onAllocate, onEdit })
                 style={{
                   height: tileSize < 38 ? 26 : 34,
                   background: isHovered
-                    ? (isFree ? "rgba(99,179,237,0.15)" : c.bg.replace("22","44"))
+                    ? (isFree ? "rgba(99,179,237,0.15)" : c.bg)
                     : c.bg,
                   border:`1px solid ${isHovered ? c.dot : c.border}`,
                   borderRadius:4,
@@ -183,15 +225,19 @@ export default function IPGrid({ blockPrefix, allocations, onAllocate, onEdit })
                   <span style={{
                     fontSize: tileSize >= 52 ? 10 : 9,
                     fontFamily:"var(--font-mono)",
-                    color: slot.match ? c.dot : "var(--text-dim)",
-                    fontWeight: slot.match ? 600 : 400,
+                    color: slot.match
+                      ? "#94a3b8"
+                      : slot.partial
+                        ? "#475569"
+                        : "#93c5fd",
+                    fontWeight: slot.match ? 600 : 500,
                     lineHeight:1,
                   }}>
-                    .{label}
+                    .{lastOctet}
                   </span>
                 )}
-                {slot.match && (
-                  <div style={{width:4,height:4,borderRadius:"50%",background:c.dot,marginTop:showLabel?2:0}}/>
+                {slot.match && !showLabel && (
+                  <div style={{width:4,height:4,borderRadius:"50%",background:"#64748b",marginTop:0}}/>
                 )}
                 {isFree && isHovered && showLabel && (
                   <span style={{fontSize:8,color:"var(--accent)",marginTop:1,fontWeight:700}}>+</span>
@@ -220,21 +266,24 @@ export default function IPGrid({ blockPrefix, allocations, onAllocate, onEdit })
                   {slot.match ? (
                     <>
                       <div style={{fontSize:10,color:c.dot,fontWeight:600,marginBottom:3}}>{c.label.toUpperCase()}</div>
-                      {slot.match.customer_name && <div style={{fontSize:11,color:"var(--text-muted)",marginBottom:1}}>{slot.match.customer_name}</div>}
-                      {slot.match.description   && <div style={{fontSize:10,color:"var(--text-dim)",marginBottom:1}}>{slot.match.description}</div>}
-                      {slot.match.vlan_vid      && <div style={{fontSize:10,color:"var(--text-dim)",marginBottom:1}}>VLAN {slot.match.vlan_vid}</div>}
-                      <div style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>
-                        {calcUsable(slot.match.prefix)}
-                      </div>
-                      <div style={{fontSize:9,color:"var(--text-dim)",marginTop:4,opacity:0.6}}>click to edit</div>
+                      {slot.match.customer_name && <div style={{fontSize:11,color:"var(--text)",marginBottom:1}}>{slot.match.customer_name}</div>}
+                      {slot.match.description   && <div style={{fontSize:10,color:"var(--text-muted)",marginBottom:1}}>{slot.match.description}</div>}
+                      {slot.match.vlan_vid      && <div style={{fontSize:10,color:"var(--text-muted)",marginBottom:1}}>VLAN {slot.match.vlan_vid}</div>}
+                      <div style={{fontSize:10,color:"var(--text-muted)",marginTop:2}}>{calcUsable(slot.match.prefix)}</div>
+                      <div style={{fontSize:9,color:"var(--text-dim)",marginTop:4,opacity:0.7}}>click to edit</div>
                     </>
                   ) : slot.partial ? (
-                    <div style={{fontSize:10,color:"var(--text-dim)"}}>Part of larger allocation</div>
+                    <div style={{fontSize:10,color:"var(--text-muted)"}}>Partially allocated — not available</div>
                   ) : (
                     <>
+                      {isAvailable && (
+                        <div style={{fontSize:10,color:"var(--warning)",marginBottom:4,fontWeight:600}}>
+                          ⚠ Status: available (belum dialokasikan)
+                        </div>
+                      )}
                       <div style={{fontSize:10,color:"var(--success)",marginBottom:2}}>Free — available</div>
-                      <div style={{fontSize:10,color:"var(--text-dim)",marginBottom:2}}>{calcUsable(slot.prefix)}</div>
-                      <div style={{fontSize:9,color:"var(--accent)",marginTop:4,opacity:0.8}}>click to allocate</div>
+                      <div style={{fontSize:10,color:"var(--text-muted)",marginBottom:2}}>{calcUsable(slot.prefix)}</div>
+                      <div style={{fontSize:9,color:"var(--accent)",marginTop:4,opacity:0.9}}>click to allocate</div>
                     </>
                   )}
                 </div>

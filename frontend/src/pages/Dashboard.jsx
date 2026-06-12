@@ -67,7 +67,7 @@ const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
     <div style={{
-      background:"var(--bg-secondary,var(--bg))",
+      background:"#1e293b",
       border:"1px solid var(--border-soft)",
       borderRadius:"var(--radius-sm)",
       padding:"10px 14px",
@@ -215,19 +215,19 @@ export default function Dashboard({ onNavigate }) {
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={barData} barGap={3} barCategoryGap="30%">
               <XAxis dataKey="name"
-                tick={{fontSize:10,fill:"var(--text-muted)",fontFamily:"var(--font-mono)"}}
+                tick={{fontSize:10,fill:"#94a3b8",fontFamily:"var(--font-mono)"}}
                 axisLine={false} tickLine={false}
                 interval={0}/>
               <YAxis
-                tick={{fontSize:10,fill:"var(--text-dim)"}}
+                tick={{fontSize:10,fill:"#64748b"}}
                 axisLine={false} tickLine={false}/>
               <Tooltip content={<CustomTooltip/>}/>
-              <Bar dataKey="total"  name="Total"  fill="var(--surface-4)" radius={[3,3,0,0]}/>
-              <Bar dataKey="active" name="Active" fill="var(--accent)"    radius={[3,3,0,0]}/>
+              <Bar dataKey="total"  name="Total"  fill="#334155" radius={[3,3,0,0]}/>
+              <Bar dataKey="active" name="Active" fill="#3b82f6" radius={[3,3,0,0]}/>
             </BarChart>
           </ResponsiveContainer>
           <div style={{display:"flex",alignItems:"center",gap:16,marginTop:8,justifyContent:"center"}}>
-            {[["Total","var(--surface-4)"],["Active","var(--accent)"]].map(([l,c])=>(
+            {[["Total","#334155"],["Active","#3b82f6"]].map(([l,c])=>(
               <div key={l} style={{display:"flex",alignItems:"center",gap:6}}>
                 <div style={{width:10,height:10,borderRadius:2,background:c}}/>
                 <span style={{fontSize:11,color:"var(--text-muted)"}}>{l}</span>
