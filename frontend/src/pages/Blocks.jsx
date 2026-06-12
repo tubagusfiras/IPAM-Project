@@ -2,14 +2,14 @@ import { useState, useEffect, useCallback } from "react";
 import { getBlocks, createBlock, updateBlock, deleteBlock, getSites } from "../api.js";
 
 const VERSION_COLOR = {
-  IPv4: { bg:"var(--info-surface)", color:"var(--info)", border:"var(--info-border)" },
-  IPv6: { bg:"var(--success-surface)", color:"var(--success)", border:"var(--success-border)" },
+  IPv4: { bg:"var(--surface-2)", color:"var(--text-muted)", border:"var(--border-soft)" },
+  IPv6: { bg:"var(--surface-2)", color:"var(--text-muted)", border:"var(--border-soft)" },
 };
 
 const STATUS_COLOR = {
-  active:     { bg:"var(--success-surface)", color:"var(--success)", border:"var(--success-border)" },
-  reserved:   { bg:"rgba(168,85,247,0.1)",   color:"#a855f7",        border:"rgba(168,85,247,0.25)" },
-  deprecated: { bg:"var(--warning-surface)", color:"var(--warning)", border:"var(--warning-border)" },
+  active:     { bg:"var(--success-surface)", color:"var(--success)",    border:"var(--success-border)" },
+  reserved:   { bg:"var(--surface-2)",        color:"var(--text-dim)",  border:"var(--border-soft)" },
+  deprecated: { bg:"var(--warning-surface)", color:"var(--warning)",    border:"var(--warning-border)" },
 };
 
 function Badge({ label, style }) {

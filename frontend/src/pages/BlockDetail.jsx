@@ -7,21 +7,21 @@ import { getBlock, updateBlock, getSites, getCustomers, getVlans,
 
 // ── CONSTANTS ────────────────────────────────────────────────────────────────
 const OWNER_TYPES = [
-  { value:"customer",   label:"Customer",   color:"var(--accent)",   icon:"👤" },
-  { value:"internal",   label:"Internal",   color:"var(--accent2)",  icon:"🖥️" },
-  { value:"ptp",        label:"PTP",        color:"var(--warning)",  icon:"🔗" },
-  { value:"peering",    label:"Peering",    color:"#a855f7",         icon:"🌐" },
-  { value:"management", label:"Mgmt",       color:"var(--info)",     icon:"⚙️" },
-  { value:"reserved",   label:"Reserved",   color:"var(--text-dim)", icon:"🔒" },
+  { value:"customer",       label:"Customer",       color:"var(--text-muted)", icon:"" },
+  { value:"infrastructure", label:"Infrastructure", color:"var(--text-muted)", icon:"" },
+  { value:"ptp",            label:"PTP",            color:"var(--text-muted)", icon:"" },
+  { value:"peering",        label:"Peering",        color:"var(--text-muted)", icon:"" },
+  { value:"management",     label:"Mgmt",           color:"var(--text-muted)", icon:"" },
+  { value:"reserved",       label:"Reserved",       color:"var(--text-dim)",   icon:"" },
 ];
 
 const STATUS_OPTS = ["active","available","reserved","deprecated"];
 
 const STATUS_STYLE = {
-  active:     { color:"var(--success)", bg:"var(--success-surface)", border:"var(--success-border)" },
-  available:  { color:"var(--accent2)", bg:"rgba(56,232,198,0.1)",   border:"rgba(56,232,198,0.25)" },
-  reserved:   { color:"#a855f7",        bg:"rgba(168,85,247,0.1)",   border:"rgba(168,85,247,0.25)" },
-  deprecated: { color:"var(--warning)", bg:"var(--warning-surface)", border:"var(--warning-border)" },
+  active:     { color:"var(--success)",  bg:"var(--success-surface)", border:"var(--success-border)" },
+  available:  { color:"var(--text-muted)", bg:"transparent",          border:"var(--border-soft)" },
+  reserved:   { color:"var(--text-dim)",   bg:"transparent",          border:"var(--border-soft)" },
+  deprecated: { color:"var(--warning)",  bg:"var(--warning-surface)", border:"var(--warning-border)" },
 };
 
 const V4_MASKS = [24,25,26,27,28,29,30,31];
@@ -307,7 +307,7 @@ function InlineCell({ value, onSave, mono, placeholder, suggestions=[], onCreate
 }
 
 // ── ALLOCATION MODAL (Add/Edit) ──────────────────────────────────────────────
-export default function BlockDetail({ blockId, onBack }) {
+export default function BlockDetail({ blockId, onBack, dark }) {
   const [data,      setData]      = useState(null);
   const [search,    setSearch]    = useState("");
   const [ownerFilter, setOwnerFilter] = useState("");
@@ -603,6 +603,7 @@ export default function BlockDetail({ blockId, onBack }) {
           allocations={data.allocations||[]}
           onAllocate={prefix=>{ setAllocModal({prefix}); }}
           onEdit={row=>setAllocModal(row)}
+          dark={dark}
         />)}
 
       {showCalc && (

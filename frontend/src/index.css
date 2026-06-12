@@ -23,8 +23,8 @@
   --danger:        #dc2626;
   --info:          #2563b1;
   --text:          #0f1923;
-  --text-muted:    rgba(15,25,35,0.68);
-  --text-dim:      rgba(15,25,35,0.45);
+  --text-muted:    rgba(15,25,35,0.75);
+  --text-dim:      rgba(15,25,35,0.55);
   --surface-1:     rgba(0,0,0,0.018);
   --surface-2:     rgba(0,0,0,0.055);
   --surface-3:     rgba(0,0,0,0.08);
@@ -78,8 +78,8 @@
   --danger:        #ef4444;
   --info:          #52a0ff;
   --text:          #e2eaf7;
-  --text-muted:    rgba(226,234,247,0.45);
-  --text-dim:      rgba(226,234,247,0.25);
+  --text-muted:    rgba(226,234,247,0.70);
+  --text-dim:      rgba(226,234,247,0.45);
   --surface-1:     rgba(255,255,255,0.02);
   --surface-2:     rgba(255,255,255,0.04);
   --surface-3:     rgba(255,255,255,0.06);

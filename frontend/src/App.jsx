@@ -323,11 +323,11 @@ export default function App() {
 
   const renderPage = () => {
     if (route?.page === "block-detail")
-      return <BlockDetail blockId={route.id} onBack={goBack}/>;
+      return <BlockDetail blockId={route.id} onBack={goBack} dark={dark}/>;
     switch(active) {
       case "dashboard": return <Dashboard onNavigate={navigate}/>;
-      case "ipv4":      return <Blocks ipVersion="IPv4" onSelectBlock={id=>navigate("block-detail",{id,from:"ipv4"})}/>;
-      case "ipv6":      return <Blocks ipVersion="IPv6" onSelectBlock={id=>navigate("block-detail",{id,from:"ipv6"})}/>;
+      case "ipv4":      return <Blocks ipVersion="IPv4" onSelectBlock={id=>navigate("block-detail",{id,from:"ipv4"})} dark={dark}/>;
+      case "ipv6":      return <Blocks ipVersion="IPv6" onSelectBlock={id=>navigate("block-detail",{id,from:"ipv6"})} dark={dark}/>;
       case "customers": return <Customers/>;
       case "vlans":     return <Vlans/>;
       case "sites":     return <Sites/>;

@@ -1,15 +1,27 @@
 import { useState } from "react";
 
-// Semua used = redup gelap, free = biru menyala
-const OWNER_COLOR = {
-  customer:       { bg:"rgba(71,85,105,0.35)",  border:"#475569", dot:"#94a3b8", label:"Customer"       },
-  infrastructure: { bg:"rgba(71,85,105,0.35)",  border:"#475569", dot:"#94a3b8", label:"Infrastructure" },
-  ptp:            { bg:"rgba(71,85,105,0.35)",  border:"#475569", dot:"#94a3b8", label:"PTP"            },
-  peering:        { bg:"rgba(71,85,105,0.35)",  border:"#475569", dot:"#94a3b8", label:"Peering"        },
-  management:     { bg:"rgba(71,85,105,0.35)",  border:"#475569", dot:"#94a3b8", label:"Mgmt"           },
-  reserved:       { bg:"rgba(51,65,85,0.50)",   border:"#334155", dot:"#64748b", label:"Reserved"       },
-  free:           { bg:"rgba(37,99,235,0.15)",  border:"#3b82f6", dot:"#60a5fa", label:"Free"           },
-};
+// Theme-aware colors — dark=true: redup gelap, light: redup soft
+function getOwnerColors(dark) {
+  if (dark) return {
+    customer:       { bg:"rgba(71,85,105,0.35)",  border:"#475569", dot:"#94a3b8", label:"Customer"       },
+    infrastructure: { bg:"rgba(71,85,105,0.35)",  border:"#475569", dot:"#94a3b8", label:"Infrastructure" },
+    ptp:            { bg:"rgba(71,85,105,0.35)",  border:"#475569", dot:"#94a3b8", label:"PTP"            },
+    peering:        { bg:"rgba(71,85,105,0.35)",  border:"#475569", dot:"#94a3b8", label:"Peering"        },
+    management:     { bg:"rgba(71,85,105,0.35)",  border:"#475569", dot:"#94a3b8", label:"Mgmt"           },
+    reserved:       { bg:"rgba(51,65,85,0.50)",   border:"#334155", dot:"#64748b", label:"Reserved"       },
+    free:           { bg:"rgba(37,99,235,0.15)",  border:"#3b82f6", dot:"#60a5fa", label:"Free"           },
+  };
+  // Light theme: used=abu muda, free=biru soft tapi tetap visible
+  return {
+    customer:       { bg:"rgba(100,116,139,0.12)", border:"#94a3b8", dot:"#64748b", label:"Customer"       },
+    infrastructure: { bg:"rgba(100,116,139,0.12)", border:"#94a3b8", dot:"#64748b", label:"Infrastructure" },
+    ptp:            { bg:"rgba(100,116,139,0.12)", border:"#94a3b8", dot:"#64748b", label:"PTP"            },
+    peering:        { bg:"rgba(100,116,139,0.12)", border:"#94a3b8", dot:"#64748b", label:"Peering"        },
+    management:     { bg:"rgba(100,116,139,0.12)", border:"#94a3b8", dot:"#64748b", label:"Mgmt"           },
+    reserved:       { bg:"rgba(148,163,184,0.20)", border:"#cbd5e1", dot:"#94a3b8", label:"Reserved"       },
+    free:           { bg:"rgba(59,130,246,0.10)",  border:"#3b82f6", dot:"#2563eb", label:"Free"           },
+  };
+}
 
 function ipToInt(ip) {
   const p = ip.split(".").map(Number);
@@ -42,10 +54,12 @@ const SLOT_SIZES = [
 
 const ZOOM_SIZES = [28, 38, 52, 70];
 
-export default function IPGrid({ blockPrefix, allocations, onAllocate, onEdit }) {
+export default function IPGrid({ blockPrefix, allocations, onAllocate, onEdit, dark }) {
   const [hover,    setHover]    = useState(null);
   const [slotSize, setSlotSize] = useState(4);
   const [zoom,     setZoom]     = useState(1);
+
+  const OWNER_COLOR = getOwnerColors(dark);
 
   if (!blockPrefix || blockPrefix.includes(":")) return null;
 
@@ -226,10 +240,10 @@ export default function IPGrid({ blockPrefix, allocations, onAllocate, onEdit })
                     fontSize: tileSize >= 52 ? 10 : 9,
                     fontFamily:"var(--font-mono)",
                     color: slot.match
-                      ? "#94a3b8"
+                      ? (dark ? "#94a3b8" : "#475569")
                       : slot.partial
-                        ? "#475569"
-                        : "#93c5fd",
+                        ? (dark ? "#475569" : "#94a3b8")
+                        : (dark ? "#93c5fd" : "#1d4ed8"),
                     fontWeight: slot.match ? 600 : 500,
                     lineHeight:1,
                   }}>
