@@ -81,7 +81,7 @@ function VlanModal({ vlan, sites, onClose, onSaved }) {
             </div>
             <div style={{gridColumn:"1/-1"}}>
               <label style={{display:"block",fontSize:10,fontWeight:600,textTransform:"uppercase",
-                letterSpacing:"0.08em",color:"var(--text-muted)",marginBottom:6}}>Description</label>
+                letterSpacing:"0.08em",color:"var(--text-muted)",marginBottom:6}}>End Device XC</label>
               <input value={form.description} onChange={e=>set("description")(e.target.value)}
                 placeholder="Optional description" className="input"/>
             </div>
@@ -192,7 +192,7 @@ export default function Vlans() {
         <table style={{width:"100%",borderCollapse:"collapse"}}>
           <thead>
             <tr>
-              {["VLAN ID","Name","Site","Status","Description",""].map(h=>(
+              {["VLAN ID","Name","Site","Status","End Device XC",""].map(h=>(
                 <th key={h} className="table-header">{h}</th>
               ))}
             </tr>

@@ -650,7 +650,7 @@ export default function BlockDetail({ blockId, onBack }) {
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
             <thead style={{position:"sticky",top:0,zIndex:10}}>
               <tr style={{background:"var(--surface-1)",borderBottom:"2px solid var(--border-soft)"}}>
-                {["#","Type","Prefix","Usable Range","Owner / Customer","VLAN","Description","Status",""].map((h,i)=>(
+                {["#","Type","Prefix","Usable Range","Owner / Customer","VLAN","End Device XC","Status",""].map((h,i)=>(
                   <th key={i} style={{
                     textAlign:"left",padding:"8px 10px",whiteSpace:"nowrap",
                     fontSize:10,fontWeight:600,textTransform:"uppercase",
@@ -793,7 +793,7 @@ export default function BlockDetail({ blockId, onBack }) {
                         onSave={v=>saveField(row.id,"vlan_vid",v)}/>
                     </td>
 
-                    {/* Description */}
+                    {/* End Device XC */}
                     <td style={{padding:"4px 8px",borderRight:"1px solid var(--border-subtle)",maxWidth:160}}>
                       <InlineCell value={row.description} placeholder="—"
                         onSave={v=>saveField(row.id,"description",v)}/>

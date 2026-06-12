@@ -4,7 +4,12 @@ from datetime import datetime
 import os, json, math, ipaddress
 
 import asyncpg
-from fastapi import FastAPI, HTTPException, Query, Depends
+from fastapi import FastAPI, HTTPException, Query, Depends, UploadFile, File
+from fastapi.responses import StreamingResponse
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
+import io
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -674,114 +679,370 @@ def parse_ipv6_csv(content: str):
 
     return meta, allocations
 
-@app.post("/api/v1/import/preview")
-async def import_preview(file: UploadFile = File(...)):
-    content = (await file.read()).decode("utf-8-sig")
-    filename = file.filename or ""
+# ------------------------------------------------------------------
+# EXPORT
+# ------------------------------------------------------------------
 
-    # detect IPv6 by presence of ":"
-    if "ipv6" in filename.lower() or "v6" in filename.lower():
-        meta, allocations = parse_ipv6_csv(content)
-    else:
-        first_data = "\n".join([l for l in content.splitlines() if l.strip()])
-        if "::/" in first_data or "fd00" in first_data or "2404" in first_data:
-            meta, allocations = parse_ipv6_csv(content)
+def _ip_to_int(ip):
+    p = list(map(int, ip.split(".")))
+    return (p[0]<<24)|(p[1]<<16)|(p[2]<<8)|p[3]
+
+def _int_to_ip(n):
+    return f"{(n>>24)&255}.{(n>>16)&255}.{(n>>8)&255}.{n&255}"
+
+def _calc_usable(prefix):
+    try:
+        addr, plen = prefix.split("/")
+        plen = int(plen)
+        base = _ip_to_int(addr)
+        size = 2**(32-plen)
+        if size <= 2:
+            return f"{_int_to_ip(base)} - {_int_to_ip(base+size-1)}"
+        return f"{_int_to_ip(base+1)} - {_int_to_ip(base+size-2)}"
+    except:
+        return ""
+
+def _calc_gaps(alloc_prefixes, block_prefix):
+    try:
+        addr, plen = block_prefix.split("/")
+        b_start = _ip_to_int(addr)
+        b_end = b_start + 2**(32-int(plen)) - 1
+        sorted_p = sorted(alloc_prefixes, key=lambda p: _ip_to_int(p.split("/")[0]))
+        gaps, cursor = [], b_start
+        for p in sorted_p:
+            a_start = _ip_to_int(p.split("/")[0])
+            a_end = a_start + 2**(32-int(p.split("/")[1])) - 1
+            if a_start > cursor:
+                gaps.append({"range": f"{_int_to_ip(cursor)} - {_int_to_ip(a_start-1)}", "size": a_start-cursor})
+            cursor = max(cursor, a_end+1)
+        if cursor <= b_end:
+            gaps.append({"range": f"{_int_to_ip(cursor)} - {_int_to_ip(b_end)}", "size": b_end-cursor+1})
+        return gaps
+    except:
+        return []
+
+OWNER_LABELS = {"customer":"Customer","internal":"Internal","ptp":"PTP","peering":"Peering","management":"Management","reserved":"Reserved"}
+STATUS_COLORS = {"active":"FF22c55e","reserved":"FF71717a","available":"FF38e8c6","deprecated":"FFef4444"}
+OWNER_COLORS  = {"customer":"FF3b82f6","internal":"FF22c55e","ptp":"FFf59e0b","peering":"FFa855f7","management":"FF0ea5e9","reserved":"FF71717a"}
+
+def _thin_border():
+    s = Side(style="thin", color="FFe2e8f0")
+    return Border(left=s, right=s, top=s, bottom=s)
+
+
+def _build_summary_sheet(ws, block, allocs):
+    bdr = _thin_border()
+    left   = Alignment(horizontal="left",   vertical="center")
+    center = Alignment(horizontal="center", vertical="center")
+
+    used  = int(block.get("used_ips") or 0)
+    total = int(block.get("total_ips") or 1)
+    free  = max(0, total-used)
+    pct   = round(used/total*100,1) if total else 0
+    pct_color = "FFef4444" if pct>85 else "FFf59e0b" if pct>60 else "FF22c55e"
+
+    col_widths = [22,14,20,30,16,14,14]
+    for i,w in enumerate(col_widths,1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+
+    # Row 1: Title
+    ws.merge_cells("A1:E1")
+    ws["A1"] = str(block["prefix"])
+    ws["A1"].font = Font(name="Calibri",bold=True,size=20,color="FF3b82f6")
+    ws["A1"].alignment = left
+    ws["A1"].fill = PatternFill("solid",start_color="FF0a0f1e")
+    ws.row_dimensions[1].height = 36
+
+    ws.merge_cells("F1:G1")
+    ws["F1"] = str(block.get("status","")).upper()
+    sc = "FF22c55e" if block.get("status")=="active" else "FF71717a"
+    ws["F1"].font = Font(name="Calibri",bold=True,size=11,color=sc)
+    ws["F1"].fill = PatternFill("solid",start_color="FF0a0f1e")
+    ws["F1"].alignment = center
+    ms = Side(style="medium",color=sc)
+    ws["F1"].border = Border(left=ms,right=ms,top=ms,bottom=ms)
+
+    # Row 2-3: Info
+    labels = ["NAME","ASN","ROUTER","OPERATOR","SITE","",""]
+    values = [block.get("name",""),block.get("asn",""),block.get("router",""),
+              block.get("operator",""),block.get("site_name",""),"",""]
+    for i,(lbl,val) in enumerate(zip(labels,values),1):
+        cl = ws.cell(row=2,column=i,value=lbl)
+        cl.font=Font(name="Calibri",bold=True,size=8,color="FF64748b")
+        cl.fill=PatternFill("solid",start_color="FF0d1424"); cl.alignment=left
+        cv = ws.cell(row=3,column=i,value=val)
+        cv.font=Font(name="Courier New" if i in (2,3) else "Calibri",bold=True,size=11,
+                     color="FFFFFFFF" if val else "FF334155")
+        cv.fill=PatternFill("solid",start_color="FF0d1424"); cv.alignment=left
+    ws.row_dimensions[2].height=13; ws.row_dimensions[3].height=22
+
+    # Row 4: spacer
+    for i in range(1,8):
+        ws.cell(row=4,column=i).fill=PatternFill("solid",start_color="FF1e293b")
+    ws.row_dimensions[4].height=6
+
+    # Rows 5-6: Stats
+    active_c = len([a for a in allocs if a.get("status")=="active"])
+    resvd_c  = len([a for a in allocs if a.get("status")=="reserved"])
+    stats = [("TOTAL ALLOC",str(len(allocs)),"FFFFFFFF"),
+             ("ACTIVE",str(active_c),"FF22c55e"),
+             ("RESERVED",str(resvd_c),"FF71717a"),
+             ("FREE IPs",f"{free:,}","FF38e8c6"),
+             ("USED IPs",f"{used:,}","FF3b82f6"),
+             ("TOTAL IPs",f"{total:,}","FF94a3b8"),
+             ("UTILIZATION",f"{pct}%",pct_color)]
+    for i,(lbl,val,col) in enumerate(stats,1):
+        fill=PatternFill("solid",start_color="FF0f172a")
+        cl=ws.cell(row=5,column=i,value=lbl)
+        cl.font=Font(name="Calibri",bold=True,size=8,color="FF64748b")
+        cl.fill=fill; cl.border=bdr; cl.alignment=left
+        cv=ws.cell(row=6,column=i,value=val)
+        cv.font=Font(name="Calibri",bold=True,size=18,color=col)
+        cv.fill=fill; cv.border=bdr; cv.alignment=left
+    ws.row_dimensions[5].height=15; ws.row_dimensions[6].height=34
+
+    # Row 7: util bar
+    filled=max(1,round(pct/100*7)) if pct>0 else 0
+    for i in range(1,8):
+        ws.cell(row=7,column=i).fill=PatternFill("solid",
+            start_color=pct_color if i<=filled else "FF1e293b")
+    ws.row_dimensions[7].height=10
+
+    # Row 8: spacer
+    for i in range(1,8):
+        ws.cell(row=8,column=i).fill=PatternFill("solid",start_color="FF1e293b")
+    ws.row_dimensions[8].height=6
+
+    # Rows 9-11: Type breakdown
+    owner_labels={"customer":"Customer","internal":"Internal","ptp":"PTP",
+                  "peering":"Peering","management":"Mgmt","reserved":"Reserved"}
+    owner_colors={"customer":"FF3b82f6","internal":"FF22c55e","ptp":"FFf59e0b",
+                  "peering":"FFa855f7","management":"FF0ea5e9","reserved":"FF71717a"}
+    owner_counts={}
+    for a in allocs:
+        o=a.get("owner_type","customer")
+        owner_counts[o]=owner_counts.get(o,0)+1
+
+    ws.cell(row=9,column=1,value="TYPE BREAKDOWN").font=Font(name="Calibri",bold=True,size=8,color="FF64748b")
+    ws.cell(row=9,column=1).fill=PatternFill("solid",start_color="FF0d1424")
+    ws.row_dimensions[9].height=14
+
+    for i,(k,v) in enumerate(owner_counts.items(),1):
+        oc=owner_colors.get(k,"FF94a3b8")
+        fill=PatternFill("solid",start_color="FF0f172a")
+        lbl=ws.cell(row=10,column=i,value=owner_labels.get(k,k))
+        lbl.font=Font(name="Calibri",bold=True,size=9,color=oc)
+        lbl.fill=fill; lbl.border=bdr; lbl.alignment=left
+        val=ws.cell(row=11,column=i,value=v)
+        val.font=Font(name="Calibri",bold=True,size=20,color=oc)
+        val.fill=fill; val.border=bdr; val.alignment=left
+    ws.row_dimensions[10].height=16; ws.row_dimensions[11].height=34
+
+    ws.sheet_view.showGridLines=False
+
+
+def _build_block_sheet_allocs(ws, block, allocs):
+    hdr_font = Font(name="Arial", bold=True, color="FFFFFFFF", size=10)
+    hdr_fill = PatternFill("solid", start_color="FF1e293b")
+    bdr = _thin_border()
+    center = Alignment(horizontal="center", vertical="center")
+    left   = Alignment(horizontal="left",   vertical="center")
+
+    ws.merge_cells("A1:H1")
+    ws["A1"] = f"Block: {block['prefix']}"
+    ws["A1"].font = Font(name="Arial", bold=True, size=14, color="FF3b82f6")
+    ws["A1"].alignment = left
+    ws.row_dimensions[1].height = 28
+
+    info = [("Name",block.get("name","")),("ASN",block.get("asn","")),
+            ("Router",block.get("router","")),("Operator",block.get("operator","")),
+            ("Site",block.get("site_name","")),("Status",str(block.get("status","")).upper())]
+    for i,(k,v) in enumerate(info):
+        col = (i%3)*2+1
+        row = 2+i//3
+        ws.cell(row=row,column=col,value=k).font = Font(name="Arial",bold=True,size=9,color="FF94a3b8")
+        ws.cell(row=row,column=col+1,value=v).font = Font(name="Arial",size=10)
+
+    used  = int(block.get("used_ips") or 0)
+    total = int(block.get("total_ips") or 1)
+    pct   = round(used/total*100,1) if total else 0
+    ws.merge_cells("A4:H4")
+    ws["A4"] = f"Utilization: {used:,} / {total:,} IPs  ({pct}%)"
+    ws["A4"].font = Font(name="Arial",bold=True,size=10,
+        color="FFef4444" if pct>85 else "FFf59e0b" if pct>60 else "FF22c55e")
+    ws.row_dimensions[4].height = 20
+
+    headers   = ["#","Prefix","Usable Range","Size","Type","Customer / Description","VLAN","Status"]
+    col_widths = [4,  22,      30,            8,     12,    35,                     8,     12]
+    for i,(h,w) in enumerate(zip(headers,col_widths),1):
+        c = ws.cell(row=6,column=i,value=h)
+        c.font=hdr_font; c.fill=hdr_fill; c.alignment=center; c.border=bdr
+        ws.column_dimensions[get_column_letter(i)].width=w
+    ws.row_dimensions[6].height=22
+
+    is_v6 = ":" in str(block.get("prefix",""))
+    sorted_allocs = sorted(allocs, key=lambda a: _ip_to_int(a["prefix"].split("/")[0]) if not is_v6 else 0)
+    gaps = [] if is_v6 else _calc_gaps([a["prefix"] for a in sorted_allocs], str(block["prefix"]))
+
+    rows = [{"_free":False,**a} for a in sorted_allocs]
+    for g in gaps:
+        rows.append({"_free":True,**g})
+    if not is_v6:
+        rows.sort(key=lambda r: _ip_to_int(r["prefix"].split("/")[0]) if not r["_free"] else _ip_to_int(r["range"].split(" - ")[0]))
+
+    alloc_idx = 0
+    for r_idx,row in enumerate(rows,7):
+        ws.row_dimensions[r_idx].height=18
+        if row["_free"]:
+            ff = PatternFill("solid",start_color="FF0a1a0f")
+            for col in range(1,9):
+                c=ws.cell(row=r_idx,column=col); c.fill=ff; c.border=bdr
+            ws.cell(row=r_idx,column=1,value="-").font=Font(name="Arial",size=9,color="FF334155")
+            ws.cell(row=r_idx,column=2,value=row["range"]).font=Font(name="Courier New",size=9,italic=True,color="FF22c55e")
+            ws.cell(row=r_idx,column=3,value="Free").font=Font(name="Arial",size=9,italic=True,color="FF22c55e")
+            ws.cell(row=r_idx,column=4,value=row["size"]).font=Font(name="Arial",size=9,color="FF22c55e")
+            ws.cell(row=r_idx,column=5,value="FREE").font=Font(name="Arial",size=9,color="FF22c55e")
+            ws.cell(row=r_idx,column=8,value="AVAILABLE").font=Font(name="Arial",size=9,color="FF22c55e")
         else:
-            meta, allocations = parse_ipv4_csv(content)
+            alloc_idx+=1
+            owner  = row.get("owner_type","customer")
+            status = row.get("status","active")
+            o_color = OWNER_COLORS.get(owner,"FF94a3b8")
+            s_color = STATUS_COLORS.get(status,"FF94a3b8")
+            rf = PatternFill("solid",start_color="FF0f172a" if alloc_idx%2==0 else "FF111827")
+            try: size = 2**(32-int(row["prefix"].split("/")[1])) if not is_v6 else "-"
+            except: size="-"
+            for col in range(1,9):
+                c=ws.cell(row=r_idx,column=col); c.fill=rf; c.border=bdr; c.alignment=left
+            ws.cell(row=r_idx,column=1,value=alloc_idx).font=Font(name="Arial",size=9,color="FF94a3b8")
+            ws.cell(row=r_idx,column=1).alignment=center
+            ws.cell(row=r_idx,column=2,value=row["prefix"]).font=Font(name="Courier New",bold=True,size=10,color="FF3b82f6")
+            ws.cell(row=r_idx,column=3,value=_calc_usable(row["prefix"])).font=Font(name="Courier New",size=9,color="FF94a3b8")
+            ws.cell(row=r_idx,column=4,value=size).font=Font(name="Arial",size=9,color="FF64748b")
+            ws.cell(row=r_idx,column=4).alignment=center
+            ws.cell(row=r_idx,column=5,value=OWNER_LABELS.get(owner,owner)).font=Font(name="Arial",bold=True,size=9,color=o_color)
+            desc = row.get("customer_name") or row.get("description") or ""
+            ws.cell(row=r_idx,column=6,value=desc).font=Font(name="Arial",size=10)
+            vlan = row.get("vlan_vid")
+            ws.cell(row=r_idx,column=7,value=str(vlan) if vlan else "").font=Font(name="Courier New",size=9,color="FF94a3b8")
+            ws.cell(row=r_idx,column=7).alignment=center
+            ws.cell(row=r_idx,column=8,value=status.upper()).font=Font(name="Arial",bold=True,size=9,color=s_color)
+            ws.cell(row=r_idx,column=8).alignment=center
 
-    return {
-        "meta":        meta,
-        "allocations": allocations,
-        "count":       len(allocations),
-        "filename":    filename,
-    }
+    ws.freeze_panes="A7"
+    ws.sheet_view.showGridLines=False
 
-class ImportConfirm(BaseModel):
-    meta: dict
-    allocations: list
-    site_id: Optional[str] = None
+BLOCK_QUERY = """
+    SELECT b.*, s.name AS site_name,
+           CASE WHEN family(b.prefix)=4 THEN
+               COALESCE(SUM(CASE WHEN a.status='active' AND a.prefix::cidr!=b.prefix
+                   AND NOT EXISTS(SELECT 1 FROM allocations a2 WHERE a2.block_id=b.id
+                       AND a2.id!=a.id AND a2.prefix::cidr>>a.prefix::cidr AND a2.status='active')
+                   THEN (2::bigint^(32-masklen(a.prefix::cidr))) ELSE 0 END),0)::numeric
+           ELSE 0 END AS used_ips,
+           CASE WHEN family(b.prefix)=4 THEN (2::bigint^(32-masklen(b.prefix)))::numeric
+           ELSE 0 END AS total_ips
+    FROM ip_blocks b LEFT JOIN sites s ON b.site_id=s.id
+    LEFT JOIN allocations a ON a.block_id=b.id
+    WHERE b.id=$1::uuid GROUP BY b.id,s.name
+"""
 
-@app.post("/api/v1/import/confirm")
-async def import_confirm(body: ImportConfirm, db=Depends(get_db)):
-    meta   = body.meta
-    allocs = body.allocations
+ALLOC_QUERY = """
+    SELECT a.prefix::text, a.status, a.owner_type, a.description, a.notes,
+           c.name AS customer_name, v.vid AS vlan_vid
+    FROM allocations a
+    LEFT JOIN customers c ON a.customer_id=c.id
+    LEFT JOIN vlans v ON a.vlan_id=v.id
+    WHERE a.block_id=$1::uuid ORDER BY a.prefix::inet
+"""
 
-    if not meta.get("prefix"):
-        raise HTTPException(400, "No valid parent prefix found")
+ALL_BLOCKS_QUERY = """
+    SELECT b.*, s.name AS site_name,
+           CASE WHEN family(b.prefix)=4 THEN
+               COALESCE(SUM(CASE WHEN a.status='active' AND a.prefix::cidr!=b.prefix
+                   AND NOT EXISTS(SELECT 1 FROM allocations a2 WHERE a2.block_id=b.id
+                       AND a2.id!=a.id AND a2.prefix::cidr>>a.prefix::cidr AND a2.status='active')
+                   THEN (2::bigint^(32-masklen(a.prefix::cidr))) ELSE 0 END),0)::numeric
+           ELSE 0 END AS used_ips,
+           CASE WHEN family(b.prefix)=4 THEN (2::bigint^(32-masklen(b.prefix)))::numeric
+           ELSE 0 END AS total_ips
+    FROM ip_blocks b LEFT JOIN sites s ON b.site_id=s.id
+    LEFT JOIN allocations a ON a.block_id=b.id
+    GROUP BY b.id,s.name ORDER BY b.prefix::inet
+"""
 
-    async with db.transaction():
-        # upsert block
-        block = await db.fetchrow("""
-            INSERT INTO ip_blocks (prefix, name, asn, router, operator, site_id, status)
-            VALUES ($1::cidr, $2, $3, $4, $5, $6::uuid, 'active')
-            ON CONFLICT (prefix) DO UPDATE SET
-                name=EXCLUDED.name, asn=EXCLUDED.asn,
-                router=EXCLUDED.router, operator=EXCLUDED.operator,
-                site_id=EXCLUDED.site_id, updated_at=NOW()
-            RETURNING id
-        """, meta["prefix"], meta.get("name") or meta["prefix"],
-             meta.get("asn"), meta.get("router"), meta.get("operator"),
-             body.site_id)
+@app.get("/api/v1/export/block/{block_id}")
+async def export_block(block_id: str, db=Depends(get_db)):
+    row = await db.fetchrow(BLOCK_QUERY, block_id)
+    if not row: raise HTTPException(404, "Block not found")
+    allocs = await db.fetch(ALLOC_QUERY, block_id)
+    allocs_list = [dict(a) for a in allocs]
+    block_dict = dict(row)
+    wb = openpyxl.Workbook()
+    ws_sum = wb.active
+    ws_sum.title = "Summary"
+    _build_summary_sheet(ws_sum, block_dict, allocs_list)
+    ws_alloc = wb.create_sheet(title="Allocations")
+    _build_block_sheet_allocs(ws_alloc, block_dict, allocs_list)
+    buf = io.BytesIO()
+    wb.save(buf); buf.seek(0)
+    fname = f"IPAM_{str(row['prefix']).replace('/','_').replace('.','_')}.xlsx"
+    return StreamingResponse(buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={fname}"})
 
-        block_id = block["id"]
-        ok = skip = 0
+@app.post("/api/v1/export/blocks")
+async def export_blocks(body: dict, db=Depends(get_db)):
+    block_ids = body.get("block_ids", [])
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+    for bid in block_ids:
+        row = await db.fetchrow(BLOCK_QUERY, bid)
+        if not row: continue
+        allocs = await db.fetch(ALLOC_QUERY, bid)
+        allocs_list = [dict(a) for a in allocs]
+        block_dict = dict(row)
+        ws_sum = wb.create_sheet(title=str(row["prefix"]).replace("/","_")[:28]+"_S")
+        _build_summary_sheet(ws_sum, block_dict, allocs_list)
+        ws_alloc = wb.create_sheet(title=str(row["prefix"]).replace("/","_")[:28]+"_A")
+        _build_block_sheet_allocs(ws_alloc, block_dict, allocs_list)
+    ws_sum = wb.create_sheet(title="Summary", index=0)
+    hdr_font = Font(name="Arial",bold=True,color="FFFFFFFF",size=10)
+    hdr_fill = PatternFill("solid",start_color="FF1e293b")
+    bdr = _thin_border()
+    hdrs   = ["#","Prefix","Name","ASN","Router","Site","Used IPs","Total IPs","Util %","Status"]
+    widths = [4,   22,      25,    12,   20,      15,    12,        12,         10,      12]
+    for i,(h,w) in enumerate(zip(hdrs,widths),1):
+        c=ws_sum.cell(row=1,column=i,value=h)
+        c.font=hdr_font; c.fill=hdr_fill; c.border=bdr
+        c.alignment=Alignment(horizontal="center")
+        ws_sum.column_dimensions[get_column_letter(i)].width=w
+    ws_sum.row_dimensions[1].height=22
+    all_blocks = await db.fetch(ALL_BLOCKS_QUERY)
+    for i,b in enumerate(all_blocks,2):
+        used=int(b["used_ips"] or 0); total=int(b["total_ips"] or 1)
+        pct=round(used/total*100,1) if total else 0
+        s_color="FFef4444" if pct>85 else "FFf59e0b" if pct>60 else "FF22c55e"
+        rf=PatternFill("solid",start_color="FF0f172a" if i%2==0 else "FF111827")
+        vals=[i-1,str(b["prefix"]),b.get("name",""),b.get("asn",""),b.get("router",""),
+              b.get("site_name",""),used,total,pct,str(b.get("status","")).upper()]
+        for j,v in enumerate(vals,1):
+            c=ws_sum.cell(row=i,column=j,value=v)
+            c.fill=rf; c.border=bdr; c.font=Font(name="Arial",size=10)
+            if j==9: c.font=Font(name="Arial",bold=True,size=10,color=s_color)
+        ws_sum.row_dimensions[i].height=18
+    ws_sum.freeze_panes="A2"
+    ws_sum.sheet_view.showGridLines=False
+    buf=io.BytesIO()
+    wb.save(buf); buf.seek(0)
+    return StreamingResponse(buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition":"attachment; filename=IPAM_Export.xlsx"})
 
-        for a in allocs:
-            if not a.get("prefix"):
-                skip += 1
-                continue
-            try:
-                async with db.transaction():
-                    # upsert customer only if name exists
-                    customer_id = None
-                    cname = a.get("customer")
-                    if cname and cname.strip():
-                        cust = await db.fetchrow("""
-                            INSERT INTO customers (name, is_active)
-                            VALUES ($1, true)
-                            ON CONFLICT DO NOTHING
-                            RETURNING id
-                        """, cname.strip())
-                        if not cust:
-                            cust = await db.fetchrow(
-                                "SELECT id FROM customers WHERE name=$1", cname.strip())
-                        customer_id = cust["id"] if cust else None
+@app.get("/api/v1/export/summary")
+async def export_summary(db=Depends(get_db)):
+    return await export_blocks({"block_ids": []}, db)
 
-                    # upsert vlan
-                    vlan_id = None
-                    if a.get("vlan") and body.site_id:
-                        vl = await db.fetchrow("""
-                            INSERT INTO vlans (vid, site_id, status)
-                            VALUES ($1, $2::uuid, 'active')
-                            ON CONFLICT (vid, site_id) DO UPDATE SET updated_at=NOW()
-                            RETURNING id
-                        """, int(a["vlan"]), body.site_id)
-                        vlan_id = vl["id"]
-
-                    # upsert allocation
-                    alloc_status = a.get("status") or "active"
-                    owner_type = a.get("owner_type") or ("customer" if customer_id else "internal")
-                    await db.execute("""
-                        INSERT INTO allocations
-                            (prefix, block_id, customer_id, vlan_id, status, owner_type, description, notes)
-                        VALUES ($1::inet, $2, $3, $4, $5::alloc_status_t, $6::owner_type_t, $7, $8)
-                        ON CONFLICT (prefix) DO UPDATE SET
-                            block_id=EXCLUDED.block_id,
-                            customer_id=EXCLUDED.customer_id,
-                            vlan_id=EXCLUDED.vlan_id,
-                            status=EXCLUDED.status,
-                            owner_type=EXCLUDED.owner_type,
-                            description=EXCLUDED.description,
-                            notes=EXCLUDED.notes,
-                            updated_at=NOW()
-                    """, a["prefix"], block_id, customer_id, vlan_id,
-                         alloc_status, owner_type, a.get("description") or "", a.get("notes") or "")
-                    ok += 1
-            except Exception as e:
-                print(f"SKIP alloc {a.get('prefix')}: {e}")
-                skip += 1
-
-    return {"imported": ok, "skipped": skip, "block_id": str(block_id)}
 
 # ------------------------------------------------------------------
 # SEARCH

@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir fastapi uvicorn asyncpg python-dotenv python-multipart
+RUN pip install --no-cache-dir fastapi uvicorn asyncpg python-dotenv python-multipart openpyxl
 
 COPY main.py .
 
