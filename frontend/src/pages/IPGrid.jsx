@@ -261,7 +261,10 @@ export default function IPGrid({ blockPrefix, allocations, onAllocate, onEdit })
                   minWidth:180,
                 }}>
                   <div style={{fontSize:12,fontFamily:"var(--font-mono)",fontWeight:700,color:"var(--text)",marginBottom:4}}>
-                    {slot.match ? slot.match.prefix : slot.prefix}
+                    {slot.prefix}
+                    {slot.match && slot.match.prefix !== slot.prefix && (
+                      <span style={{fontSize:10,color:"var(--text-dim)",marginLeft:6}}>← in {slot.match.prefix}</span>
+                    )}
                   </div>
                   {slot.match ? (
                     <>
@@ -269,7 +272,7 @@ export default function IPGrid({ blockPrefix, allocations, onAllocate, onEdit })
                       {slot.match.customer_name && <div style={{fontSize:11,color:"var(--text)",marginBottom:1}}>{slot.match.customer_name}</div>}
                       {slot.match.description   && <div style={{fontSize:10,color:"var(--text-muted)",marginBottom:1}}>{slot.match.description}</div>}
                       {slot.match.vlan_vid      && <div style={{fontSize:10,color:"var(--text-muted)",marginBottom:1}}>VLAN {slot.match.vlan_vid}</div>}
-                      <div style={{fontSize:10,color:"var(--text-muted)",marginTop:2}}>{calcUsable(slot.match.prefix)}</div>
+                      <div style={{fontSize:10,color:"var(--text-muted)",marginTop:2}}>{calcUsable(slot.prefix)}</div>
                       <div style={{fontSize:9,color:"var(--text-dim)",marginTop:4,opacity:0.7}}>click to edit</div>
                     </>
                   ) : slot.partial ? (
