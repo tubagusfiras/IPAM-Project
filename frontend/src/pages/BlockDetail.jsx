@@ -451,10 +451,13 @@ export default function BlockDetail({ blockId, onBack, dark }) {
   const totalAllocs   = (data?.allocations||[]).length;
   const activeAllocs  = (data?.allocations||[]).filter(a=>a.status==="active").length;
   const availAllocs   = (data?.allocations||[]).filter(a=>a.status==="available").length;
-  const usedIps       = parseFloat(data?.used_ips||0);
-  const totalIps      = parseFloat(data?.total_ips||1);
-  const utilPct       = totalIps ? Math.round(usedIps/totalIps*100) : 0;
-  const utilColor     = utilPct>85?"var(--danger)":utilPct>60?"var(--warning)":"var(--success)";
+  const usedIps   = parseFloat(data?.used_ips||0);
+  const totalIps  = parseFloat(data?.total_ips||1);
+  // IPv6: total_ips astronomis, gunakan alloc count untuk display
+  const v6AllocCount  = isV6 ? (data?.allocations||[]).length : 0;
+  const v6ActiveCount = isV6 ? (data?.allocations||[]).filter(a=>a.status==="active").length : 0;
+  const utilPct   = isV6 ? 0 : (totalIps ? Math.round(usedIps/totalIps*100) : 0);
+  const utilColor = utilPct>85?"var(--danger)":utilPct>60?"var(--warning)":"var(--success)";
 
   // Owner type breakdown
   const ownerBreakdown = OWNER_TYPES.map(ot=>({
@@ -528,7 +531,7 @@ export default function BlockDetail({ blockId, onBack, dark }) {
             <button onClick={()=>setEditModal(true)} className="btn btn-secondary btn-sm">
               Edit Block
             </button>
-            <button onClick={()=>setAllocModal({})} className="btn btn-primary btn-sm">
+            <button onClick={()=>setAllocModal(isV6?{prefix:data.prefix.replace(/\/\d+$/,"") + "/127"}:{})} className="btn btn-primary btn-sm">
               + Add Allocation
             </button>
           </div>
@@ -559,14 +562,29 @@ export default function BlockDetail({ blockId, onBack, dark }) {
         </div>
 
         {/* Utilization bar */}
-        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
-          <div style={{flex:1,height:6,background:"var(--surface-3)",borderRadius:99,overflow:"hidden"}}>
-            <div style={{width:`${utilPct}%`,height:"100%",background:utilColor,
-              borderRadius:99,transition:"width 0.5s"}}/>
+        {isV6 ? (
+          <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:12,
+            padding:"8px 12px",background:"var(--surface-2)",borderRadius:"var(--radius-sm)",
+            border:"1px solid var(--border-soft)"}}>
+            <span style={{fontSize:12,color:"var(--text-muted)"}}>
+              <span style={{fontWeight:700,color:"var(--accent)",fontFamily:"var(--font-mono)"}}>{v6ActiveCount}</span>
+              <span style={{color:"var(--text-dim)"}}> active</span>
+              <span style={{margin:"0 6px",color:"var(--border-medium)"}}>·</span>
+              <span style={{fontWeight:700,color:"var(--text)",fontFamily:"var(--font-mono)"}}>{v6AllocCount}</span>
+              <span style={{color:"var(--text-dim)"}}> total prefixes allocated</span>
+            </span>
+            <span style={{marginLeft:"auto",fontSize:11,color:"var(--text-dim)"}}>IPv6 — utilization by prefix count</span>
           </div>
-          <span style={{fontFamily:"var(--font-mono)",fontSize:12,color:utilColor,
-            fontWeight:700,minWidth:36,textAlign:"right"}}>{utilPct}%</span>
-        </div>
+        ) : (
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
+            <div style={{flex:1,height:6,background:"var(--surface-3)",borderRadius:99,overflow:"hidden"}}>
+              <div style={{width:`${utilPct}%`,height:"100%",background:utilColor,
+                borderRadius:99,transition:"width 0.5s"}}/>
+            </div>
+            <span style={{fontFamily:"var(--font-mono)",fontSize:12,color:utilColor,
+              fontWeight:700,minWidth:36,textAlign:"right"}}>{utilPct}%</span>
+          </div>
+        )}
 
         {/* Stats row */}
         <div style={{display:"flex",alignItems:"center",gap:20,flexWrap:"wrap"}}>
@@ -597,15 +615,81 @@ export default function BlockDetail({ blockId, onBack, dark }) {
         </div>
       </div>
 
-      {/* Subnet calculator */}
+      {/* IP Map / IPv6 Allocation View */}
       {showGrid && (
-        <IPGrid
-          blockPrefix={data.prefix}
-          allocations={data.allocations||[]}
-          onAllocate={prefix=>{ setAllocModal({prefix}); }}
-          onEdit={row=>setAllocModal(row)}
-          dark={dark}
-        />)}
+        isV6 ? (
+          <div style={{
+            background:"var(--surface-1)",border:"1px solid var(--border-medium)",
+            borderRadius:"var(--radius)",padding:16,marginBottom:12,
+          }}>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+              <span style={{fontSize:11,fontWeight:700,color:"var(--text)",letterSpacing:"0.08em",textTransform:"uppercase"}}>IPv6 Allocations</span>
+              <span style={{fontSize:11,color:"var(--text-muted)"}}>
+                {(data.allocations||[]).length} prefix{(data.allocations||[]).length!==1?"es":""}
+              </span>
+            </div>
+            {(data.allocations||[]).length === 0 ? (
+              <div style={{textAlign:"center",padding:"32px 0",color:"var(--text-dim)",fontSize:13}}>
+                No allocations yet — click + Add Allocation to get started
+                (prefix will be pre-filled with block address)
+              </div>
+            ) : (
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {(data.allocations||[]).sort((a,b)=>a.prefix.localeCompare(b.prefix)).map(a=>{
+                  const typeColors = {
+                    customer:"#3b82f6",infrastructure:"#8b5cf6",
+                    ptp:"#f59e0b",peering:"#a855f7",
+                    management:"#0ea5e9",reserved:"#71717a",
+                  };
+                  const tc = typeColors[a.owner_type]||"#71717a";
+                  const isActive = a.status==="active";
+                  return (
+                    <div key={a.id}
+                      onClick={()=>setAllocModal(a)}
+                      style={{
+                        display:"flex",alignItems:"center",gap:12,
+                        padding:"10px 14px",borderRadius:"var(--radius-sm)",
+                        border:"1px solid var(--border-soft)",
+                        background:"var(--surface-2)",
+                        cursor:"pointer",transition:"all 0.12s",
+                      }}
+                      onMouseEnter={e=>e.currentTarget.style.background="var(--surface-3)"}
+                      onMouseLeave={e=>e.currentTarget.style.background="var(--surface-2)"}
+                    >
+                      <div style={{width:3,height:36,borderRadius:2,background:tc,flexShrink:0}}/>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontFamily:"var(--font-mono)",fontSize:13,fontWeight:600,color:"var(--accent)",marginBottom:2}}>
+                          {a.prefix}
+                        </div>
+                        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                          <span style={{fontSize:10,color:tc,fontWeight:600,textTransform:"uppercase"}}>{a.owner_type}</span>
+                          {a.customer_name && <span style={{fontSize:11,color:"var(--text-muted)"}}>{a.customer_name}</span>}
+                          {a.vlan_vid && <span style={{fontSize:10,color:"var(--text-dim)",fontFamily:"var(--font-mono)"}}>VLAN {a.vlan_vid}</span>}
+                        </div>
+                      </div>
+                      <span style={{
+                        padding:"2px 8px",borderRadius:99,fontSize:10,fontWeight:600,
+                        background: isActive?"var(--success-surface)":"var(--surface-3)",
+                        color: isActive?"var(--success)":"var(--text-dim)",
+                        border:`1px solid ${isActive?"var(--success-border)":"var(--border-soft)"}`,
+                      }}>{a.status}</span>
+                      <span style={{fontSize:11,color:"var(--text-dim)",opacity:0.6}}>click to edit →</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : (
+          <IPGrid
+            blockPrefix={data.prefix}
+            allocations={data.allocations||[]}
+            onAllocate={prefix=>{ setAllocModal({prefix}); }}
+            onEdit={row=>setAllocModal(row)}
+            dark={dark}
+          />
+        )
+      )}
 
       {showCalc && (
         <SubnetCalc
