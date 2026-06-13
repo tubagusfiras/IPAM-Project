@@ -1,13 +1,19 @@
 import { useState, useEffect, useCallback } from "react";
-import { getVlans, createVlan, updateVlan, deleteVlan, getSites } from "../api.js";
+import { getVlans, getSites, createVlan, updateVlan, deleteVlan } from "../api.js";
+
+const STATUS_STYLE = {
+  active:     { color:"var(--success)", bg:"var(--success-surface)", border:"var(--success-border)" },
+  inactive:   { color:"var(--text-dim)", bg:"var(--surface-3)", border:"var(--border-soft)" },
+  deprecated: { color:"var(--warning)", bg:"var(--warning-surface)", border:"var(--warning-border)" },
+};
 
 function VlanModal({ vlan, sites, onClose, onSaved }) {
   const isEdit = !!vlan?.id;
   const [form, setForm] = useState({
     vid:         vlan?.vid         || "",
     name:        vlan?.name        || "",
-    site_id:     vlan?.site_id     || "",
     status:      vlan?.status      || "active",
+    site_id:     vlan?.site_id     || "",
     description: vlan?.description || "",
   });
   const [saving, setSaving] = useState(false);
@@ -16,11 +22,9 @@ function VlanModal({ vlan, sites, onClose, onSaved }) {
 
   const save = async () => {
     if (!form.vid) return setErr("VLAN ID is required");
-    const vid = parseInt(form.vid);
-    if (isNaN(vid) || vid < 1 || vid > 4094) return setErr("VLAN ID must be between 1 and 4094");
     setSaving(true); setErr(null);
     try {
-      const payload = {...form, vid};
+      const payload = { ...form, vid: parseInt(form.vid), site_id: form.site_id||null };
       if (isEdit) await updateVlan(vlan.id, payload);
       else        await createVlan(payload);
       onSaved();
@@ -28,11 +32,9 @@ function VlanModal({ vlan, sites, onClose, onSaved }) {
     setSaving(false);
   };
 
-  const STATUS_OPTS = ["active","reserved","deprecated"];
-
   return (
     <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div className="modal" style={{maxWidth:460}}>
+      <div className="modal" style={{maxWidth:480}}>
         <div className="modal-header">
           <div>
             <div style={{fontWeight:700,fontSize:15,color:"var(--text)"}}>
@@ -46,49 +48,52 @@ function VlanModal({ vlan, sites, onClose, onSaved }) {
             color:"var(--text-muted)",fontSize:18,padding:4}}>✕</button>
         </div>
         <div className="modal-body" style={{display:"flex",flexDirection:"column",gap:14}}>
-          {err&&<div style={{background:"var(--danger-surface)",border:"1px solid var(--danger-border)",
-            borderRadius:"var(--radius-sm)",padding:"10px 14px",color:"var(--danger)",fontSize:13}}>{err}</div>}
+          {err && (
+            <div style={{background:"var(--danger-surface)",border:"1px solid var(--danger-border)",
+              borderRadius:"var(--radius-sm)",padding:"10px 14px",color:"var(--danger)",fontSize:13}}>
+              {err}
+            </div>
+          )}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
             <div>
-              <label style={{display:"block",fontSize:10,fontWeight:600,textTransform:"uppercase",
-                letterSpacing:"0.08em",color:"var(--text-muted)",marginBottom:6}}>
-                VLAN ID (1-4094) *
-              </label>
-              <input value={form.vid} onChange={e=>set("vid")(e.target.value)}
-                placeholder="e.g. 1336" className="input"
-                style={{fontFamily:"var(--font-mono)"}} type="number" min="1" max="4094"/>
+              <label style={{display:"block",fontSize:10,fontWeight:700,textTransform:"uppercase",
+                letterSpacing:"0.08em",color:"var(--text-dim)",marginBottom:6}}>VLAN ID *</label>
+              <input type="number" value={form.vid} onChange={e=>set("vid")(e.target.value)}
+                placeholder="e.g. 100" className="input" style={{fontFamily:"var(--font-mono)"}}/>
             </div>
             <div>
-              <label style={{display:"block",fontSize:10,fontWeight:600,textTransform:"uppercase",
-                letterSpacing:"0.08em",color:"var(--text-muted)",marginBottom:6}}>Name</label>
+              <label style={{display:"block",fontSize:10,fontWeight:700,textTransform:"uppercase",
+                letterSpacing:"0.08em",color:"var(--text-dim)",marginBottom:6}}>Name</label>
               <input value={form.name} onChange={e=>set("name")(e.target.value)}
-                placeholder="e.g. VLAN-KEDIRI" className="input"/>
+                placeholder="e.g. MGMT" className="input"/>
             </div>
             <div>
-              <label style={{display:"block",fontSize:10,fontWeight:600,textTransform:"uppercase",
-                letterSpacing:"0.08em",color:"var(--text-muted)",marginBottom:6}}>Site</label>
+              <label style={{display:"block",fontSize:10,fontWeight:700,textTransform:"uppercase",
+                letterSpacing:"0.08em",color:"var(--text-dim)",marginBottom:6}}>Status</label>
+              <select value={form.status} onChange={e=>set("status")(e.target.value)} className="select">
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="deprecated">Deprecated</option>
+              </select>
+            </div>
+            <div>
+              <label style={{display:"block",fontSize:10,fontWeight:700,textTransform:"uppercase",
+                letterSpacing:"0.08em",color:"var(--text-dim)",marginBottom:6}}>Site</label>
               <select value={form.site_id} onChange={e=>set("site_id")(e.target.value)} className="select">
-                <option value="">— No site —</option>
+                <option value="">— All Sites —</option>
                 {sites.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
-            <div>
-              <label style={{display:"block",fontSize:10,fontWeight:600,textTransform:"uppercase",
-                letterSpacing:"0.08em",color:"var(--text-muted)",marginBottom:6}}>Status</label>
-              <select value={form.status} onChange={e=>set("status")(e.target.value)} className="select">
-                {STATUS_OPTS.map(s=><option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
-              </select>
-            </div>
             <div style={{gridColumn:"1/-1"}}>
-              <label style={{display:"block",fontSize:10,fontWeight:600,textTransform:"uppercase",
-                letterSpacing:"0.08em",color:"var(--text-muted)",marginBottom:6}}>End Device XC</label>
+              <label style={{display:"block",fontSize:10,fontWeight:700,textTransform:"uppercase",
+                letterSpacing:"0.08em",color:"var(--text-dim)",marginBottom:6}}>Description</label>
               <input value={form.description} onChange={e=>set("description")(e.target.value)}
-                placeholder="Optional description" className="input"/>
+                placeholder="Optional notes" className="input"/>
             </div>
           </div>
         </div>
         <div className="modal-footer">
-          <button onClick={onClose}  className="btn btn-secondary">Cancel</button>
+          <button onClick={onClose} className="btn btn-secondary">Cancel</button>
           <button onClick={save} disabled={saving} className="btn btn-primary">
             {saving?"Saving…":isEdit?"Save Changes":"Add VLAN"}
           </button>
@@ -104,13 +109,14 @@ function ConfirmModal({ message, onConfirm, onCancel }) {
       <div className="modal" style={{maxWidth:380}}>
         <div className="modal-header">
           <div style={{fontWeight:700,fontSize:15,color:"var(--text)"}}>Confirm Delete</div>
-          <button onClick={onCancel} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-muted)",fontSize:18,padding:4}}>✕</button>
+          <button onClick={onCancel} style={{background:"none",border:"none",cursor:"pointer",
+            color:"var(--text-muted)",fontSize:18,padding:4}}>✕</button>
         </div>
         <div className="modal-body">
           <p style={{fontSize:13,color:"var(--text-muted)",lineHeight:1.6,margin:0}}>{message}</p>
         </div>
         <div className="modal-footer">
-          <button onClick={onCancel}  className="btn btn-secondary">Cancel</button>
+          <button onClick={onCancel} className="btn btn-secondary">Cancel</button>
           <button onClick={onConfirm} className="btn btn-danger">Delete</button>
         </div>
       </div>
@@ -118,32 +124,72 @@ function ConfirmModal({ message, onConfirm, onCancel }) {
   );
 }
 
-const STATUS_STYLE = {
-  active:     {bg:"var(--success-surface)", color:"var(--success)",  border:"var(--success-border)"},
-  reserved:   {bg:"rgba(168,85,247,0.1)",   color:"#a855f7",          border:"rgba(168,85,247,0.25)"},
-  deprecated: {bg:"var(--warning-surface)", color:"var(--warning)",  border:"var(--warning-border)"},
-};
+function RouterTags({ routers }) {
+  if (!routers) return <div className="skeleton" style={{height:13,width:80,borderRadius:4}}/>;
+  if (!routers.length) return <span style={{color:"var(--text-dim)",fontSize:11}}>—</span>;
+  return (
+    <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+      {routers.map((r,i) => (
+        <span key={i} style={{
+          fontFamily:"var(--font-mono)",fontSize:10,fontWeight:500,
+          padding:"2px 7px",borderRadius:4,
+          background:"var(--surface-3)",
+          color:"var(--text-muted)",
+          border:"1px solid var(--border-soft)",
+        }}>{r}</span>
+      ))}
+    </div>
+  );
+}
 
 export default function Vlans() {
-  const [items,   setItems]   = useState([]);
-  const [total,   setTotal]   = useState(0);
-  const [search,  setSearch]  = useState("");
-  const [siteFilter, setSiteFilter] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [modal,   setModal]   = useState(null);
-  const [confirm, setConfirm] = useState(null);
-  const [sites,   setSites]   = useState([]);
+  const [items,     setItems]     = useState([]);
+  const [total,     setTotal]     = useState(0);
+  const [sites,     setSites]     = useState([]);
+  const [search,    setSearch]    = useState("");
+  const [siteFilter,setSiteFilter]= useState("");
+  const [loading,   setLoading]   = useState(true);
+  const [modal,     setModal]     = useState(null);
+  const [confirm,   setConfirm]   = useState(null);
+  const [routerMap, setRouterMap] = useState({});
+  const LIMIT = 100;
 
-  const load = useCallback(()=>{
+  const load = useCallback(() => {
     setLoading(true);
-    getVlans(search, siteFilter, 200)
+    getVlans(search, siteFilter, LIMIT)
       .then(d=>{ setItems(d.items||[]); setTotal(d.total||0); })
       .catch(console.error)
       .finally(()=>setLoading(false));
-  },[search, siteFilter]);
+  }, [search, siteFilter]);
 
   useEffect(()=>{ load(); },[load]);
-  useEffect(()=>{ getSites().then(setSites); },[]);
+  useEffect(()=>{ getSites("",100).then(d=>setSites(d.items||d||[])); },[]);
+
+  // Fetch router placements per VLAN
+  useEffect(()=>{
+    if (!items.length) return;
+    // Init semua ke null (loading)
+    const initMap = {};
+    items.forEach(v=>{ initMap[v.id] = null; });
+    setRouterMap(initMap);
+
+    Promise.all(items.map(v =>
+      fetch(`/api/v1/allocations?vlan_id=${v.id}&limit=100`)
+        .then(r=>r.json())
+        .then(d=>{
+          const allocs = d.items || [];
+          const routers = [...new Set(
+            allocs.map(a=>a.block_router).filter(Boolean)
+          )].sort();
+          return [v.id, routers];
+        })
+        .catch(()=>[v.id,[]])
+    )).then(results=>{
+      const map = {};
+      results.forEach(([id, routers])=>{ map[id] = routers; });
+      setRouterMap(map);
+    });
+  }, [items]);
 
   const handleDelete = async (v) => {
     try { await deleteVlan(v.id); load(); }
@@ -151,8 +197,12 @@ export default function Vlans() {
     setConfirm(null);
   };
 
+  const activeCount = items.filter(v=>v.status==="active").length;
+
   return (
     <div style={{display:"flex",flexDirection:"column",gap:20}}>
+
+      {/* Header */}
       <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
         <div>
           <h1 style={{margin:0,fontSize:20,fontWeight:700,color:"var(--text)"}}>VLANs</h1>
@@ -161,16 +211,16 @@ export default function Vlans() {
           </p>
         </div>
         <button onClick={()=>setModal("add")} className="btn btn-primary">
-          <span style={{fontSize:16,lineHeight:1}}>+</span>Add VLAN
+          + Add VLAN
         </button>
       </div>
 
-      <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",
-        background:"var(--surface-1)",border:"1px solid var(--border-subtle)",borderRadius:"var(--radius)"}}>
-        <div style={{position:"relative",flex:1,maxWidth:280}}>
+      {/* Toolbar */}
+      <div className="card" style={{padding:"10px 14px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+        <div style={{position:"relative",flex:1,minWidth:200,maxWidth:320}}>
           <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",
             color:"var(--text-dim)",pointerEvents:"none",fontSize:14}}>🔍</span>
-          <input value={search} onChange={e=>setSearch(e.target.value)}
+          <input value={search} onChange={e=>{setSearch(e.target.value);}}
             placeholder="Search VLAN ID or name..."
             className="input" style={{paddingLeft:32,height:34,fontSize:13}}/>
         </div>
@@ -180,34 +230,43 @@ export default function Vlans() {
           {sites.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
         <div style={{marginLeft:"auto",display:"flex",gap:8}}>
-          <div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 10px",
-            borderRadius:99,background:"var(--surface-3)",fontSize:12,fontWeight:500}}>
-            <span style={{color:"var(--text-muted)",fontWeight:700,fontVariantNumeric:"tabular-nums"}}>{total}</span>
-            <span style={{color:"var(--text-dim)"}}>Total</span>
-          </div>
+          {[
+            ["Total",  total,       "var(--text-muted)","var(--surface-3)","var(--border-soft)"],
+            ["Active", activeCount, "var(--success)",   "var(--success-surface)","var(--success-border)"],
+          ].map(([l,v,c,bg,border])=>(
+            <div key={l} style={{display:"flex",alignItems:"center",gap:6,
+              padding:"4px 12px",borderRadius:99,background:bg,
+              border:`1px solid ${border}`,fontSize:12,fontWeight:500}}>
+              <span style={{color:c,fontWeight:700,fontVariantNumeric:"tabular-nums"}}>{v}</span>
+              <span style={{color:"var(--text-muted)"}}>{l}</span>
+            </div>
+          ))}
         </div>
       </div>
 
+      {/* Table */}
       <div className="card" style={{overflow:"hidden"}}>
         <table style={{width:"100%",borderCollapse:"collapse"}}>
           <thead>
             <tr>
-              {["VLAN ID","Name","Site","Status","End Device XC",""].map(h=>(
+              {["VLAN ID","Name","Site","Status","Router Placements","End Device XC",""].map(h=>(
                 <th key={h} className="table-header">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {loading ? Array.from({length:6}).map((_,i)=>(
-              <tr key={i}>
-                {[60,120,100,80,180,60].map((w,j)=>(
-                  <td key={j} className="table-cell">
-                    <div className="skeleton" style={{height:14,width:w,borderRadius:4}}/>
-                  </td>
-                ))}
-              </tr>
-            )) : items.length===0 ? (
-              <tr><td colSpan={6}>
+            {loading ? (
+              Array.from({length:6}).map((_,i)=>(
+                <tr key={i}>
+                  {[60,120,100,80,160,160,60].map((w,j)=>(
+                    <td key={j} className="table-cell">
+                      <div className="skeleton" style={{height:13,width:w,borderRadius:4}}/>
+                    </td>
+                  ))}
+                </tr>
+              ))
+            ) : items.length===0 ? (
+              <tr><td colSpan={7}>
                 <div style={{display:"flex",flexDirection:"column",alignItems:"center",
                   justifyContent:"center",padding:"60px 0",gap:10}}>
                   <div style={{fontSize:36}}>🔗</div>
@@ -217,46 +276,67 @@ export default function Vlans() {
                   </div>
                 </div>
               </td></tr>
-            ) : items.map(v=>{
+            ) : items.map((v,idx)=>{
               const sc = STATUS_STYLE[v.status]||STATUS_STYLE.active;
               return (
-                <tr key={v.id} className="table-row">
+                <tr key={v.id} className="table-row"
+                  style={{background: idx%2===0?"var(--surface-1)":"var(--surface-2)"}}>
+
+                  {/* VLAN ID */}
                   <td className="table-cell">
-                    <span style={{fontFamily:"var(--font-mono)",fontSize:14,fontWeight:700,
+                    <span style={{fontFamily:"var(--font-mono)",fontSize:15,fontWeight:700,
                       color:"var(--accent)",fontVariantNumeric:"tabular-nums"}}>
                       {v.vid}
                     </span>
                   </td>
+
+                  {/* Name */}
                   <td className="table-cell">
-                    <span style={{fontSize:13,color:v.name?"var(--text)":"var(--text-dim)",
+                    <span style={{fontSize:13,fontWeight:500,
+                      color:v.name?"var(--text)":"var(--text-dim)",
                       fontStyle:v.name?"normal":"italic"}}>
                       {v.name||"—"}
                     </span>
                   </td>
+
+                  {/* Site */}
                   <td className="table-cell">
-                    <span style={{fontSize:12,color:"var(--text-muted)"}}>{v.site_name||"—"}</span>
+                    <span style={{fontSize:12,color:"var(--text-muted)"}}>
+                      {v.site_name||"—"}
+                    </span>
                   </td>
+
+                  {/* Status */}
                   <td className="table-cell">
                     <span style={{display:"inline-flex",alignItems:"center",gap:5,
-                      padding:"2px 8px",borderRadius:99,fontSize:10,fontWeight:600,
+                      padding:"3px 9px",borderRadius:99,fontSize:10,fontWeight:600,
                       background:sc.bg,color:sc.color,border:`1px solid ${sc.border}`}}>
                       <span style={{width:5,height:5,borderRadius:"50%",background:sc.color}}/>
                       {v.status}
                     </span>
                   </td>
+
+                  {/* Router placements */}
+                  <td className="table-cell" style={{minWidth:160}}>
+                    <RouterTags routers={routerMap[v.id]}/>
+                  </td>
+
+                  {/* End Device XC */}
                   <td className="table-cell">
-                    <span style={{fontSize:12,color:"var(--text-muted)",maxWidth:200,
+                    <span style={{fontSize:12,color:"var(--text-muted)",maxWidth:180,
                       overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"block"}}>
                       {v.description||"—"}
                     </span>
                   </td>
+
+                  {/* Actions */}
                   <td className="table-cell" onClick={e=>e.stopPropagation()}>
                     <div style={{display:"flex",gap:4,justifyContent:"flex-end"}}>
                       <button onClick={()=>setModal(v)} className="btn btn-ghost btn-sm"
                         style={{padding:"4px 10px",fontSize:12}}>Edit</button>
                       <button onClick={()=>setConfirm(v)} className="btn btn-sm"
                         style={{padding:"4px 10px",fontSize:12,background:"var(--danger-surface)",
-                          color:"var(--danger)",border:"1px solid var(--danger-border)"}}>Delete</button>
+                          color:"var(--danger)",border:"1px solid var(--danger-border)"}}>Del</button>
                     </div>
                   </td>
                 </tr>

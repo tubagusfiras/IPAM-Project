@@ -420,6 +420,7 @@ async def list_allocations(
     search: Optional[str]=Query(None),
     block_id: Optional[str]=Query(None),
     customer_id: Optional[str]=Query(None),
+    vlan_id: Optional[str]=Query(None),
     status: Optional[str]=Query(None),
     limit: int=Query(100,ge=1,le=1000),
     offset: int=Query(0,ge=0),
@@ -435,6 +436,9 @@ async def list_allocations(
     if customer_id:
         params.append(customer_id)
         conditions.append(f"a.customer_id = ${len(params)}::uuid")
+    if vlan_id:
+        params.append(vlan_id)
+        conditions.append(f"a.vlan_id = ${len(params)}::uuid")
     if status:
         params.append(status)
         conditions.append(f"a.status = ${len(params)}::alloc_status_t")
@@ -444,6 +448,7 @@ async def list_allocations(
         SELECT a.id, a.prefix::text, a.ip_version, a.status, a.owner_type, a.description, a.notes,
                a.created_at, a.updated_at, a.block_id,
                b.prefix::text AS block_prefix, b.name AS block_name,
+               b.router AS block_router, b.asn AS block_asn,
                s.name AS site_name,
                a.customer_id, c.name AS customer_name, c.code AS customer_code,
                a.vlan_id, v.vid AS vlan_vid, v.name AS vlan_name
