@@ -164,12 +164,48 @@ function changeMaskAligned(currentPrefix, newPlen, allocations) {
   }
 }
 
+function ipv6ToBigIntBD(addr) {
+  let s = addr;
+  if (s.includes("::")) {
+    const sides = s.split("::");
+    const left  = sides[0] ? sides[0].split(":") : [];
+    const right = sides[1] ? sides[1].split(":") : [];
+    const mid   = Array(8 - left.length - right.length).fill("0");
+    s = [...left, ...mid, ...right].join(":");
+  }
+  return s.split(":").reduce((acc,g) => (acc << 16n) | BigInt(parseInt(g||"0",16)), 0n);
+}
+
+function bigIntToIPv6BD(n) {
+  const groups = [];
+  for (let i = 0; i < 8; i++) { groups.unshift((n & 0xffffn).toString(16)); n >>= 16n; }
+  let best = {start:-1,len:0}, cur = {start:-1,len:0};
+  groups.forEach((g,i) => {
+    if (g==="0") { if(cur.start<0) cur={start:i,len:1}; else cur.len++; if(cur.len>best.len) best={...cur}; }
+    else cur={start:-1,len:0};
+  });
+  if (best.len > 1) {
+    const l = groups.slice(0,best.start).join(":");
+    const r = groups.slice(best.start+best.len).join(":");
+    return (l?l+":":"") + ":" + (r?r:"");
+  }
+  return groups.join(":");
+}
+
 function calcUsableRange(prefix) {
   if (!prefix) return "";
   try {
-    if (prefix.includes(":")) return prefix;
     const [addr, plenStr] = prefix.split("/");
     const plen = parseInt(plenStr);
+    if (addr.includes(":")) {
+      const base    = ipv6ToBigIntBD(addr);
+      const mask    = plen === 0 ? 0n : (~0n << BigInt(128-plen)) & ((1n<<128n)-1n);
+      const network = base & mask;
+      const bcast   = network | (~mask & ((1n<<128n)-1n));
+      if (plen === 128) return addr;
+      if (plen === 127) return `${bigIntToIPv6BD(network)} — ${bigIntToIPv6BD(bcast)}`;
+      return `${bigIntToIPv6BD(network+1n)} — ${bigIntToIPv6BD(bcast-1n)}`;
+    }
     const parts = addr.split(".").map(Number);
     const toInt = p => ((p[0]<<24)|(p[1]<<16)|(p[2]<<8)|p[3])>>>0;
     const toIP  = n => [(n>>>24)&255,(n>>>16)&255,(n>>>8)&255,n&255].join(".");
@@ -184,8 +220,14 @@ function calcUsableRange(prefix) {
 function calcUsableCount(prefix) {
   if (!prefix) return 0;
   try {
-    if (prefix.includes(":")) return 2;
-    const plen = parseInt(prefix.split("/")[1]);
+    const [addr, plenStr] = prefix.split("/");
+    const plen = parseInt(plenStr);
+    if (addr.includes(":")) {
+      if (plen === 128) return 1;
+      if (plen === 127) return 2;
+      const usable = (1n << BigInt(128-plen)) - 2n;
+      return usable > BigInt(Number.MAX_SAFE_INTEGER) ? usable.toString() : Number(usable);
+    }
     if (plen === 32) return 1;
     if (plen === 31) return 2;
     return Math.pow(2, 32-plen) - 2;
