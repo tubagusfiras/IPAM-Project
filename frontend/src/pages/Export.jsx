@@ -78,7 +78,7 @@ function DonutChart({ data, size=120 }) {
   );
 }
 
-export default function Export() {
+export default function Export({ dark }) {
   const [blocks,    setBlocks]    = useState([]);
   const [selected,  setSelected]  = useState({});
   const [preview,   setPreview]   = useState(null);
@@ -107,27 +107,21 @@ export default function Export() {
     setLoading(false);
   };
 
+  const theme = dark ? "dark" : "light";
+
   const doExport = async (type) => {
     setExporting(true);
     try {
-      if (type==="single" && preview) {
-        window.location.href = `/api/v1/export/block/${preview.id}`;
-      } else if (type==="single-pdf" && preview) {
-        window.location.href = `/api/v1/export/block/${preview.id}/pdf`;
-      } else if (type==="multi") {
-        const res = await fetch("/api/v1/export/blocks",{
-          method:"POST", headers:{"Content-Type":"application/json"},
-          body: JSON.stringify({block_ids: selectedIds}),
-        });
-        const blob = await res.blob();
-        const url  = URL.createObjectURL(blob);
-        const a    = document.createElement("a");
-        a.href=url; a.download="IPAM_Export.xlsx"; a.click();
-        URL.revokeObjectURL(url);
-      } else if (type==="summary") {
-        window.location.href = "/api/v1/export/summary";
+      if (type==="single-pdf" && preview) {
+        window.location.href = `/api/v1/export/block/${preview.id}/pdf?theme=${theme}`;
+      } else if (type==="multi-pdf") {
+        // Multi block PDF — generate per block, download satu per satu
+        for (const id of selectedIds) {
+          window.open(`/api/v1/export/block/${id}/pdf?theme=${theme}`, "_blank");
+          await new Promise(r=>setTimeout(r,300));
+        }
       } else if (type==="summary-pdf") {
-        window.location.href = "/api/v1/export/summary/pdf";
+        window.location.href = `/api/v1/export/summary/pdf?theme=${theme}`;
       }
     } catch(e) { console.error(e); }
     setExporting(false);
@@ -171,9 +165,9 @@ export default function Export() {
         <div style={{display:"flex",gap:8}}>
           <button onClick={()=>doExport("summary-pdf")} disabled={exporting}
             className="btn btn-secondary btn-sm">📋 Summary PDF</button>
-          <button onClick={()=>doExport("multi")} disabled={!someSelected||exporting}
+          <button onClick={()=>doExport("multi-pdf")} disabled={!someSelected||exporting}
             className="btn btn-primary btn-sm">
-            ⬇ Export Selected Excel ({selectedIds.length})
+            📄 Export Selected PDF ({selectedIds.length})
           </button>
         </div>
       </div>

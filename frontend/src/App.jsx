@@ -331,7 +331,7 @@ export default function App() {
       case "customers": return <Customers/>;
       case "vlans":     return <Vlans/>;
       case "sites":     return <Sites/>;
-      case "export":    return <Export/>;
+      case "export":    return <Export dark={dark}/>;
       default:          return <Dashboard onNavigate={navigate}/>;
     }
   };
