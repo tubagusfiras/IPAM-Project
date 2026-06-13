@@ -249,38 +249,35 @@ export default function Export({ dark }) {
             <div style={{display:"flex",flexDirection:"column",gap:12}}>
 
               {/* Block info + export button */}
-              <div style={{
-                background:"var(--surface-1)",border:"1px solid var(--border-soft)",
-                borderRadius:"var(--radius)",padding:16,
-                display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16,
-              }}>
-                <div>
-                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+              <div className="card" style={{padding:16,display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16}}>
+                <div style={{flex:1}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
                     <span style={{fontFamily:"var(--font-mono)",fontSize:18,fontWeight:700,color:"var(--accent)"}}>
                       {preview.prefix}
                     </span>
                     <span style={{
-                      fontSize:10,padding:"2px 8px",borderRadius:99,fontWeight:600,textTransform:"uppercase",
-                      background:preview.status==="active"?"rgba(34,197,94,0.12)":"var(--surface-2)",
+                      fontSize:10,padding:"3px 9px",borderRadius:99,fontWeight:600,textTransform:"uppercase",
+                      background:preview.status==="active"?"var(--success-surface)":"var(--surface-2)",
                       color:preview.status==="active"?"var(--success)":"var(--text-dim)",
-                      border:`1px solid ${preview.status==="active"?"rgba(34,197,94,0.3)":"var(--border-soft)"}`,
+                      border:`1px solid ${preview.status==="active"?"var(--success-border)":"var(--border-soft)"}`,
                     }}>{preview.status}</span>
                   </div>
-                  <div style={{display:"flex",gap:20,flexWrap:"wrap"}}>
-                    {[["Name",preview.name],["ASN",preview.asn],["Router",preview.router],["Operator",preview.operator],["Site",preview.site_name]].map(([k,v])=>v?(
-                      <div key={k}>
-                        <div style={{fontSize:9,fontWeight:600,color:"var(--text-dim)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:2}}>{k}</div>
-                        <div style={{fontSize:12,color:"var(--text)",fontFamily:k==="ASN"||k==="Router"?"var(--font-mono)":"inherit"}}>{v}</div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8}}>
+                    {[["Name",preview.name],["ASN",preview.asn],["Router",preview.router],["Operator",preview.operator],["Site",preview.site_name]].map(([k,v])=>(
+                      <div key={k} style={{
+                        background:"var(--surface-2)",borderRadius:"var(--radius-sm)",
+                        padding:"8px 10px",border:"1px solid var(--border-soft)",
+                      }}>
+                        <div style={{fontSize:9,fontWeight:700,color:"var(--text-dim)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:3}}>{k}</div>
+                        <div style={{fontSize:11,color:"var(--text)",fontFamily:k==="ASN"||k==="Router"?"var(--font-mono)":"inherit",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{v||"—"}</div>
                       </div>
-                    ):null)}
+                    ))}
                   </div>
                 </div>
-                <div style={{display:"flex",gap:8,flexShrink:0}}>
-                  <button onClick={()=>doExport("single-pdf")} disabled={exporting}
-                    className="btn btn-primary" style={{whiteSpace:"nowrap"}}>
-                    📄 Export PDF
-                  </button>
-                </div>
+                <button onClick={()=>doExport("single-pdf")} disabled={exporting}
+                  className="btn btn-primary" style={{whiteSpace:"nowrap",flexShrink:0}}>
+                  📄 Export PDF
+                </button>
               </div>
 
               {/* Stats row */}
@@ -288,9 +285,8 @@ export default function Export({ dark }) {
 
                 {/* Gauge */}
                 <div style={{
-                  background:"var(--surface-1)",border:"1px solid var(--border-soft)",
-                  borderRadius:"var(--radius)",padding:16,textAlign:"center",
-                }}>
+                  padding:16,textAlign:"center",
+                }} className="card">
                   <div style={{fontSize:10,fontWeight:600,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>Utilization</div>
                   <GaugeChart pct={utilizPct}/>
                   <div style={{fontSize:11,color:"var(--text-dim)",marginTop:4}}>
@@ -300,10 +296,9 @@ export default function Export({ dark }) {
 
                 {/* IP breakdown donut */}
                 <div style={{
-                  background:"var(--surface-1)",border:"1px solid var(--border-soft)",
-                  borderRadius:"var(--radius)",padding:16,
+                  padding:16,
                   display:"flex",flexDirection:"column",alignItems:"center",
-                }}>
+                }} className="card">
                   <div style={{fontSize:10,fontWeight:600,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>IP Usage</div>
                   <DonutChart data={ipBreakdown} size={100}/>
                   <div style={{display:"flex",gap:12,marginTop:8}}>
@@ -318,10 +313,9 @@ export default function Export({ dark }) {
 
                 {/* Owner breakdown donut */}
                 <div style={{
-                  background:"var(--surface-1)",border:"1px solid var(--border-soft)",
-                  borderRadius:"var(--radius)",padding:16,
+                  padding:16,
                   display:"flex",flexDirection:"column",alignItems:"center",
-                }}>
+                }} className="card">
                   <div style={{fontSize:10,fontWeight:600,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>By Type</div>
                   <DonutChart data={ownerBreakdown} size={100}/>
                   <div style={{display:"flex",gap:8,marginTop:8,flexWrap:"wrap",justifyContent:"center"}}>
@@ -340,13 +334,10 @@ export default function Export({ dark }) {
                 {[
                   ["Total Allocations", allocs.length, "var(--text)"],
                   ["Active",            activeCount,   "var(--success)"],
-                  ["Reserved",          resvCount,     "#71717a"],
+                  ["Reserved",          resvCount,     "var(--text-dim)"],
                   ["Free IPs",          Math.round(freeIps).toLocaleString(), "var(--accent)"],
                 ].map(([label,val,color])=>(
-                  <div key={label} style={{
-                    background:"var(--surface-1)",border:"1px solid var(--border-soft)",
-                    borderRadius:"var(--radius)",padding:"12px 16px",
-                  }}>
+                  <div key={label} className="card" style={{padding:"12px 16px"}}>
                     <div style={{fontSize:9,fontWeight:600,color:"var(--text-dim)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:4}}>{label}</div>
                     <div style={{fontSize:20,fontWeight:700,color,fontFamily:"var(--font-mono)"}}>{val}</div>
                   </div>
@@ -354,15 +345,15 @@ export default function Export({ dark }) {
               </div>
 
               {/* Allocation table */}
-              <div style={{background:"var(--surface-1)",border:"1px solid var(--border-soft)",borderRadius:"var(--radius)"}}>
-                <div style={{padding:"10px 14px",borderBottom:"1px solid var(--border-subtle)"}}>
+              <div className="card" style={{overflow:"hidden"}}>
+                <div style={{padding:"10px 14px",borderBottom:"1px solid var(--border-medium)"}}>
                   <span style={{fontSize:11,fontWeight:600,color:"var(--text)"}}>Allocation Detail</span>
                   <span style={{fontSize:10,color:"var(--text-dim)",marginLeft:8}}>{allocs.length} rows</span>
                 </div>
                 <div style={{overflowX:"auto",maxHeight:"40vh",overflowY:"auto"}}>
                   <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
                     <thead style={{position:"sticky",top:0,zIndex:5}}>
-                      <tr style={{background:"var(--surface-2)",borderBottom:"2px solid var(--border-soft)"}}>
+                      <tr style={{background:"var(--surface-2)",borderBottom:"2px solid var(--border-medium)"}}>
                         {["#","Prefix","Usable Range","Type","Customer / Desc","VLAN","Status"].map(h=>(
                           <th key={h} style={{
                             padding:"7px 10px",textAlign:"left",
@@ -375,7 +366,7 @@ export default function Export({ dark }) {
                     <tbody>
                       {allocs.map((a,i)=>(
                         <tr key={a.id} style={{
-                          borderBottom:"1px solid var(--border-subtle)",
+                          borderBottom:"1px solid var(--border-soft)",
                           background:i%2===0?"var(--surface-1)":"transparent",
                         }}>
                           <td style={{padding:"5px 10px",color:"var(--text-dim)",fontSize:10}}>{i+1}</td>
