@@ -73,57 +73,151 @@ function nextValidBoundary(ip, plen, allocations) {
   return null;
 }
 
+// ─── IPv6 helpers ───────────────────────────────────────────────
+function expandIPv6(addr) {
+  // Expand :: notation and return 8 groups of 16-bit as numbers
+  let s = addr;
+  if (s.includes("::")) {
+    const sides = s.split("::");
+    const left  = sides[0] ? sides[0].split(":") : [];
+    const right = sides[1] ? sides[1].split(":") : [];
+    const missing = 8 - left.length - right.length;
+    const mid = Array(missing).fill("0");
+    s = [...left, ...mid, ...right].join(":");
+  }
+  return s.split(":").map(g => parseInt(g||"0", 16));
+}
+
+function ipv6ToBigInt(addr) {
+  const groups = expandIPv6(addr);
+  return groups.reduce((acc, g) => (acc << 16n) | BigInt(g), 0n);
+}
+
+function isValidIPv6(addr) {
+  try {
+    // Basic format check
+    if (!addr || addr.includes(":::")) return false;
+    const dcCount = (addr.match(/::/g)||[]).length;
+    if (dcCount > 1) return false;
+    const groups = expandIPv6(addr);
+    if (groups.length !== 8) return false;
+    return groups.every(g => g >= 0 && g <= 65535 && !isNaN(g));
+  } catch { return false; }
+}
+
+function ipv6InBlock(addr, blockAddr, blockPlen) {
+  try {
+    const ip    = ipv6ToBigInt(addr);
+    const bBase = ipv6ToBigInt(blockAddr);
+    const mask  = blockPlen === 0 ? 0n : (~0n << BigInt(128 - blockPlen)) & ((1n << 128n) - 1n);
+    const bEnd  = bBase | (~mask & ((1n << 128n) - 1n));
+    return ip >= bBase && ip <= bEnd;
+  } catch { return false; }
+}
+
+function ipv6Overlaps(addr1, plen1, addr2, plen2) {
+  try {
+    const makeRange = (addr, plen) => {
+      const base = ipv6ToBigInt(addr);
+      const mask = plen === 0 ? 0n : (~0n << BigInt(128 - plen)) & ((1n << 128n) - 1n);
+      const start = base & mask;
+      const end   = start | (~mask & ((1n << 128n) - 1n));
+      return [start, end];
+    };
+    const [s1, e1] = makeRange(addr1, plen1);
+    const [s2, e2] = makeRange(addr2, plen2);
+    return s1 <= e2 && e1 >= s2;
+  } catch { return false; }
+}
+// ────────────────────────────────────────────────────────────────
+
 function validateSubnet(prefix, allocations, blockPrefix) {
-  // Returns { valid, errors[], warnings[] }
   const errors   = [];
   const warnings = [];
 
-  if (!prefix || !prefix.includes("/")) return { valid:false, errors:["Invalid prefix format"], warnings };
+  if (!prefix || !prefix.includes("/"))
+    return { valid:false, errors:["Invalid prefix format (use CIDR notation)"], warnings };
+
+  const [ip, plenStr] = prefix.split("/");
+  const plen = parseInt(plenStr);
+  const isV6 = ip.includes(":");
 
   try {
-    const [ip, plenStr] = prefix.split("/");
-    const plen = parseInt(plenStr);
-    const parts = ip.split(".").map(Number);
-    if (parts.length !== 4 || parts.some(p=>isNaN(p)||p<0||p>255))
-      return { valid:false, errors:["Invalid IP address"], warnings };
-    if (isNaN(plen) || plen < 1 || plen > 32)
-      return { valid:false, errors:["Invalid prefix length"], warnings };
+    if (isV6) {
+      // ── IPv6 validation ──
+      if (!isValidIPv6(ip))
+        return { valid:false, errors:["Invalid IPv6 address"], warnings };
+      if (isNaN(plen) || plen < 1 || plen > 128)
+        return { valid:false, errors:["Invalid prefix length (1-128)"], warnings };
 
-    const ipInt  = ipToInt(ip);
-    const size   = Math.pow(2, 32-plen);
-    const ipEnd  = (ipInt + size - 1)>>>0;
+      // Block containment
+      if (blockPrefix) {
+        const [bAddr, bPlenStr] = blockPrefix.split("/");
+        if (!ipv6InBlock(ip, bAddr, parseInt(bPlenStr)))
+          errors.push(`Prefix is outside block ${blockPrefix}`);
+      }
 
-    // Check block containment
-    if (blockPrefix) {
-      const [bAddr, bPlen] = blockPrefix.split("/");
-      const bStart = ipToInt(bAddr);
-      const bSize  = Math.pow(2, 32-parseInt(bPlen));
-      const bEnd   = (bStart+bSize-1)>>>0;
-      if (ipInt < bStart || ipEnd > bEnd)
-        errors.push(`Prefix is outside block ${blockPrefix}`);
-    }
+      // Overlap check
+      for (const a of (allocations||[])) {
+        if (a.status === "available") continue;
+        if (!a.prefix.includes(":")) continue;
+        try {
+          const [aAddr, aPlenStr] = a.prefix.split("/");
+          const aPlen = parseInt(aPlenStr);
+          if (ipv6Overlaps(ip, plen, aAddr, aPlen)) {
+            if (ip === aAddr && plen === aPlen)
+              warnings.push(`Prefix already exists as ${a.prefix}`);
+            else
+              errors.push(`Overlaps with ${a.prefix} (${a.description||a.customer_name||"allocated"})`);
+          }
+        } catch {}
+      }
 
-    // Check alignment
-    if (!isAligned(ip, plen)) {
-      const snapped = snapToBoundary(ip, plen);
-      errors.push(`Not aligned — should start at ${snapped}/${plen}`);
-    }
+    } else {
+      // ── IPv4 validation ──
+      const parts = ip.split(".").map(Number);
+      if (parts.length !== 4 || parts.some(p=>isNaN(p)||p<0||p>255))
+        return { valid:false, errors:["Invalid IPv4 address"], warnings };
+      if (isNaN(plen) || plen < 1 || plen > 32)
+        return { valid:false, errors:["Invalid prefix length (1-32)"], warnings };
 
-    // Check overlaps
-    for (const a of (allocations||[])) {
-      if (a.status === "available") continue;
-      try {
-        const [aAddr, aPlen] = a.prefix.split("/");
-        const aStart = ipToInt(aAddr);
-        const aSize  = Math.pow(2, 32-parseInt(aPlen));
-        const aEnd   = (aStart+aSize-1)>>>0;
-        if (ipInt <= aEnd && ipEnd >= aStart) {
-          if (ipInt===aStart && ipEnd===aEnd)
-            warnings.push(`Prefix already exists as ${a.prefix}`);
-          else
-            errors.push(`Overlaps with ${a.prefix} (${a.description||a.customer_name||"allocated"})`);
-        }
-      } catch {}
+      const ipInt = ipToInt(ip);
+      const size  = Math.pow(2, 32-plen);
+      const ipEnd = (ipInt + size - 1)>>>0;
+
+      // Block containment
+      if (blockPrefix) {
+        const [bAddr, bPlen] = blockPrefix.split("/");
+        const bStart = ipToInt(bAddr);
+        const bSize  = Math.pow(2, 32-parseInt(bPlen));
+        const bEnd   = (bStart+bSize-1)>>>0;
+        if (ipInt < bStart || ipEnd > bEnd)
+          errors.push(`Prefix is outside block ${blockPrefix}`);
+      }
+
+      // Alignment check
+      if (!isAligned(ip, plen)) {
+        const snapped = snapToBoundary(ip, plen);
+        errors.push(`Not aligned — should start at ${snapped}/${plen}`);
+      }
+
+      // Overlap check
+      for (const a of (allocations||[])) {
+        if (a.status === "available") continue;
+        if (a.prefix.includes(":")) continue;
+        try {
+          const [aAddr, aPlen] = a.prefix.split("/");
+          const aStart = ipToInt(aAddr);
+          const aSize  = Math.pow(2, 32-parseInt(aPlen));
+          const aEnd   = (aStart+aSize-1)>>>0;
+          if (ipInt <= aEnd && ipEnd >= aStart) {
+            if (ipInt===aStart && ipEnd===aEnd)
+              warnings.push(`Prefix already exists as ${a.prefix}`);
+            else
+              errors.push(`Overlaps with ${a.prefix} (${a.description||a.customer_name||"allocated"})`);
+          }
+        } catch {}
+      }
     }
 
   } catch(e) {
@@ -162,12 +256,43 @@ function changeMaskAligned(currentPrefix, newPlen, allocations) {
   }
 }
 
+function bigIntToIPv6(n) {
+  const groups = [];
+  for (let i = 0; i < 8; i++) {
+    groups.unshift((n & 0xffffn).toString(16));
+    n >>= 16n;
+  }
+  // Compress longest run of zeros
+  let best = {start:-1,len:0}, cur = {start:-1,len:0};
+  groups.forEach((g,i) => {
+    if (g==="0") {
+      if (cur.start<0) cur={start:i,len:1}; else cur.len++;
+      if (cur.len>best.len) best={...cur};
+    } else { cur={start:-1,len:0}; }
+  });
+  if (best.len > 1) {
+    const left  = groups.slice(0,best.start).join(":");
+    const right = groups.slice(best.start+best.len).join(":");
+    return (left?left+":":"") + ":" + (right?right:"");
+  }
+  return groups.join(":");
+}
+
 function calcUsableRange(prefix) {
   if (!prefix) return "";
   try {
-    if (prefix.includes(":")) return prefix;
     const [addr, plenStr] = prefix.split("/");
     const plen = parseInt(plenStr);
+    if (addr.includes(":")) {
+      const base = ipv6ToBigInt(addr);
+      const mask = plen === 0 ? 0n : (~0n << BigInt(128-plen)) & ((1n<<128n)-1n);
+      const network = base & mask;
+      const bcast   = network | (~mask & ((1n<<128n)-1n));
+      if (plen === 128) return addr;
+      if (plen === 127) return `${bigIntToIPv6(network)} — ${bigIntToIPv6(bcast)}`; // RFC 6164: both usable
+      return `${bigIntToIPv6(network+1n)} — ${bigIntToIPv6(bcast-1n)}`;
+    }
+    // IPv4
     const parts = addr.split(".").map(Number);
     const toInt = p => ((p[0]<<24)|(p[1]<<16)|(p[2]<<8)|p[3])>>>0;
     const toIP  = n => [(n>>>24)&255,(n>>>16)&255,(n>>>8)&255,n&255].join(".");
@@ -182,8 +307,15 @@ function calcUsableRange(prefix) {
 function calcUsableCount(prefix) {
   if (!prefix) return 0;
   try {
-    if (prefix.includes(":")) return 2;
-    const plen = parseInt(prefix.split("/")[1]);
+    const [addr, plenStr] = prefix.split("/");
+    const plen = parseInt(plenStr);
+    if (addr.includes(":")) {
+      if (plen === 128) return 1;
+      if (plen === 127) return 2; // RFC 6164
+      const total = 1n << BigInt(128-plen);
+      const usable = total - 2n;
+      return usable > BigInt(Number.MAX_SAFE_INTEGER) ? usable.toString() : Number(usable);
+    }
     if (plen === 32) return 1;
     if (plen === 31) return 2;
     return Math.pow(2, 32-plen) - 2;
@@ -327,7 +459,6 @@ function AllocModal({ alloc, blockId, blockPrefix, prefillPrefix, customers, vla
   const [vlanVid,     setVlanVid]     = useState(alloc?.vlan_vid?String(alloc.vlan_vid):"");
   const [status,      setStatus]      = useState(alloc?.status||"active");
   const [description, setDescription]= useState(alloc?.description||"");
-  const [notes,       setNotes]       = useState(alloc?.notes||"");
   const [saving,      setSaving]      = useState(false);
   const [err,         setErr]         = useState(null);
 
@@ -413,7 +544,7 @@ function AllocModal({ alloc, blockId, blockPrefix, prefillPrefix, customers, vla
         status: ownerType==="reserved"?"available":status,
         owner_type: ownerType,
         description: description||(ownerType==="customer"?custName:""),
-        notes: notes||"",
+        notes: "",
       };
 
       if (isEdit) await updateAllocation(alloc.id, payload);
@@ -546,13 +677,7 @@ function AllocModal({ alloc, blockId, blockPrefix, prefillPrefix, customers, vla
               </select>
             </LabelRow>
 
-            {/* Notes */}
-            <div style={{gridColumn:"1/-1"}}>
-              <LabelRow label="Notes">
-                <input value={notes} onChange={e=>setNotes(e.target.value)}
-                  placeholder="Additional notes" className="input" style={{fontSize:13}}/>
-              </LabelRow>
-            </div>
+
           </div>
 
           {/* Preview - only show when prefix is complete and valid */}
