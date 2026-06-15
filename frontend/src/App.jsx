@@ -7,6 +7,7 @@ const Customers  = lazy(()=>import("./pages/Customers.jsx"));
 const Vlans      = lazy(()=>import("./pages/Vlans.jsx"));
 const Sites      = lazy(()=>import("./pages/Sites.jsx"));
 const Export     = lazy(()=>import("./pages/Export.jsx"));
+const IPScan     = lazy(()=>import("./pages/IPScan.jsx"));
 
 const NAV_GROUPS = [
   {
@@ -24,7 +25,7 @@ const NAV_GROUPS = [
     label: "TOOLS",
     items: [
       { id:"export", label:"Export",       icon:"export" },
-      { id:"scan",   label:"IP Scan",      icon:"scan",   soon:true },
+      { id:"scan",   label:"IP Scan",      icon:"scan" },
       { id:"ping",   label:"Ping & Trace", icon:"ping",   soon:true },
     ]
   },
@@ -332,6 +333,7 @@ export default function App() {
       case "vlans":     return <Vlans/>;
       case "sites":     return <Sites/>;
       case "export":    return <Export dark={dark}/>;
+      case "scan":      return <IPScan/>;
       default:          return <Dashboard onNavigate={navigate}/>;
     }
   };
