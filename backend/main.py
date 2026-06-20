@@ -16,7 +16,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://ipam:ipam@db:5432/ipam")
+REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 pool: asyncpg.Pool = None
+
+import redis.asyncio as aioredis
+redis_client = aioredis.from_url(REDIS_URL, decode_responses=True)
+SCAN_TTL = 60 * 60 * 24  # 24 jam
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -1328,6 +1333,47 @@ async def _scan_ip(ip: str) -> dict:
 # Active scan sessions: scan_id -> {status, results, progress}
 _scan_sessions: dict = {}
 
+async def _save_scan_to_redis(scan_id: str):
+    """Persist scan session ke Redis agar survive API restart."""
+    try:
+        session = _scan_sessions.get(scan_id)
+        if session:
+            await redis_client.set(f"scan:{scan_id}", json.dumps(session, default=str), ex=SCAN_TTL)
+    except Exception as e:
+        print(f"Redis save error: {e}")
+
+async def _load_scan_from_redis(scan_id: str) -> dict | None:
+    """Load scan session dari Redis jika tidak ada di memory (misal setelah API restart)."""
+    try:
+        data = await redis_client.get(f"scan:{scan_id}")
+        if data:
+            return json.loads(data)
+    except Exception as e:
+        print(f"Redis load error: {e}")
+    return None
+
+async def _delete_scan_from_redis(scan_id: str):
+    try:
+        await redis_client.delete(f"scan:{scan_id}")
+    except Exception as e:
+        print(f"Redis delete error: {e}")
+
+async def _log_audit(db, action: str, entity_type: str, entity_id, entity_prefix: str,
+                      description: str = "", old_data: dict = None, new_data: dict = None,
+                      changed_by: str = "admin"):
+    """Insert audit log entry."""
+    try:
+        await db.execute(
+            "INSERT INTO audit_logs (action, entity_type, entity_id, entity_prefix, description, changed_by, old_data, new_data) "
+            "VALUES ($1,$2,$3::uuid,$4,$5,$6,$7::jsonb,$8::jsonb)",
+            action, entity_type, str(entity_id) if entity_id else None, entity_prefix,
+            description, changed_by,
+            json.dumps(old_data, default=str) if old_data else None,
+            json.dumps(new_data, default=str) if new_data else None,
+        )
+    except Exception as e:
+        print(f"Audit log error: {e}")
+
 @app.post("/api/v1/scan/start")
 async def start_scan(body: dict, db=Depends(get_db)):
     """Start background scan for a block."""
@@ -1417,17 +1463,27 @@ async def start_scan(body: dict, db=Depends(get_db)):
                     "discrepancy": discrepancy,
                 })
             session["scanned"] = min(i + BATCH, total)
+            await _save_scan_to_redis(scan_id)
         session["status"] = "done"
         session["finished_at"] = time.time()
+        await _save_scan_to_redis(scan_id)
 
     asyncio.create_task(run_scan())
+    await _save_scan_to_redis(scan_id)
     return {"scan_id": scan_id, "status": "started", "total": total}
 
 @app.get("/api/v1/scan/status/{scan_id}")
 async def scan_status(scan_id: str):
     """Get current scan progress and results."""
     if scan_id not in _scan_sessions:
-        raise HTTPException(404, "Scan session not found")
+        # Fallback: coba load dari Redis (misal setelah API restart)
+        restored = await _load_scan_from_redis(scan_id)
+        if not restored:
+            raise HTTPException(404, "Scan session not found")
+        # Jika scan dulunya "running" tapi API sudah restart, tandai sebagai interrupted
+        if restored.get("status") == "running":
+            restored["status"] = "interrupted"
+        _scan_sessions[scan_id] = restored
     s = _scan_sessions[scan_id]
     elapsed = time.time() - s["started_at"]
     scanned = s["scanned"]
@@ -1490,6 +1546,7 @@ async def cancel_scan(scan_id: str):
     if scan_id not in _scan_sessions:
         raise HTTPException(404, "Scan session not found")
     _scan_sessions[scan_id]["status"] = "cancelled"
+    await _save_scan_to_redis(scan_id)
     return {"status": "cancelled"}
 
 @app.delete("/api/v1/scan/clear/{scan_id}")
@@ -1497,6 +1554,7 @@ async def clear_scan(scan_id: str):
     """Clear scan session."""
     if scan_id in _scan_sessions:
         del _scan_sessions[scan_id]
+    await _delete_scan_from_redis(scan_id)
     return {"status": "cleared"}
 
 @app.post("/api/v1/scan/action")
@@ -1507,14 +1565,54 @@ async def scan_action(body: dict, db=Depends(get_db)):
     if not alloc_id:
         raise HTTPException(400, "alloc_id required")
 
+    # Fetch existing data untuk audit log
+    existing = await db.fetchrow(
+        "SELECT a.*, c.name AS customer_name FROM allocations a "
+        "LEFT JOIN customers c ON a.customer_id=c.id WHERE a.id=$1::uuid", alloc_id
+    )
+    if not existing:
+        raise HTTPException(404, "Allocation not found")
+    old_data = dict(existing)
+    prefix = old_data.get("prefix")
+
     if action == "delete":
         await db.execute("DELETE FROM allocations WHERE id=$1::uuid", alloc_id)
+        await _log_audit(db, "delete", "allocation", alloc_id, str(prefix),
+                          description=f"Deleted via IP Scan — ghost allocation ({old_data.get('customer_name') or old_data.get('owner_type')})",
+                          old_data=old_data)
         return {"status": "deleted"}
     elif action == "mark_deprecated":
         await db.execute("UPDATE allocations SET status='deprecated' WHERE id=$1::uuid", alloc_id)
+        await _log_audit(db, "update", "allocation", alloc_id, str(prefix),
+                          description=f"Marked deprecated via IP Scan ({old_data.get('customer_name') or old_data.get('owner_type')})",
+                          old_data=old_data, new_data={**old_data, "status": "deprecated"})
         return {"status": "marked_deprecated"}
     else:
         raise HTTPException(400, "Invalid action")
+
+@app.get("/api/v1/audit-logs")
+async def list_audit_logs(
+    entity_type: Optional[str] = Query(None),
+    action: Optional[str] = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    db=Depends(get_db)
+):
+    conditions, params = ["1=1"], []
+    if entity_type:
+        params.append(entity_type)
+        conditions.append(f"entity_type = ${len(params)}")
+    if action:
+        params.append(action)
+        conditions.append(f"action = ${len(params)}")
+    where = " AND ".join(conditions)
+    params.extend([limit, offset])
+    rows = await db.fetch(
+        f"SELECT * FROM audit_logs WHERE {where} ORDER BY created_at DESC LIMIT ${len(params)-1} OFFSET ${len(params)}",
+        *params
+    )
+    total = await db.fetchval(f"SELECT COUNT(*) FROM audit_logs WHERE {where}", *params[:-2])
+    return {"total": total, "items": [dict(r) for r in rows]}
 
 
 # ------------------------------------------------------------------
