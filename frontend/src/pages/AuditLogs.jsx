@@ -58,11 +58,15 @@ export default function AuditLogs() {
 
       {/* Header */}
       <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
-        <div>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
           <h1 style={{margin:0,fontSize:20,fontWeight:700,color:"var(--text)"}}>Audit Logs</h1>
-          <p style={{margin:"4px 0 0",fontSize:13,color:"var(--text-muted)"}}>
-            Riwayat perubahan data — {total} log{total!==1?"s":""} tercatat
-          </p>
+          {total>0 && (
+            <span style={{
+              fontSize:11,fontWeight:600,padding:"2px 9px",borderRadius:99,
+              background:"var(--surface-3)",color:"var(--text-muted)",
+              border:"1px solid var(--border-soft)",
+            }}>{total}</span>
+          )}
         </div>
       </div>
 
@@ -106,10 +110,7 @@ export default function AuditLogs() {
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",
             justifyContent:"center",padding:"60px 0",gap:10}}>
             <div style={{fontSize:36}}>📋</div>
-            <div style={{fontSize:14,fontWeight:600,color:"var(--text)"}}>Belum ada log</div>
-            <div style={{fontSize:12,color:"var(--text-muted)"}}>
-              Aktivitas perubahan data akan tercatat di sini
-            </div>
+            <div style={{fontSize:13,color:"var(--text-dim)"}}>No logs yet</div>
           </div>
         ) : (
           <div style={{display:"flex",flexDirection:"column"}}>

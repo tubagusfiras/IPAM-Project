@@ -135,9 +135,6 @@ export default function IPScan() {
       <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
         <div>
           <h1 style={{margin:0,fontSize:20,fontWeight:700,color:"var(--text)"}}>IP Scan</h1>
-          <p style={{margin:"4px 0 0",fontSize:13,color:"var(--text-muted)"}}>
-            Network reconciliation — temukan discrepancy antara kondisi real dan data IPAM
-          </p>
         </div>
       </div>
 
@@ -252,18 +249,6 @@ export default function IPScan() {
           </div>
         )}
 
-        {/* Empty state inline hint */}
-        {!hasData && (
-          <div style={{
-            marginTop:18,paddingTop:18,borderTop:"1px solid var(--border-soft)",
-            display:"flex",alignItems:"center",gap:14,
-          }}>
-            <div style={{fontSize:13,color:"var(--text-muted)",lineHeight:1.6}}>
-              Setiap IP dalam block akan dicek lewat ping dan TCP probe, lalu dibandingkan dengan data alokasi yang ada.
-              Klik <strong style={{color:"var(--text)"}}>Start Scan</strong> untuk mulai.
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Action message toast */}
@@ -279,17 +264,9 @@ export default function IPScan() {
         </div>
       )}
 
-      {/* No scan yet — full empty state */}
       {!hasData && (
-        <div className="card" style={{padding:"60px 40px",textAlign:"center"}}>
-          <div style={{fontSize:48,marginBottom:16,opacity:0.5}}>🛰️</div>
-          <div style={{fontSize:16,fontWeight:600,color:"var(--text)",marginBottom:8}}>
-            Belum ada scan dijalankan
-          </div>
-          <div style={{fontSize:13,color:"var(--text-muted)",maxWidth:440,margin:"0 auto",lineHeight:1.7}}>
-            Pilih block di atas, lalu jalankan scan untuk melihat IP mana yang masih aktif
-            dan mana yang sudah tidak terpakai — data IPAM akan disandingkan langsung dengan kondisi network sebenarnya.
-          </div>
+        <div className="card" style={{padding:"48px 0",textAlign:"center"}}>
+          <div style={{fontSize:13,color:"var(--text-dim)"}}>No scan results</div>
         </div>
       )}
 

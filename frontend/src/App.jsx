@@ -9,6 +9,7 @@ const Sites      = lazy(()=>import("./pages/Sites.jsx"));
 const Export     = lazy(()=>import("./pages/Export.jsx"));
 const IPScan     = lazy(()=>import("./pages/IPScan.jsx"));
 const AuditLogs  = lazy(()=>import("./pages/AuditLogs.jsx"));
+const PingTrace  = lazy(()=>import("./pages/PingTrace.jsx"));
 
 const NAV_GROUPS = [
   {
@@ -27,7 +28,7 @@ const NAV_GROUPS = [
     items: [
       { id:"export", label:"Export",       icon:"export" },
       { id:"scan",   label:"IP Scan",      icon:"scan" },
-      { id:"ping",   label:"Ping & Trace", icon:"ping",   soon:true },
+      { id:"ping",   label:"Ping & Trace", icon:"ping" },
     ]
   },
   {
@@ -336,6 +337,7 @@ export default function App() {
       case "export":    return <Export dark={dark}/>;
       case "scan":      return <IPScan/>;
       case "audit":     return <AuditLogs/>;
+      case "ping":      return <PingTrace/>;
       default:          return <Dashboard onNavigate={navigate}/>;
     }
   };

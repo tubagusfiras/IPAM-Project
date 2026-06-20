@@ -156,12 +156,7 @@ export default function Export({ dark }) {
     <div style={{padding:24, maxWidth:1200, margin:"0 auto"}}>
       {/* Page header */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
-        <div>
-          <h1 style={{fontSize:20,fontWeight:700,color:"var(--text)",margin:0}}>Export</h1>
-          <p style={{fontSize:12,color:"var(--text-muted)",margin:"3px 0 0"}}>
-            Pilih block, preview detail, lalu export ke PDF
-          </p>
-        </div>
+        <h1 style={{fontSize:20,fontWeight:700,color:"var(--text)",margin:0}}>Export</h1>
         <div style={{display:"flex",gap:8}}>
           <button onClick={()=>doExport("summary-pdf")} disabled={exporting}
             className="btn btn-secondary btn-sm">📋 Summary PDF</button>
@@ -233,8 +228,7 @@ export default function Export({ dark }) {
               background:"var(--surface-1)",border:"1px solid var(--border-soft)",
               borderRadius:"var(--radius)",padding:60,textAlign:"center",
             }}>
-              <div style={{fontSize:32,marginBottom:8}}>📋</div>
-              <div style={{fontSize:13,color:"var(--text-dim)"}}>Klik block di kiri untuk preview detail</div>
+              <div style={{fontSize:13,color:"var(--text-dim)"}}>Select a block to preview</div>
             </div>
           )}
           {loading && (

@@ -1616,6 +1616,89 @@ async def list_audit_logs(
 
 
 # ------------------------------------------------------------------
+# PING & TRACE
+# ------------------------------------------------------------------
+
+def _validate_target(target: str) -> bool:
+    """Basic validation untuk prevent command injection."""
+    import re
+    # Hanya allow IP address atau hostname yang valid
+    pattern = r'^[a-zA-Z0-9.\-:]+$'
+    return bool(re.match(pattern, target)) and len(target) < 256
+
+async def _lookup_ipam(target: str, db) -> dict:
+    """Cek apakah target IP terdaftar di IPAM."""
+    try:
+        ipaddress.ip_address(target)
+    except ValueError:
+        return None
+    try:
+        row = await db.fetchrow(
+            """
+            SELECT a.prefix::text, a.owner_type, a.status, c.name AS customer_name,
+                   b.prefix::text AS block_prefix, b.name AS block_name, b.router, s.name AS site_name
+            FROM allocations a
+            JOIN ip_blocks b ON a.block_id = b.id
+            LEFT JOIN customers c ON a.customer_id = c.id
+            LEFT JOIN sites s ON b.site_id = s.id
+            WHERE a.prefix >> $1::inet OR a.prefix = $1::inet
+            LIMIT 1
+            """, target
+        )
+        return dict(row) if row else None
+    except Exception:
+        return None
+
+@app.get("/api/v1/ping-trace/lookup")
+async def lookup_target(target: str = Query(...), db=Depends(get_db)):
+    """Cek apakah target ada di IPAM sebelum ping/trace."""
+    if not _validate_target(target):
+        raise HTTPException(400, "Invalid target format")
+    info = await _lookup_ipam(target, db)
+    return {"target": target, "ipam_info": info}
+
+async def _stream_command(cmd: list):
+    """Generator untuk streaming output command line by line via SSE."""
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+    )
+    try:
+        while True:
+            line = await proc.stdout.readline()
+            if not line:
+                break
+            text = line.decode(errors="replace").rstrip()
+            yield f"data: {json.dumps({'type':'line','text':text})}\n\n"
+        await proc.wait()
+        yield f"data: {json.dumps({'type':'done','returncode':proc.returncode})}\n\n"
+    except asyncio.CancelledError:
+        proc.kill()
+        raise
+    finally:
+        if proc.returncode is None:
+            try: proc.kill()
+            except: pass
+
+@app.get("/api/v1/ping-trace/ping")
+async def stream_ping(target: str = Query(...), count: int = Query(4, ge=1, le=20)):
+    if not _validate_target(target):
+        raise HTTPException(400, "Invalid target format")
+    cmd = ["ping", "-c", str(count), target]
+    return StreamingResponse(_stream_command(cmd), media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+@app.get("/api/v1/ping-trace/traceroute")
+async def stream_traceroute(target: str = Query(...), max_hops: int = Query(30, ge=1, le=64)):
+    if not _validate_target(target):
+        raise HTTPException(400, "Invalid target format")
+    cmd = ["traceroute", "-m", str(max_hops), "-w", "2", target]
+    return StreamingResponse(_stream_command(cmd), media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+# ------------------------------------------------------------------
 # SEARCH
 # ------------------------------------------------------------------
 @app.get("/api/v1/search")
