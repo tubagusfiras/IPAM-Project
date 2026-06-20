@@ -1,16 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { getBlocks } from "../api.js";
 
-const STATUS_COLOR = {
-  ghost:        { color:"#ef4444", bg:"rgba(239,68,68,0.1)",  border:"rgba(239,68,68,0.25)",  label:"Ghost"        },
-  unregistered: { color:"#f59e0b", bg:"rgba(245,158,11,0.1)", border:"rgba(245,158,11,0.25)", label:"Unregistered" },
-  firewall:     { color:"#6b7280", bg:"rgba(107,114,128,0.1)",border:"rgba(107,114,128,0.25)",label:"Likely Firewall"},
-};
-
 function formatEta(sec) {
   if (!sec || sec <= 0) return "";
-  if (sec < 60) return `~${sec}s`;
-  return `~${Math.ceil(sec/60)}m ${sec%60}s`;
+  if (sec < 60) return `~${sec}s left`;
+  return `~${Math.ceil(sec/60)}m left`;
 }
 
 function formatElapsed(sec) {
@@ -22,33 +16,25 @@ function formatElapsed(sec) {
 export default function IPScan() {
   const [blocks,      setBlocks]      = useState([]);
   const [blockId,     setBlockId]     = useState("");
-  const [scanData,    setScanData]    = useState(null);   // hasil scan
+  const [scanData,    setScanData]    = useState(null);
   const [polling,     setPolling]     = useState(false);
   const [actionMsg,   setActionMsg]   = useState(null);
-  const [filterType,  setFilterType]  = useState("all"); // all | ghost | unregistered | responding
+  const [filterType,  setFilterType]  = useState("all");
   const [confirmDel,  setConfirmDel]  = useState(null);
   const pollRef = useRef(null);
 
   useEffect(() => {
-    // Restore session scan jika ada
     const saved = sessionStorage.getItem("ipscan_data");
-    if (saved) {
-      try { setScanData(JSON.parse(saved)); } catch {}
-    }
-    // Restore block yang terakhir di-scan
+    if (saved) { try { setScanData(JSON.parse(saved)); } catch {} }
     const savedBlock = sessionStorage.getItem("ipscan_block");
 
     getBlocks({limit:100}).then(d => {
       const ipv4 = (d.items||[]).filter(b => b.ip_version === "IPv4");
       setBlocks(ipv4);
-      if (savedBlock && ipv4.find(b => b.id === savedBlock)) {
-        setBlockId(savedBlock);
-      } else if (ipv4.length) {
-        setBlockId(ipv4[0].id);
-      }
+      if (savedBlock && ipv4.find(b => b.id === savedBlock)) setBlockId(savedBlock);
+      else if (ipv4.length) setBlockId(ipv4[0].id);
     });
 
-    // Resume polling jika scan masih running
     if (saved) {
       try {
         const d = JSON.parse(saved);
@@ -59,21 +45,13 @@ export default function IPScan() {
       } catch {}
     }
 
-    // Cleanup polling saat unmount
-    return () => {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-    };
+    return () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } };
   }, []);
 
-  // Save scan data ke sessionStorage agar tidak hilang saat pindah page
   useEffect(() => {
     if (scanData) sessionStorage.setItem("ipscan_data", JSON.stringify(scanData));
   }, [scanData]);
 
-  // Save selected block
   useEffect(() => {
     if (blockId) sessionStorage.setItem("ipscan_block", blockId);
   }, [blockId]);
@@ -85,14 +63,13 @@ export default function IPScan() {
       setScanData(d);
       if (d.status === "done" || d.status === "cancelled") {
         setPolling(false);
-        clearInterval(pollRef.current);
+        if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
       }
     } catch(e) { console.error(e); }
   }, []);
 
   const startScan = async () => {
     if (!blockId) return;
-    // Clear session lama jika block berbeda
     const saved = sessionStorage.getItem("ipscan_data");
     if (saved) {
       try {
@@ -104,20 +81,15 @@ export default function IPScan() {
     setPolling(true);
     try {
       const res = await fetch("/api/v1/scan/start", {
-        method: "POST",
-        headers: {"Content-Type":"application/json"},
+        method: "POST", headers: {"Content-Type":"application/json"},
         body: JSON.stringify({block_id: blockId}),
       });
       const d = await res.json();
       if (d.status === "started" || d.status === "already_running") {
-        // Poll setiap 1.5 detik
         pollRef.current = setInterval(() => pollStatus(blockId), 1500);
         pollStatus(blockId);
       }
-    } catch(e) {
-      console.error(e);
-      setPolling(false);
-    }
+    } catch(e) { console.error(e); setPolling(false); }
   };
 
   const cancelScan = async () => {
@@ -130,31 +102,31 @@ export default function IPScan() {
 
   const doAction = async (action, alloc_id, prefix) => {
     try {
-      const res = await fetch("/api/v1/scan/action", {
-        method: "POST",
-        headers: {"Content-Type":"application/json"},
+      await fetch("/api/v1/scan/action", {
+        method: "POST", headers: {"Content-Type":"application/json"},
         body: JSON.stringify({action, alloc_id}),
       });
-      const d = await res.json();
-      setActionMsg(`${action === "delete" ? "Deleted" : "Marked deprecated"}: ${prefix}`);
-      setTimeout(() => setActionMsg(null), 3000);
-      // Refresh scan status
+      setActionMsg({type: action === "delete" ? "delete" : "deprecate", text:
+        `${action === "delete" ? "Deleted" : "Marked deprecated"}: ${prefix}`});
+      setTimeout(() => setActionMsg(null), 3500);
       pollStatus(scanData.scan_id);
     } catch(e) {
-      setActionMsg("Error: " + e.message);
+      setActionMsg({type:"error", text:"Error: " + e.message});
     }
     setConfirmDel(null);
   };
 
-  // Filter results
   const ghosts        = scanData?.ghost_allocs || [];
   const unregistered  = scanData?.unregistered_ips || [];
   const responding    = (scanData?.results || []).filter(r => r.responding && !r.discrepancy);
-
   const selectedBlock = blocks.find(b => b.id === blockId);
   const pct = scanData?.pct || 0;
   const isRunning = scanData?.status === "running" || polling;
   const isDone    = scanData?.status === "done";
+  const hasData   = !!scanData;
+
+  const filteredGhosts = filterType==="all"||filterType==="ghost" ? ghosts : [];
+  const filteredUnreg  = filterType==="all"||filterType==="unregistered" ? unregistered : [];
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:20}}>
@@ -164,119 +136,161 @@ export default function IPScan() {
         <div>
           <h1 style={{margin:0,fontSize:20,fontWeight:700,color:"var(--text)"}}>IP Scan</h1>
           <p style={{margin:"4px 0 0",fontSize:13,color:"var(--text-muted)"}}>
-            Scan jaringan untuk menemukan discrepancy antara kondisi real dan data IPAM
+            Network reconciliation — temukan discrepancy antara kondisi real dan data IPAM
           </p>
         </div>
       </div>
 
-      {/* Scan control */}
-      <div className="card" style={{padding:16}}>
-        <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-          <div style={{flex:1,minWidth:200}}>
+      {/* Scan control card */}
+      <div className="card" style={{padding:20}}>
+        <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+          <div style={{
+            width:44,height:44,borderRadius:10,flexShrink:0,
+            background:"var(--accent-dim)",border:"1px solid var(--border-soft)",
+            display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,
+          }}>📡</div>
+
+          <div style={{flex:1,minWidth:220}}>
             <label style={{display:"block",fontSize:10,fontWeight:700,textTransform:"uppercase",
-              letterSpacing:"0.08em",color:"var(--text-dim)",marginBottom:6}}>IP Block (IPv4)</label>
+              letterSpacing:"0.08em",color:"var(--text-dim)",marginBottom:6}}>Target Block (IPv4)</label>
             <select value={blockId} onChange={e=>setBlockId(e.target.value)}
-              className="select" disabled={isRunning} style={{height:36,fontSize:13}}>
-              {blocks.map(b=>(
-                <option key={b.id} value={b.id}>{b.prefix} — {b.name||b.site_name||"—"}</option>
-              ))}
+              className="select" disabled={isRunning} style={{height:38,fontSize:13,fontWeight:500}}>
+              {blocks.map(b=>{
+                const pct = b.total_ips ? Math.round((b.used_ips/b.total_ips)*100) : 0;
+                return (
+                  <option key={b.id} value={b.id}>
+                    {b.prefix} — {b.name||b.site_name||"—"} ({pct}% utilized)
+                  </option>
+                );
+              })}
             </select>
           </div>
-          <div style={{display:"flex",gap:8,alignItems:"flex-end",paddingBottom:0}}>
+
+          <div style={{display:"flex",gap:8,alignSelf:"flex-end"}}>
             {!isRunning ? (
-              <button onClick={startScan} className="btn btn-primary"
-                style={{height:36}} disabled={!blockId}>
+              <button onClick={startScan} className="btn btn-primary" style={{height:38,paddingLeft:18,paddingRight:18}} disabled={!blockId}>
                 🔍 Start Scan
               </button>
             ) : (
               <button onClick={cancelScan} className="btn btn-secondary"
-                style={{height:36,color:"var(--danger)",borderColor:"var(--danger-border)"}}>
+                style={{height:38,color:"var(--danger)",borderColor:"var(--danger-border)"}}>
                 ✕ Cancel
               </button>
             )}
             {isDone && (
-              <button onClick={()=>{
-                sessionStorage.removeItem("ipscan_data");
-                setScanData(null);
-              }} className="btn btn-ghost" style={{height:36}}>
+              <button onClick={()=>{ sessionStorage.removeItem("ipscan_data"); setScanData(null); }}
+                className="btn btn-ghost" style={{height:38}}>
                 🗑 Clear
               </button>
             )}
           </div>
         </div>
 
-        {/* Progress bar */}
-        {scanData && (
-          <div style={{marginTop:16}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-              <span style={{fontSize:12,color:"var(--text-muted)"}}>
-                {isRunning ? "Scanning..." : scanData.status === "cancelled" ? "Cancelled" : "Scan Complete"}
-                <span style={{fontFamily:"var(--font-mono)",marginLeft:8,color:"var(--text)"}}>
+        {/* Progress section */}
+        {hasData && (
+          <div style={{marginTop:20,paddingTop:18,borderTop:"1px solid var(--border-soft)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:10}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <div style={{
+                  width:8,height:8,borderRadius:"50%",
+                  background: isRunning?"var(--accent)":isDone?"var(--success)":"var(--text-dim)",
+                  animation: isRunning ? "pulse-scan 1.2s ease-in-out infinite" : "none",
+                }}/>
+                <span style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>
+                  {isRunning ? "Scanning network..." : scanData.status === "cancelled" ? "Scan cancelled" : "Scan complete"}
+                </span>
+                <span style={{fontFamily:"var(--font-mono)",fontSize:12,color:"var(--text-muted)"}}>
                   {scanData.scanned}/{scanData.total} IPs
                 </span>
-              </span>
-              <div style={{display:"flex",gap:12,alignItems:"center"}}>
+              </div>
+              <div style={{display:"flex",gap:14,alignItems:"center"}}>
                 {isRunning && scanData.eta_seconds && (
-                  <span style={{fontSize:11,color:"var(--text-dim)"}}>
-                    ETA: {formatEta(scanData.eta_seconds)}
-                  </span>
+                  <span style={{fontSize:11,color:"var(--text-dim)"}}>{formatEta(scanData.eta_seconds)}</span>
                 )}
-                <span style={{fontSize:11,color:"var(--text-dim)"}}>
-                  Elapsed: {formatElapsed(scanData.elapsed)}
-                </span>
-                <span style={{fontFamily:"var(--font-mono)",fontSize:13,fontWeight:700,
-                  color: isDone?"var(--success)":"var(--accent)"}}>
-                  {pct}%
-                </span>
+                <span style={{fontSize:11,color:"var(--text-dim)"}}>Elapsed {formatElapsed(scanData.elapsed)}</span>
+                <span style={{fontFamily:"var(--font-mono)",fontSize:16,fontWeight:700,
+                  color: isDone?"var(--success)":"var(--accent)"}}>{pct}%</span>
               </div>
             </div>
-            <div style={{height:8,background:"var(--surface-3)",borderRadius:99,overflow:"hidden"}}>
+
+            <div style={{height:8,background:"var(--surface-3)",borderRadius:99,overflow:"hidden",position:"relative"}}>
               <div style={{
-                height:"100%",borderRadius:99,
-                background: isDone?"var(--success)":isRunning?"var(--accent)":"var(--text-dim)",
-                width:`${pct}%`,transition:"width 0.5s",
+                height:"100%",borderRadius:99,width:`${pct}%`,transition:"width 0.6s ease",
+                background: isDone
+                  ? "linear-gradient(90deg, #16a34a, #22c55e)"
+                  : isRunning
+                    ? "linear-gradient(90deg, #2563eb, #60a5fa)"
+                    : "var(--text-dim)",
               }}/>
             </div>
-            {/* Summary badges */}
+
+            {/* Summary cards */}
             {(isDone || scanData.scanned > 0) && (
-              <div style={{display:"flex",gap:10,marginTop:10,flexWrap:"wrap"}}>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginTop:16}}>
                 {[
-                  ["Responding",   scanData.responding_count,   "var(--success)",  "var(--success-surface)",  "var(--success-border)"],
-                  ["Ghost",        scanData.ghost_count,         "#ef4444",         "rgba(239,68,68,0.1)",     "rgba(239,68,68,0.25)"],
-                  ["Unregistered", scanData.unregistered_count,  "#f59e0b",         "rgba(245,158,11,0.1)",    "rgba(245,158,11,0.25)"],
-                ].map(([label,val,c,bg,border])=>(
-                  <div key={label} style={{
-                    display:"flex",alignItems:"center",gap:6,
-                    padding:"4px 12px",borderRadius:99,
-                    background:bg,border:`1px solid ${border}`,
-                    fontSize:12,fontWeight:500,cursor:"pointer",
-                  }} onClick={()=>setFilterType(label.toLowerCase())}>
-                    <span style={{color:c,fontWeight:700,fontVariantNumeric:"tabular-nums"}}>{val}</span>
-                    <span style={{color:"var(--text-muted)"}}>{label}</span>
+                  {key:"responding",   label:"Responding",   val:scanData.responding_count,   icon:"✓", color:"var(--success)", bg:"var(--success-surface)", border:"var(--success-border)"},
+                  {key:"ghost",        label:"Ghost",         val:scanData.ghost_count,         icon:"👻", color:"#ef4444",         bg:"rgba(239,68,68,0.08)",   border:"rgba(239,68,68,0.22)"},
+                  {key:"unregistered", label:"Unregistered",  val:scanData.unregistered_count,  icon:"⚠",  color:"#f59e0b",         bg:"rgba(245,158,11,0.08)", border:"rgba(245,158,11,0.22)"},
+                ].map(s=>(
+                  <div key={s.key}
+                    onClick={()=>setFilterType(filterType===s.key ? "all" : s.key)}
+                    style={{
+                      padding:"12px 14px",borderRadius:"var(--radius-sm)",cursor:"pointer",
+                      background: filterType===s.key ? s.bg : "var(--surface-2)",
+                      border:`1px solid ${filterType===s.key ? s.border : "var(--border-soft)"}`,
+                      transition:"all 0.15s",
+                    }}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
+                      <span style={{fontSize:16}}>{s.icon}</span>
+                      <span style={{fontFamily:"var(--font-mono)",fontSize:22,fontWeight:700,color:s.color}}>{s.val}</span>
+                    </div>
+                    <div style={{fontSize:11,color:"var(--text-muted)",fontWeight:500}}>{s.label}</div>
                   </div>
                 ))}
-                <div style={{
-                  display:"flex",alignItems:"center",gap:6,
-                  padding:"4px 12px",borderRadius:99,
-                  background:"var(--surface-3)",border:"1px solid var(--border-soft)",
-                  fontSize:12,fontWeight:500,cursor:"pointer",
-                  opacity: filterType==="all"?1:0.6,
-                }} onClick={()=>setFilterType("all")}>
-                  <span style={{color:"var(--text-muted)"}}>Show All</span>
-                </div>
               </div>
             )}
           </div>
         )}
+
+        {/* Empty state inline hint */}
+        {!hasData && (
+          <div style={{
+            marginTop:18,paddingTop:18,borderTop:"1px solid var(--border-soft)",
+            display:"flex",alignItems:"center",gap:14,
+          }}>
+            <div style={{fontSize:13,color:"var(--text-muted)",lineHeight:1.6}}>
+              Setiap IP dalam block akan dicek lewat ping dan TCP probe, lalu dibandingkan dengan data alokasi yang ada.
+              Klik <strong style={{color:"var(--text)"}}>Start Scan</strong> untuk mulai.
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Action message */}
+      {/* Action message toast */}
       {actionMsg && (
         <div style={{
-          padding:"10px 16px",borderRadius:"var(--radius)",fontSize:13,
-          background:"var(--success-surface)",color:"var(--success)",
-          border:"1px solid var(--success-border)",
-        }}>{actionMsg}</div>
+          padding:"10px 16px",borderRadius:"var(--radius)",fontSize:13,display:"flex",alignItems:"center",gap:8,
+          background: actionMsg.type==="error" ? "var(--danger-surface)" : actionMsg.type==="delete" ? "var(--danger-surface)" : "var(--success-surface)",
+          color: actionMsg.type==="error" || actionMsg.type==="delete" ? "var(--danger)" : "var(--success)",
+          border: `1px solid ${actionMsg.type==="error" || actionMsg.type==="delete" ? "var(--danger-border)" : "var(--success-border)"}`,
+        }}>
+          <span>{actionMsg.type==="error" ? "✕" : "✓"}</span>
+          {actionMsg.text}
+        </div>
+      )}
+
+      {/* No scan yet — full empty state */}
+      {!hasData && (
+        <div className="card" style={{padding:"60px 40px",textAlign:"center"}}>
+          <div style={{fontSize:48,marginBottom:16,opacity:0.5}}>🛰️</div>
+          <div style={{fontSize:16,fontWeight:600,color:"var(--text)",marginBottom:8}}>
+            Belum ada scan dijalankan
+          </div>
+          <div style={{fontSize:13,color:"var(--text-muted)",maxWidth:440,margin:"0 auto",lineHeight:1.7}}>
+            Pilih block di atas, lalu jalankan scan untuk melihat IP mana yang masih aktif
+            dan mana yang sudah tidak terpakai — data IPAM akan disandingkan langsung dengan kondisi network sebenarnya.
+          </div>
+        </div>
       )}
 
       {/* Results */}
@@ -284,17 +298,18 @@ export default function IPScan() {
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
 
           {/* Ghost allocations */}
-          {(filterType==="all" || filterType==="ghost") && ghosts.length>0 && (
+          {filteredGhosts.length>0 && (
             <div className="card" style={{overflow:"hidden"}}>
-              <div style={{padding:"12px 16px",borderBottom:"1px solid var(--border-medium)",
-                display:"flex",alignItems:"center",gap:10}}>
+              <div style={{padding:"14px 16px",borderBottom:"1px solid var(--border-medium)",
+                display:"flex",alignItems:"center",gap:10,background:"var(--surface-2)"}}>
+                <span style={{fontSize:16}}>👻</span>
                 <span style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>Ghost Allocations</span>
                 <span style={{fontSize:11,color:"#ef4444",background:"rgba(239,68,68,0.1)",
-                  border:"1px solid rgba(239,68,68,0.25)",padding:"2px 8px",borderRadius:99}}>
-                  {ghosts.length} found
+                  border:"1px solid rgba(239,68,68,0.25)",padding:"2px 8px",borderRadius:99,fontWeight:600}}>
+                  {ghosts.length}
                 </span>
                 <span style={{fontSize:11,color:"var(--text-dim)",marginLeft:4}}>
-                  — Terdaftar di IPAM tapi tidak ada IP yang respond
+                  Terdaftar di IPAM, tidak ada IP yang respond
                 </span>
               </div>
               <table style={{width:"100%",borderCollapse:"collapse"}}>
@@ -310,21 +325,16 @@ export default function IPScan() {
                     <tr key={g.alloc_id||i} className="table-row"
                       style={{background:i%2===0?"var(--surface-1)":"var(--surface-2)"}}>
                       <td className="table-cell">
-                        <span style={{fontFamily:"var(--font-mono)",fontSize:12,fontWeight:600,color:"var(--accent)"}}>
-                          {g.alloc_prefix}
-                        </span>
-                        {g.likely_firewall && (
-                          <span style={{fontSize:9,marginLeft:6,color:"var(--text-dim)",
-                            background:"var(--surface-3)",padding:"1px 5px",borderRadius:3,
-                            border:"1px solid var(--border-soft)"}}>
-                            may be firewall
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          <div style={{width:3,height:24,borderRadius:2,
+                            background: g.likely_firewall ? "var(--text-dim)" : "#ef4444",flexShrink:0}}/>
+                          <span style={{fontFamily:"var(--font-mono)",fontSize:12,fontWeight:600,color:"var(--accent)"}}>
+                            {g.alloc_prefix}
                           </span>
-                        )}
+                        </div>
                       </td>
                       <td className="table-cell">
-                        <span style={{fontSize:11,color:"var(--text-muted)",textTransform:"capitalize"}}>
-                          {g.owner_type}
-                        </span>
+                        <span style={{fontSize:11,color:"var(--text-muted)",textTransform:"capitalize"}}>{g.owner_type}</span>
                       </td>
                       <td className="table-cell">
                         <span style={{fontSize:12,color:g.customer_name?"var(--text)":"var(--text-dim)"}}>
@@ -333,9 +343,10 @@ export default function IPScan() {
                       </td>
                       <td className="table-cell">
                         <span style={{
-                          fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:99,
-                          background:"rgba(239,68,68,0.1)",color:"#ef4444",
-                          border:"1px solid rgba(239,68,68,0.25)",
+                          fontSize:10,fontWeight:600,padding:"3px 9px",borderRadius:99,
+                          background: g.likely_firewall ? "var(--surface-3)" : "rgba(239,68,68,0.1)",
+                          color: g.likely_firewall ? "var(--text-dim)" : "#ef4444",
+                          border: `1px solid ${g.likely_firewall ? "var(--border-soft)" : "rgba(239,68,68,0.25)"}`,
                         }}>
                           {g.likely_firewall ? "LIKELY FIREWALL" : "GHOST"}
                         </span>
@@ -344,15 +355,12 @@ export default function IPScan() {
                         {g.alloc_id && (
                           <div style={{display:"flex",gap:4}}>
                             <button onClick={()=>doAction("mark_deprecated", g.alloc_id, g.alloc_prefix)}
-                              className="btn btn-ghost btn-sm"
-                              style={{fontSize:11,padding:"3px 8px"}}>
+                              className="btn btn-ghost btn-sm" style={{fontSize:11,padding:"3px 8px"}}>
                               Mark Deprecated
                             </button>
-                            <button onClick={()=>setConfirmDel(g)}
-                              className="btn btn-sm"
-                              style={{fontSize:11,padding:"3px 8px",
-                                background:"var(--danger-surface)",color:"var(--danger)",
-                                border:"1px solid var(--danger-border)"}}>
+                            <button onClick={()=>setConfirmDel(g)} className="btn btn-sm"
+                              style={{fontSize:11,padding:"3px 8px",background:"var(--danger-surface)",
+                                color:"var(--danger)",border:"1px solid var(--danger-border)"}}>
                               Delete
                             </button>
                           </div>
@@ -365,52 +373,41 @@ export default function IPScan() {
             </div>
           )}
 
-          {/* Unregistered IPs */}
-          {(filterType==="all" || filterType==="unregistered") && unregistered.length>0 && (
+          {/* Unregistered devices */}
+          {filteredUnreg.length>0 && (
             <div className="card" style={{overflow:"hidden"}}>
-              <div style={{padding:"12px 16px",borderBottom:"1px solid var(--border-medium)",
-                display:"flex",alignItems:"center",gap:10}}>
+              <div style={{padding:"14px 16px",borderBottom:"1px solid var(--border-medium)",
+                display:"flex",alignItems:"center",gap:10,background:"var(--surface-2)"}}>
+                <span style={{fontSize:16}}>⚠️</span>
                 <span style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>Unregistered Devices</span>
                 <span style={{fontSize:11,color:"#f59e0b",background:"rgba(245,158,11,0.1)",
-                  border:"1px solid rgba(245,158,11,0.25)",padding:"2px 8px",borderRadius:99}}>
-                  {unregistered.length} found
+                  border:"1px solid rgba(245,158,11,0.25)",padding:"2px 8px",borderRadius:99,fontWeight:600}}>
+                  {unregistered.length}
                 </span>
                 <span style={{fontSize:11,color:"var(--text-dim)",marginLeft:4}}>
-                  — Respond tapi tidak terdaftar di IPAM
+                  Respond tapi tidak terdaftar di IPAM
                 </span>
               </div>
               <table style={{width:"100%",borderCollapse:"collapse"}}>
                 <thead>
-                  <tr>
-                    {["IP Address","Method","Block","Action"].map(h=>(
-                      <th key={h} className="table-header">{h}</th>
-                    ))}
-                  </tr>
+                  <tr>{["IP Address","Method","Block","Note"].map(h=>(
+                    <th key={h} className="table-header">{h}</th>
+                  ))}</tr>
                 </thead>
                 <tbody>
                   {unregistered.map((r,i)=>(
-                    <tr key={r.ip} className="table-row"
-                      style={{background:i%2===0?"var(--surface-1)":"var(--surface-2)"}}>
+                    <tr key={r.ip} className="table-row" style={{background:i%2===0?"var(--surface-1)":"var(--surface-2)"}}>
                       <td className="table-cell">
-                        <span style={{fontFamily:"var(--font-mono)",fontSize:12,fontWeight:600,color:"#f59e0b"}}>
-                          {r.ip}
-                        </span>
+                        <span style={{fontFamily:"var(--font-mono)",fontSize:12,fontWeight:600,color:"#f59e0b"}}>{r.ip}</span>
                       </td>
                       <td className="table-cell">
-                        <span style={{fontSize:11,color:"var(--text-muted)",textTransform:"uppercase",
-                          fontFamily:"var(--font-mono)"}}>
-                          {r.method}
-                        </span>
+                        <span style={{fontSize:11,color:"var(--text-muted)",textTransform:"uppercase",fontFamily:"var(--font-mono)"}}>{r.method}</span>
                       </td>
                       <td className="table-cell">
-                        <span style={{fontSize:11,color:"var(--text-muted)",fontFamily:"var(--font-mono)"}}>
-                          {selectedBlock?.prefix||"—"}
-                        </span>
+                        <span style={{fontSize:11,color:"var(--text-muted)",fontFamily:"var(--font-mono)"}}>{selectedBlock?.prefix||"—"}</span>
                       </td>
                       <td className="table-cell">
-                        <span style={{fontSize:11,color:"var(--text-dim)"}}>
-                          Perlu investigasi manual
-                        </span>
+                        <span style={{fontSize:11,color:"var(--text-dim)"}}>Perlu investigasi manual</span>
                       </td>
                     </tr>
                   ))}
@@ -419,48 +416,29 @@ export default function IPScan() {
             </div>
           )}
 
-          {/* Responding (clean) */}
-          {filterType==="responding" && (
+          {/* Responding clean list */}
+          {filterType==="responding" && responding.length>0 && (
             <div className="card" style={{overflow:"hidden"}}>
-              <div style={{padding:"12px 16px",borderBottom:"1px solid var(--border-medium)",
-                display:"flex",alignItems:"center",gap:10}}>
+              <div style={{padding:"14px 16px",borderBottom:"1px solid var(--border-medium)",
+                display:"flex",alignItems:"center",gap:10,background:"var(--surface-2)"}}>
+                <span style={{fontSize:16}}>✓</span>
                 <span style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>Responding IPs</span>
                 <span style={{fontSize:11,color:"var(--success)",background:"var(--success-surface)",
-                  border:"1px solid var(--success-border)",padding:"2px 8px",borderRadius:99}}>
-                  {responding.length} found
+                  border:"1px solid var(--success-border)",padding:"2px 8px",borderRadius:99,fontWeight:600}}>
+                  {responding.length}
                 </span>
               </div>
               <table style={{width:"100%",borderCollapse:"collapse"}}>
-                <thead>
-                  <tr>
-                    {["IP","Method","Allocation","Customer"].map(h=>(
-                      <th key={h} className="table-header">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
+                <thead><tr>{["IP","Method","Allocation","Customer"].map(h=>(
+                  <th key={h} className="table-header">{h}</th>
+                ))}</tr></thead>
                 <tbody>
                   {responding.map((r,i)=>(
-                    <tr key={r.ip} className="table-row"
-                      style={{background:i%2===0?"var(--surface-1)":"var(--surface-2)"}}>
-                      <td className="table-cell">
-                        <span style={{fontFamily:"var(--font-mono)",fontSize:12,fontWeight:600,color:"var(--success)"}}>
-                          {r.ip}
-                        </span>
-                      </td>
-                      <td className="table-cell">
-                        <span style={{fontSize:11,color:"var(--text-muted)",fontFamily:"var(--font-mono)",
-                          textTransform:"uppercase"}}>{r.method}</span>
-                      </td>
-                      <td className="table-cell">
-                        <span style={{fontFamily:"var(--font-mono)",fontSize:11,color:"var(--accent)"}}>
-                          {r.alloc_prefix||"—"}
-                        </span>
-                      </td>
-                      <td className="table-cell">
-                        <span style={{fontSize:12,color:"var(--text-muted)"}}>
-                          {r.customer_name||"—"}
-                        </span>
-                      </td>
+                    <tr key={r.ip} className="table-row" style={{background:i%2===0?"var(--surface-1)":"var(--surface-2)"}}>
+                      <td className="table-cell"><span style={{fontFamily:"var(--font-mono)",fontSize:12,fontWeight:600,color:"var(--success)"}}>{r.ip}</span></td>
+                      <td className="table-cell"><span style={{fontSize:11,color:"var(--text-muted)",fontFamily:"var(--font-mono)",textTransform:"uppercase"}}>{r.method}</span></td>
+                      <td className="table-cell"><span style={{fontFamily:"var(--font-mono)",fontSize:11,color:"var(--accent)"}}>{r.alloc_prefix||"—"}</span></td>
+                      <td className="table-cell"><span style={{fontSize:12,color:"var(--text-muted)"}}>{r.customer_name||"—"}</span></td>
                     </tr>
                   ))}
                 </tbody>
@@ -468,15 +446,15 @@ export default function IPScan() {
             </div>
           )}
 
-          {/* Empty state */}
-          {isDone && ghosts.length===0 && unregistered.length===0 && (
+          {/* All clean */}
+          {ghosts.length===0 && unregistered.length===0 && (
             <div className="card" style={{padding:48,textAlign:"center"}}>
-              <div style={{fontSize:36,marginBottom:8}}>✅</div>
+              <div style={{fontSize:40,marginBottom:10}}>✅</div>
               <div style={{fontSize:15,fontWeight:600,color:"var(--text)",marginBottom:4}}>
                 Tidak ada discrepancy ditemukan
               </div>
               <div style={{fontSize:12,color:"var(--text-muted)"}}>
-                Semua alokasi dalam block {scanData.prefix} sesuai kondisi real network
+                Semua alokasi dalam block <span style={{fontFamily:"var(--font-mono)",color:"var(--accent)"}}>{scanData.prefix}</span> sesuai kondisi real network
               </div>
             </div>
           )}
@@ -494,21 +472,25 @@ export default function IPScan() {
             </div>
             <div className="modal-body">
               <p style={{fontSize:13,color:"var(--text-muted)",lineHeight:1.6,margin:0}}>
-                Hapus alokasi <strong style={{fontFamily:"var(--font-mono)",color:"var(--accent)"}}>
-                {confirmDel.alloc_prefix}</strong>
+                Hapus alokasi <strong style={{fontFamily:"var(--font-mono)",color:"var(--accent)"}}>{confirmDel.alloc_prefix}</strong>
                 {confirmDel.customer_name && ` (${confirmDel.customer_name})`} dari IPAM?
-                <br/><br/>
-                Tindakan ini tidak dapat dibatalkan.
+                <br/><br/>Tindakan ini tidak dapat dibatalkan dan akan tercatat di Audit Logs.
               </p>
             </div>
             <div className="modal-footer">
               <button onClick={()=>setConfirmDel(null)} className="btn btn-secondary">Cancel</button>
-              <button onClick={()=>doAction("delete", confirmDel.alloc_id, confirmDel.alloc_prefix)}
-                className="btn btn-danger">Delete</button>
+              <button onClick={()=>doAction("delete", confirmDel.alloc_id, confirmDel.alloc_prefix)} className="btn btn-danger">Delete</button>
             </div>
           </div>
         </div>
       )}
+
+      <style>{`
+        @keyframes pulse-scan {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.4; transform: scale(0.8); }
+        }
+      `}</style>
     </div>
   );
 }
