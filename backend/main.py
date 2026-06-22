@@ -86,6 +86,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # ------------------------------------------------------------------
 PUBLIC_PATHS = {
     "/api/v1/auth/login",
+    "/api/v1/health/detailed",
     "/docs", "/openapi.json", "/redoc",
 }
 
