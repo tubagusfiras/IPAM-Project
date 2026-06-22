@@ -2,7 +2,7 @@
 
 Production-ready IPAM system for ISP network management. Built for PT Sumber Data Indonesia (ASN 56246).
 
-**Status:** 🟢 Production-Ready (Security Hardened)
+**Status:** 🟢 Production-Ready (Hardened + Monitored + Automated CI/CD)
 
 ---
 
@@ -21,9 +21,11 @@ cp .env.example .env
 docker compose -f docker/docker-compose.yml up -d
 
 # Access application
-# Frontend: http://localhost:8100
-# API Docs: http://localhost:8101/docs
-# Health: http://localhost:8101/health
+# Frontend: http://103.10.120.11:8100
+# API Docs: http://103.10.120.11:8101/docs
+# Health: http://103.10.120.11:8101/health
+# Grafana: http://103.10.120.11:3100 (admin/admin)
+# Prometheus: http://103.10.120.11:9090
 ```
 
 **Default login:** Create first user via API or use database seed script.
