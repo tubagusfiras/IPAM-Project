@@ -1,18 +1,13 @@
 from contextlib import asynccontextmanager
-import asyncio, subprocess, ipaddress, time
+import asyncio, subprocess, ipaddress, time, os, json, math, io, csv
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List
-from datetime import datetime
-import os, json, math, ipaddress
 
 import asyncpg
-from fastapi import FastAPI, HTTPException, Query, Depends, UploadFile, File
+from fastapi import FastAPI, HTTPException, Query, Depends, UploadFile, File, Request
 from fastapi.responses import StreamingResponse, JSONResponse, Response
-import openpyxl
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-from openpyxl.utils import get_column_letter
-import io
-from weasyprint import HTML as WeasyprintHTML
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -20,36 +15,35 @@ from slowapi.errors import RateLimitExceeded
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 from loguru import logger
 import time as time_module
-
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://ipam:ipam@db:5432/ipam")
-REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
-pool: asyncpg.Pool = None
-
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
+from weasyprint import HTML as WeasyprintHTML
+import bcrypt, jwt
 import redis.asyncio as aioredis
+
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
+import io
+from weasyprint import HTML as WeasyprintHTML
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+# ── CORE MODULE IMPORTS ──────────────────────────────────────
+from core.config import DATABASE_URL, REDIS_URL, JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRE_HOURS, SCAN_TTL, ALLOWED_ORIGINS
+
+# ── REDIS ────────────────────────────────────────────────────
 redis_client = aioredis.from_url(REDIS_URL, decode_responses=True)
 SCAN_TTL = 60 * 60 * 24  # 24 jam
 
-import bcrypt, jwt
-from datetime import datetime, timedelta, timezone
-from fastapi import Request
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-
-JWT_SECRET = os.getenv("JWT_SECRET")
-if not JWT_SECRET:
-    raise RuntimeError("JWT_SECRET environment variable must be set")
-JWT_ALGORITHM = "HS256"
-JWT_EXPIRE_HOURS = 8
-
+# ── SECURITY ─────────────────────────────────────────────────
 security = HTTPBearer(auto_error=False)
 
 def create_jwt_token(user_id: str, username: str, role: str) -> str:
-    payload = {
-        "sub": str(user_id),
-        "username": username,
-        "role": role,
-        "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRE_HOURS),
-        "iat": datetime.now(timezone.utc),
-    }
+    payload = {"sub": str(user_id), "username": username, "role": role,
+               "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRE_HOURS),
+               "iat": datetime.now(timezone.utc)}
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 def decode_jwt_token(token: str) -> dict:
@@ -63,8 +57,7 @@ def decode_jwt_token(token: str) -> dict:
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
     if not credentials:
         raise HTTPException(401, "Not authenticated")
-    payload = decode_jwt_token(credentials.credentials)
-    return payload
+    return decode_jwt_token(credentials.credentials)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -73,10 +66,9 @@ async def lifespan(app: FastAPI):
     yield
     await pool.close()
 
-app = FastAPI(title="IPAM API", version="2.0.0", lifespan=lifespan)
+pool: asyncpg.Pool = None
 
-# CORS configuration from env var (comma-separated origins)
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:8100,http://localhost:3000").split(",")
+app = FastAPI(title="IPAM API", version="2.0.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=ALLOWED_ORIGINS, allow_methods=["*"], allow_headers=["*"], allow_credentials=True)
 
 # Rate limiting
@@ -85,61 +77,37 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Prometheus metrics
-REQUEST_COUNT = Counter(
-    "ipam_requests_total",
-    "Total requests",
-    ["method", "endpoint", "status"],
-)
-REQUEST_LATENCY = Histogram(
-    "ipam_request_duration_seconds",
-    "Request latency in seconds",
-    ["method", "endpoint"],
-    buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
-)
+REQUEST_COUNT = Counter("ipam_requests_total", "Total requests", ["method", "endpoint", "status"])
+REQUEST_LATENCY = Histogram("ipam_request_duration_seconds", "Request latency in seconds", ["method", "endpoint"],
+                            buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0))
 
 # ------------------------------------------------------------------
-# AUTH MIDDLEWARE — protect semua endpoint kecuali whitelist
+# AUTH MIDDLEWARE
 # ------------------------------------------------------------------
-PUBLIC_PATHS = {
-    "/api/v1/auth/login",
-    "/api/v1/health/detailed",
-    "/metrics",
-    "/docs", "/openapi.json", "/redoc",
-}
+PUBLIC_PATHS = {"/api/v1/auth/login", "/api/v1/health/detailed", "/metrics", "/docs", "/openapi.json", "/redoc"}
 
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     path = request.url.path
-
-    # Whitelist: public paths, OPTIONS (CORS preflight), dan static/health check
     if path in PUBLIC_PATHS or request.method == "OPTIONS" or path == "/":
         return await call_next(request)
-
-    # Hanya protect /api/v1/* — biarkan path lain (jika ada) lewat
     if not path.startswith("/api/v1/"):
         return await call_next(request)
-
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
-
-    token = auth_header.replace("Bearer ", "", 1)
     try:
-        payload = decode_jwt_token(token)
-        request.state.user = payload
+        request.state.user = decode_jwt_token(auth_header.replace("Bearer ", "", 1))
     except HTTPException as e:
         return JSONResponse(status_code=e.status_code, content={"detail": e.detail})
-
     return await call_next(request)
 
 @app.middleware("http")
 async def metrics_middleware(request: Request, call_next):
     start = time_module.time()
     response = await call_next(request)
-    duration = time_module.time() - start
-    endpoint = request.url.path
-    REQUEST_COUNT.labels(request.method, endpoint, str(response.status_code)).inc()
-    REQUEST_LATENCY.labels(request.method, endpoint).observe(duration)
+    REQUEST_COUNT.labels(request.method, request.url.path, str(response.status_code)).inc()
+    REQUEST_LATENCY.labels(request.method, request.url.path).observe(time_module.time() - start)
     return response
 
 async def get_db():
@@ -149,10 +117,20 @@ async def get_db():
 def log_action(conn, table, record_id, action, old=None, new=None):
     return conn.execute(
         "INSERT INTO audit_log (table_name, record_id, action, old_data, new_data) VALUES ($1,$2,$3,$4,$5)",
-        table, record_id, action,
-        json.dumps(old) if old else None,
-        json.dumps(new) if new else None
-    )
+        table, record_id, action, json.dumps(old) if old else None, json.dumps(new) if new else None)
+
+# ── ROUTE MODULE IMPORTS ─────────────────────────────────────
+from models.schemas import SiteIn, CustomerIn, VlanIn, BlockIn, AllocIn, LoginIn, ChangePasswordIn, UserIn, UserUpdateIn
+from api.routes.sites import router as sites_router
+from api.routes.customers import router as customers_router
+from api.routes.vlans import router as vlans_router
+from api.routes.blocks import router as blocks_router
+from api.routes.allocations import router as allocations_router
+app.include_router(sites_router)
+app.include_router(customers_router)
+app.include_router(vlans_router)
+app.include_router(blocks_router)
+app.include_router(allocations_router)
 
 # ------------------------------------------------------------------
 # HEALTH & DASHBOARD
@@ -163,42 +141,26 @@ async def health():
 
 @app.get("/api/v1/health/detailed")
 async def health_detailed():
-    """Comprehensive health check - DB, Redis, uptime"""
-    health = {"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat(), "services": {}}
-
-    # Check DB
+    h = {"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat(), "services": {}}
     try:
         await pool.fetchval("SELECT 1")
-        health["services"]["database"] = {
-            "status": "ok",
-            "pool_size": pool.get_size(),
-            "pool_free": pool.get_idle_size(),
-        }
+        h["services"]["database"] = {"status": "ok", "pool_size": pool.get_size(), "pool_free": pool.get_idle_size()}
     except Exception as e:
-        health["services"]["database"] = {"status": "error", "error": str(e)}
-        health["status"] = "degraded"
-
-    # Check Redis
+        h["services"]["database"] = {"status": "error", "error": str(e)}
+        h["status"] = "degraded"
     try:
         await redis_client.ping()
         info = await redis_client.info("memory")
-        health["services"]["redis"] = {
-            "status": "ok",
-            "used_memory_human": info.get("used_memory_human", "unknown"),
-        }
+        h["services"]["redis"] = {"status": "ok", "used_memory_human": info.get("used_memory_human", "unknown")}
     except Exception as e:
-        health["services"]["redis"] = {"status": "error", "error": str(e)}
-        health["status"] = "degraded"
-
-    # Summary
-    health["ok_count"] = sum(1 for s in health["services"].values() if s["status"] == "ok")
-    health["total_count"] = len(health["services"])
-
-    return health
+        h["services"]["redis"] = {"status": "error", "error": str(e)}
+        h["status"] = "degraded"
+    h["ok_count"] = sum(1 for s in h["services"].values() if s["status"] == "ok")
+    h["total_count"] = len(h["services"])
+    return h
 
 @app.get("/metrics")
 async def metrics():
-    """Prometheus metrics endpoint"""
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 @app.get("/api/v1/dashboard/stats")
@@ -258,392 +220,6 @@ async def dashboard_stats(db=Depends(get_db)):
     return stats
 
 # ------------------------------------------------------------------
-# SITES
-# ------------------------------------------------------------------
-class SiteIn(BaseModel):
-    name: str
-    city: Optional[str] = None
-    region: Optional[str] = None
-    description: Optional[str] = None
-
-@app.get("/api/v1/sites")
-async def list_sites(search: Optional[str]=Query(None), db=Depends(get_db)):
-    q = f"%{search}%" if search else "%"
-    rows = await db.fetch("SELECT * FROM sites WHERE name ILIKE $1 OR city ILIKE $1 ORDER BY name", q)
-    return [dict(r) for r in rows]
-
-@app.post("/api/v1/sites", status_code=201)
-async def create_site(body: SiteIn, db=Depends(get_db)):
-    row = await db.fetchrow(
-        "INSERT INTO sites (name,city,region,description) VALUES ($1,$2,$3,$4) RETURNING *",
-        body.name, body.city, body.region, body.description
-    )
-    return dict(row)
-
-@app.put("/api/v1/sites/{site_id}")
-async def update_site(site_id: str, body: SiteIn, db=Depends(get_db)):
-    row = await db.fetchrow(
-        "UPDATE sites SET name=$1,city=$2,region=$3,description=$4 WHERE id=$5::uuid RETURNING *",
-        body.name, body.city, body.region, body.description, site_id
-    )
-    if not row: raise HTTPException(404, "Site not found")
-    return dict(row)
-
-@app.delete("/api/v1/sites/{site_id}", status_code=204)
-async def delete_site(site_id: str, db=Depends(get_db)):
-    await db.execute("DELETE FROM sites WHERE id=$1::uuid", site_id)
-
-# ------------------------------------------------------------------
-# CUSTOMERS
-# ------------------------------------------------------------------
-class CustomerIn(BaseModel):
-    name: str
-    code: Optional[str] = None
-    contact_name: Optional[str] = None
-    contact_email: Optional[str] = None
-    contact_phone: Optional[str] = None
-    description: Optional[str] = None
-    is_active: bool = True
-
-@app.get("/api/v1/customers")
-async def list_customers(
-    search: Optional[str]=Query(None),
-    limit: int=Query(50,ge=1,le=500),
-    offset: int=Query(0,ge=0),
-    db=Depends(get_db)
-):
-    q = f"%{search}%" if search else "%"
-    rows = await db.fetch("""
-        SELECT c.*, COUNT(DISTINCT a.id) AS alloc_count
-        FROM customers c
-        LEFT JOIN allocations a ON a.customer_id = c.id
-        WHERE c.name ILIKE $1 OR c.code ILIKE $1
-        GROUP BY c.id ORDER BY c.name
-        LIMIT $2 OFFSET $3
-    """, q, limit, offset)
-    total = await db.fetchval("SELECT COUNT(*) FROM customers WHERE name ILIKE $1 OR code ILIKE $1", q)
-    return {"total": total, "items": [dict(r) for r in rows]}
-
-@app.get("/api/v1/customers/{customer_id}")
-async def get_customer(customer_id: str, db=Depends(get_db)):
-    row = await db.fetchrow("SELECT * FROM customers WHERE id=$1::uuid", customer_id)
-    if not row: raise HTTPException(404, "Customer not found")
-    allocs = await db.fetch("SELECT * FROM v_allocation_detail WHERE customer_id=$1::uuid ORDER BY prefix::inet", customer_id)
-    return {**dict(row), "allocations": [dict(a) for a in allocs]}
-
-@app.post("/api/v1/customers", status_code=201)
-async def create_customer(body: CustomerIn, db=Depends(get_db)):
-    row = await db.fetchrow(
-        "INSERT INTO customers (name,code,contact_name,contact_email,contact_phone,description,is_active) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *",
-        body.name, body.code, body.contact_name, body.contact_email, body.contact_phone, body.description, body.is_active
-    )
-    return dict(row)
-
-@app.put("/api/v1/customers/{customer_id}")
-async def update_customer(customer_id: str, body: CustomerIn, db=Depends(get_db)):
-    row = await db.fetchrow(
-        "UPDATE customers SET name=$1,code=$2,contact_name=$3,contact_email=$4,contact_phone=$5,description=$6,is_active=$7 WHERE id=$8::uuid RETURNING *",
-        body.name, body.code, body.contact_name, body.contact_email, body.contact_phone, body.description, body.is_active, customer_id
-    )
-    if not row: raise HTTPException(404, "Customer not found")
-    return dict(row)
-
-@app.delete("/api/v1/customers/{customer_id}", status_code=204)
-async def delete_customer(customer_id: str, db=Depends(get_db)):
-    await db.execute("DELETE FROM customers WHERE id=$1::uuid", customer_id)
-
-# ------------------------------------------------------------------
-# VLANs
-# ------------------------------------------------------------------
-class VlanIn(BaseModel):
-    vid: int
-    name: Optional[str] = None
-    site_id: Optional[str] = None
-    status: str = "active"
-    description: Optional[str] = None
-
-@app.get("/api/v1/vlans")
-async def list_vlans(
-    search: Optional[str]=Query(None),
-    site_id: Optional[str]=Query(None),
-    limit: int=Query(50,ge=1,le=500),
-    offset: int=Query(0,ge=0),
-    db=Depends(get_db)
-):
-    conditions, params = ["1=1"], []
-    if search:
-        params.append(f"%{search}%")
-        conditions.append(f"(v.name ILIKE ${len(params)} OR v.vid::text ILIKE ${len(params)})")
-    if site_id:
-        params.append(site_id)
-        conditions.append(f"v.site_id = ${len(params)}::uuid")
-    where = " AND ".join(conditions)
-    params.extend([limit, offset])
-    rows = await db.fetch(f"""
-        SELECT v.*, s.name AS site_name
-        FROM vlans v LEFT JOIN sites s ON v.site_id=s.id
-        WHERE {where} ORDER BY v.vid
-        LIMIT ${len(params)-1} OFFSET ${len(params)}
-    """, *params)
-    total = await db.fetchval(f"SELECT COUNT(*) FROM vlans v WHERE {where}", *params[:-2])
-    return {"total": total, "items": [dict(r) for r in rows]}
-
-@app.post("/api/v1/vlans", status_code=201)
-async def create_vlan(body: VlanIn, db=Depends(get_db)):
-    row = await db.fetchrow(
-        "INSERT INTO vlans (vid,name,site_id,status,description) VALUES ($1,$2,$3::uuid,$4::vlan_status_t,$5) RETURNING *",
-        body.vid, body.name, body.site_id, body.status, body.description
-    )
-    return dict(row)
-
-@app.put("/api/v1/vlans/{vlan_id}")
-async def update_vlan(vlan_id: str, body: VlanIn, db=Depends(get_db)):
-    row = await db.fetchrow(
-        "UPDATE vlans SET vid=$1,name=$2,site_id=$3::uuid,status=$4::vlan_status_t,description=$5 WHERE id=$6::uuid RETURNING *",
-        body.vid, body.name, body.site_id, body.status, body.description, vlan_id
-    )
-    if not row: raise HTTPException(404, "VLAN not found")
-    return dict(row)
-
-@app.delete("/api/v1/vlans/{vlan_id}", status_code=204)
-async def delete_vlan(vlan_id: str, db=Depends(get_db)):
-    await db.execute("DELETE FROM vlans WHERE id=$1::uuid", vlan_id)
-
-# ------------------------------------------------------------------
-# IP BLOCKS
-# ------------------------------------------------------------------
-class BlockIn(BaseModel):
-    prefix: str
-    name: Optional[str] = None
-    asn: Optional[str] = None
-    router: Optional[str] = None
-    operator: Optional[str] = None
-    site_id: Optional[str] = None
-    status: str = "active"
-    description: Optional[str] = None
-
-@app.get("/api/v1/blocks")
-async def list_blocks(
-    search: Optional[str]=Query(None),
-    ip_version: Optional[str]=Query(None),
-    site_id: Optional[str]=Query(None),
-    limit: int=Query(50,ge=1,le=500),
-    offset: int=Query(0,ge=0),
-    db=Depends(get_db)
-):
-    conditions, params = ["1=1"], []
-    if search:
-        params.append(f"%{search}%")
-        conditions.append(f"(b.prefix::text ILIKE ${len(params)} OR b.name ILIKE ${len(params)} OR b.asn ILIKE ${len(params)} OR b.router ILIKE ${len(params)})")
-    if ip_version:
-        params.append(ip_version)
-        conditions.append(f"b.ip_version = ${len(params)}::ip_version_t")
-    if site_id:
-        params.append(site_id)
-        conditions.append(f"b.site_id = ${len(params)}::uuid")
-    where = " AND ".join(conditions)
-    params.extend([limit, offset])
-    rows = await db.fetch(f"""
-        SELECT b.prefix::text, b.ip_version, b.name, b.asn, b.router, b.operator,
-               b.status, b.description, b.id, b.site_id, b.created_at,
-               s.name AS site_name,
-               COUNT(a.id) AS total_allocations,
-               COUNT(a.id) FILTER (WHERE a.status='active') AS active_allocations,
-               CASE WHEN family(b.prefix) = 4 THEN
-                   COALESCE(SUM(CASE WHEN a.status = 'active' AND a.prefix::cidr != b.prefix
-                       AND NOT EXISTS (
-                           SELECT 1 FROM allocations a2
-                           WHERE a2.block_id = b.id AND a2.id != a.id
-                           AND a2.prefix::cidr >> a.prefix::cidr
-                           AND a2.status != 'available'
-                       )
-                       THEN (2::bigint ^ (32 - masklen(a.prefix::cidr))) ELSE 0 END), 0)::numeric
-               ELSE
-                   COALESCE(SUM(CASE WHEN a.status = 'active' AND a.prefix::cidr != b.prefix
-                       AND NOT EXISTS (
-                           SELECT 1 FROM allocations a2
-                           WHERE a2.block_id = b.id AND a2.id != a.id
-                           AND a2.prefix::cidr >> a.prefix::cidr
-                           AND a2.status != 'available'
-                       )
-                       THEN (2::numeric ^ (128 - masklen(a.prefix::cidr))) ELSE 0 END), 0)
-               END AS used_ips,
-               CASE WHEN family(b.prefix) = 4 THEN
-                   (2::bigint ^ (32 - masklen(b.prefix)))::numeric
-               ELSE
-                   (2::numeric ^ (128 - masklen(b.prefix)))
-               END AS total_ips
-        FROM ip_blocks b
-        LEFT JOIN sites s ON b.site_id=s.id
-        LEFT JOIN allocations a ON a.block_id=b.id
-        WHERE {where}
-        GROUP BY b.id, s.name
-        ORDER BY b.prefix::inet
-        LIMIT ${len(params)-1} OFFSET ${len(params)}
-    """, *params)
-    total = await db.fetchval(f"SELECT COUNT(*) FROM ip_blocks b WHERE {where}", *params[:-2])
-    return {"total": total, "items": [dict(r) for r in rows]}
-
-@app.get("/api/v1/blocks/{block_id}")
-async def get_block(block_id: str, db=Depends(get_db)):
-    row = await db.fetchrow("""
-        SELECT b.*, s.name AS site_name,
-               CASE WHEN family(b.prefix) = 4 THEN
-                   COALESCE(SUM(CASE WHEN a.status = 'active' AND a.prefix::cidr != b.prefix
-                       AND NOT EXISTS (
-                           SELECT 1 FROM allocations a2
-                           WHERE a2.block_id = b.id AND a2.id != a.id
-                           AND a2.prefix::cidr >> a.prefix::cidr
-                           AND a2.status != 'available'
-                       )
-                       THEN (2::bigint ^ (32 - masklen(a.prefix::cidr))) ELSE 0 END), 0)::numeric
-               ELSE
-                   COALESCE(SUM(CASE WHEN a.status = 'active' AND a.prefix::cidr != b.prefix
-                       AND NOT EXISTS (
-                           SELECT 1 FROM allocations a2
-                           WHERE a2.block_id = b.id AND a2.id != a.id
-                           AND a2.prefix::cidr >> a.prefix::cidr
-                           AND a2.status != 'available'
-                       )
-                       THEN (2::numeric ^ (128 - masklen(a.prefix::cidr))) ELSE 0 END), 0)
-               END AS used_ips,
-               CASE WHEN family(b.prefix) = 4 THEN
-                   (2::bigint ^ (32 - masklen(b.prefix)))::numeric
-               ELSE
-                   (2::numeric ^ (128 - masklen(b.prefix)))
-               END AS total_ips
-        FROM ip_blocks b
-        LEFT JOIN sites s ON b.site_id=s.id
-        LEFT JOIN allocations a ON a.block_id=b.id
-        WHERE b.id=$1::uuid
-        GROUP BY b.id, s.name
-    """, block_id)
-    if not row: raise HTTPException(404, "Block not found")
-    allocs = await db.fetch("""
-        SELECT a.id, a.prefix::text, a.ip_version, a.status, a.owner_type, a.description, a.notes,
-               a.created_at, a.updated_at, a.block_id,
-               b.prefix::text AS block_prefix, b.name AS block_name, b.asn AS block_asn,
-               s.name AS site_name,
-               a.customer_id, c.name AS customer_name, c.code AS customer_code,
-               a.vlan_id, v.vid AS vlan_vid, v.name AS vlan_name
-        FROM allocations a
-        JOIN ip_blocks b ON a.block_id = b.id
-        LEFT JOIN sites s ON b.site_id = s.id
-        LEFT JOIN customers c ON a.customer_id = c.id
-        LEFT JOIN vlans v ON a.vlan_id = v.id
-        WHERE a.block_id = $1::uuid
-        ORDER BY a.prefix::inet
-    """, block_id)
-    return {**dict(row), "prefix": str(row["prefix"]), "allocations": [dict(a) for a in allocs]}
-
-@app.post("/api/v1/blocks", status_code=201)
-async def create_block(body: BlockIn, db=Depends(get_db)):
-    row = await db.fetchrow(
-        "INSERT INTO ip_blocks (prefix,name,asn,router,operator,site_id,status,description) VALUES ($1::cidr,$2,$3,$4,$5,$6::uuid,$7::block_status_t,$8) RETURNING *",
-        body.prefix, body.name, body.asn, body.router, body.operator, body.site_id, body.status, body.description
-    )
-    return {**dict(row), "prefix": str(row["prefix"])}
-
-@app.put("/api/v1/blocks/{block_id}")
-async def update_block(block_id: str, body: BlockIn, db=Depends(get_db)):
-    row = await db.fetchrow(
-        "UPDATE ip_blocks SET prefix=$1::cidr,name=$2,asn=$3,router=$4,operator=$5,site_id=$6::uuid,status=$7::block_status_t,description=$8 WHERE id=$9::uuid RETURNING *",
-        body.prefix, body.name, body.asn, body.router, body.operator, body.site_id, body.status, body.description, block_id
-    )
-    if not row: raise HTTPException(404, "Block not found")
-    return {**dict(row), "prefix": str(row["prefix"])}
-
-@app.delete("/api/v1/blocks/{block_id}", status_code=204)
-async def delete_block(block_id: str, db=Depends(get_db)):
-    await db.execute("DELETE FROM ip_blocks WHERE id=$1::uuid", block_id)
-
-# ------------------------------------------------------------------
-# ALLOCATIONS
-# ------------------------------------------------------------------
-class AllocIn(BaseModel):
-    prefix: str
-    block_id: str
-    customer_id: Optional[str] = None
-    vlan_id: Optional[str] = None
-    status: str = "active"
-    owner_type: str = "customer"
-    description: Optional[str] = None
-    notes: Optional[str] = None
-
-@app.get("/api/v1/allocations")
-async def list_allocations(
-    search: Optional[str]=Query(None),
-    block_id: Optional[str]=Query(None),
-    customer_id: Optional[str]=Query(None),
-    vlan_id: Optional[str]=Query(None),
-    status: Optional[str]=Query(None),
-    limit: int=Query(100,ge=1,le=1000),
-    offset: int=Query(0,ge=0),
-    db=Depends(get_db)
-):
-    conditions, params = ["1=1"], []
-    if search:
-        params.append(f"%{search}%")
-        conditions.append(f"(a.prefix::text ILIKE ${len(params)} OR c.name ILIKE ${len(params)} OR a.description ILIKE ${len(params)})")
-    if block_id:
-        params.append(block_id)
-        conditions.append(f"a.block_id = ${len(params)}::uuid")
-    if customer_id:
-        params.append(customer_id)
-        conditions.append(f"a.customer_id = ${len(params)}::uuid")
-    if vlan_id:
-        params.append(vlan_id)
-        conditions.append(f"a.vlan_id = ${len(params)}::uuid")
-    if status:
-        params.append(status)
-        conditions.append(f"a.status = ${len(params)}::alloc_status_t")
-    where = " AND ".join(conditions)
-    params.extend([limit, offset])
-    rows = await db.fetch(f"""
-        SELECT a.id, a.prefix::text, a.ip_version, a.status, a.owner_type, a.description, a.notes,
-               a.created_at, a.updated_at, a.block_id,
-               b.prefix::text AS block_prefix, b.name AS block_name,
-               b.router AS block_router, b.asn AS block_asn,
-               s.name AS site_name,
-               a.customer_id, c.name AS customer_name, c.code AS customer_code,
-               a.vlan_id, v.vid AS vlan_vid, v.name AS vlan_name
-        FROM allocations a
-        JOIN ip_blocks b ON a.block_id=b.id
-        LEFT JOIN sites s ON b.site_id=s.id
-        LEFT JOIN customers c ON a.customer_id=c.id
-        LEFT JOIN vlans v ON a.vlan_id=v.id
-        WHERE {where}
-        ORDER BY a.prefix::inet
-        LIMIT ${len(params)-1} OFFSET ${len(params)}
-    """, *params)
-    total = await db.fetchval(f"""
-        SELECT COUNT(*) FROM allocations a
-        JOIN ip_blocks b ON a.block_id=b.id
-        LEFT JOIN customers c ON a.customer_id=c.id
-        WHERE {where}
-    """, *params[:-2])
-    return {"total": total, "items": [dict(r) for r in rows]}
-
-@app.post("/api/v1/allocations", status_code=201)
-async def create_allocation(body: AllocIn, db=Depends(get_db)):
-    row = await db.fetchrow(
-        "INSERT INTO allocations (prefix,block_id,customer_id,vlan_id,status,owner_type,description,notes) VALUES ($1::cidr,$2::uuid,$3::uuid,$4::uuid,$5::alloc_status_t,$6::owner_type_t,$7,$8) RETURNING *",
-        body.prefix, body.block_id, body.customer_id, body.vlan_id, body.status, body.owner_type, body.description, body.notes
-    )
-    return {**dict(row), "prefix": str(row["prefix"])}
-
-@app.put("/api/v1/allocations/{alloc_id}")
-async def update_allocation(alloc_id: str, body: AllocIn, db=Depends(get_db)):
-    row = await db.fetchrow(
-        "UPDATE allocations SET prefix=$1::inet,block_id=$2::uuid,customer_id=$3::uuid,vlan_id=$4::uuid,status=$5::alloc_status_t,owner_type=$6::owner_type_t,description=$7,notes=$8 WHERE id=$9::uuid RETURNING *",
-        body.prefix, body.block_id, body.customer_id, body.vlan_id, body.status, body.owner_type, body.description, body.notes, alloc_id
-    )
-    if not row: raise HTTPException(404, "Allocation not found")
-    return {**dict(row), "prefix": str(row["prefix"])}
-
-@app.delete("/api/v1/allocations/{alloc_id}", status_code=204)
-async def delete_allocation(alloc_id: str, db=Depends(get_db)):
-    await db.execute("DELETE FROM allocations WHERE id=$1::uuid", alloc_id)
 
 # ------------------------------------------------------------------
 # CSV IMPORT (preview + confirm)
