@@ -1,384 +1,255 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { getDashboardStats } from "../api.js";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
-const SVC = {
-  grafana:    { label:"Grafana",    port:3100, color:"#f59e0b" },
-  prometheus: { label:"Prometheus", port:9090, color:"#e74c3c" },
+const STATUS_HEX = { active:"#22c55e", available:"#38e8c6", reserved:"#a855f7", deprecated:"#f59e0b" };
+const ICONS = { networks:"🌐", allocations:"📡", customers:"👥", vlans:"🔗", sites:"📍" };
+const GRADS = {
+  networks:"linear-gradient(135deg,#1e40af,#3b82f6)", allocations:"linear-gradient(135deg,#166534,#22c55e)",
+  customers:"linear-gradient(135deg,#9a3412,#f97316)", vlans:"linear-gradient(135deg,#6b21a8,#a855f7)",
+  sites:"linear-gradient(135deg,#0e7490,#38e8c6)",
 };
 
-const STATUS_COLORS = {
-  active:     "var(--success)",
-  available:  "var(--accent2)",
-  reserved:   "#a855f7",
-  deprecated: "var(--warning)",
-};
-
-const STATUS_HEX = {
-  active:     "#22c55e",
-  available:  "#38e8c6",
-  reserved:   "#a855f7",
-  deprecated: "#f59e0b",
-};
-
-function StatCard({ label, value, sub, icon, color }) {
-  return (
-    <div className="card" style={{padding:20}}>
-      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:12}}>
-        <div style={{
-          width:40,height:40,borderRadius:10,
-          background:`${color}18`,
-          display:"flex",alignItems:"center",justifyContent:"center",
-          fontSize:20,
-        }}>{icon}</div>
-        <span style={{
-          fontSize:10,fontWeight:600,
-          color:"var(--success)",
-          background:"var(--success-surface)",
-          border:"1px solid var(--success-border)",
-          padding:"2px 8px",borderRadius:99,
-        }}>+2.1%</span>
-      </div>
-      <div style={{fontSize:26,fontWeight:700,color:"var(--text)",marginBottom:2,fontVariantNumeric:"tabular-nums"}}>
-        {value?.toLocaleString() ?? "—"}
-      </div>
-      <div style={{fontSize:13,fontWeight:500,color:"var(--text-muted)",marginBottom:4}}>{label}</div>
-      <div style={{fontSize:11,color:"var(--text-dim)"}}>{sub}</div>
-    </div>
-  );
+function CountUp({ to, suffix="" }) {
+  const [n, setN] = useState(0);
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current; if (!el) return;
+    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) {
+      let start = 0, dur = Math.min(1200, 20 + to * 3), step = Math.ceil(to / 60);
+      const iv = setInterval(() => { start += step; if (start >= to) { setN(to); clearInterval(iv); } else setN(start); }, dur / 60);
+      obs.disconnect();
+    }});
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [to]);
+  return <span ref={ref}>{n.toLocaleString()}{suffix}</span>;
 }
-
-function UsageBar({ label, value, total, color }) {
-  const pct = total ? Math.round(value/total*100) : 0;
-  return (
-    <div style={{marginBottom:16}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-        <span style={{fontSize:13,fontWeight:500,color:"var(--text)",textTransform:"capitalize"}}>{label}</span>
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <span style={{fontSize:13,fontWeight:600,color:"var(--text)",fontVariantNumeric:"tabular-nums"}}>
-            {value?.toLocaleString()}
-          </span>
-          <span style={{fontSize:11,color:"var(--text-muted)",minWidth:32,textAlign:"right"}}>{pct}%</span>
-        </div>
-      </div>
-      <div className="progress-bar">
-        <div className="progress-fill" style={{width:`${pct}%`,background:color}}/>
-      </div>
-    </div>
-  );
-}
-
-const CustomTooltip = ({ active, payload, label }) => {
-  if (!active || !payload?.length) return null;
-  return (
-    <div style={{
-      background:"#1e293b",
-      border:"1px solid var(--border-soft)",
-      borderRadius:"var(--radius-sm)",
-      padding:"10px 14px",
-      boxShadow:"var(--shadow-lg)",
-      fontSize:12,
-    }}>
-      <div style={{fontWeight:600,color:"var(--text)",fontFamily:"var(--font-mono)",marginBottom:6}}>
-        {payload[0]?.payload?.full || label}
-      </div>
-      {payload.map((p,i) => (
-        <div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
-          <div style={{width:8,height:8,borderRadius:2,background:p.fill}}/>
-          <span style={{color:"var(--text-muted)",textTransform:"capitalize"}}>{p.name}:</span>
-          <span style={{color:"var(--text)",fontWeight:600,fontVariantNumeric:"tabular-nums"}}>{p.value?.toLocaleString()}</span>
-        </div>
-      ))}
-    </div>
-  );
-};
 
 export default function Dashboard({ onNavigate }) {
   const [stats, setStats] = useState(null);
-  const [err,   setErr]   = useState(null);
+  const [err, setErr] = useState(null);
   const [health, setHealth] = useState(null);
 
-  useEffect(() => {
-    getDashboardStats().then(setStats).catch(e => setErr(e.message));
-  }, []);
-
+  useEffect(() => { getDashboardStats().then(setStats).catch(e => setErr(e.message)); }, []);
   useEffect(() => {
     const check = async () => {
       try {
         const h = await fetch("/api/v1/health/detailed").then(r=>r.json());
         setHealth([
-          { key:"database", label:"Database",  ok: h?.services?.database?.status==="ok", detail:`pool ${h?.services?.database?.pool_free}/${h?.services?.database?.pool_size}` },
-          { key:"redis",    label:"Redis",     ok: h?.services?.redis?.status==="ok",    detail:h?.services?.redis?.used_memory_human },
-          { key:"grafana",  label:"Grafana",   ok: false, detail:"external" },
-          { key:"prometheus",label:"Prometheus",ok: false, detail:"external" },
+          { k:"database", l:"Database", ok:h?.services?.database?.status==="ok", d:`pool ${h?.services?.database?.pool_free}/${h?.services?.database?.pool_size}` },
+          { k:"redis", l:"Redis", ok:h?.services?.redis?.status==="ok", d:h?.services?.redis?.used_memory_human },
         ]);
       } catch {}
     };
-    check();
-    const iv = setInterval(check, 30000);
-    return () => clearInterval(iv);
+    check(); const iv = setInterval(check, 30000); return () => clearInterval(iv);
   }, []);
 
-  if (err) return (
-    <div style={{
-      background:"var(--danger-surface)",
-      border:"1px solid var(--danger-border)",
-      borderRadius:"var(--radius)",
-      padding:"16px 20px",
-      color:"var(--danger)",fontSize:14,
-    }}>
-      Cannot reach API: {err}
-    </div>
-  );
-
+  if (err) return <div className="card" style={{padding:20,color:"var(--danger)",fontSize:14,background:"var(--danger-surface)",border:"1px solid var(--danger-border)"}}>⛔ {err}</div>;
   if (!stats) return (
-    <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:240,gap:12}}>
-      <div style={{
-        width:32,height:32,borderRadius:"50%",
-        border:"2px solid var(--accent-dim)",
-        borderTopColor:"var(--accent)",
-        animation:"spin 0.8s linear infinite",
-      }}/>
-      <span style={{fontSize:13,color:"var(--text-muted)"}}>Loading dashboard...</span>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:300,gap:16}}>
+      <div style={{width:40,height:40,borderRadius:"50%",border:"3px solid var(--accent-dim)",borderTopColor:"var(--accent)",animation:"sp1n 0.8s linear infinite"}}/>
+      <span style={{color:"var(--text-muted)",fontSize:13}}>Loading dashboard...</span>
+      <style>{`@keyframes sp1n{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
 
-  const {
-    total_blocks, total_allocations, total_customers, total_vlans, total_sites,
-    ipv4_blocks, ipv6_blocks, alloc_by_status, recent_blocks
-  } = stats;
-
+  const { total_blocks, total_allocations, total_customers, total_vlans, total_sites, ipv4_blocks, ipv6_blocks, alloc_by_status, recent_blocks } = stats;
   const totalAlloc = Object.values(alloc_by_status||{}).reduce((a,b)=>a+b,0);
-  const utilPct    = totalAlloc ? Math.round((alloc_by_status?.active||0)/totalAlloc*100) : 0;
+  const utilPct = totalAlloc ? Math.round((alloc_by_status?.active||0)/totalAlloc*100) : 0;
+  const pieData = Object.entries(alloc_by_status||{}).map(([k,v])=>({ name:k, value:v, color:STATUS_HEX[k]||"#94a3b8" }));
+  const barData = (recent_blocks||[]).map(b => ({ name: b.prefix.split("/")[0].split(".").slice(-2).join(".")+"/"+b.prefix.split("/")[1], full: b.prefix, active: b.active_allocations, total: b.total_allocations }));
 
-  const pieData = Object.entries(alloc_by_status||{}).map(([k,v])=>({
-    name:k, value:v, color:STATUS_HEX[k]||"#94a3b8"
-  }));
-
-  const barData = (recent_blocks||[]).map(b=>({
-    name:   b.prefix.split("/")[0].split(".").slice(-2).join(".") + "/" + b.prefix.split("/")[1],
-    full:   b.prefix,
-    active: b.active_allocations,
-    total:  b.total_allocations,
-  }));
-
-  const STAT_CARDS = [
-    { label:"Total Networks",  value:total_blocks,      icon:"🌐", color:"#52a0ff", sub:`IPv4: ${ipv4_blocks} · IPv6: ${ipv6_blocks}` },
-    { label:"IP Allocations",  value:total_allocations, icon:"📡", color:"#22c55e", sub:`Active: ${alloc_by_status?.active??0}` },
-    { label:"Customers",       value:total_customers,   icon:"👥", color:"#f97316", sub:"Total registered" },
-    { label:"VLANs",           value:total_vlans,       icon:"🔗", color:"#a855f7", sub:"Total VLANs" },
-    { label:"Sites",           value:total_sites,       icon:"📍", color:"#38e8c6", sub:"Total locations" },
+  const cards = [
+    { k:"networks", label:"Total Networks", value:total_blocks, sub:`IPv4: ${ipv4_blocks} &middot; IPv6: ${ipv6_blocks}`, grad:GRADS.networks },
+    { k:"allocations", label:"IP Allocations", value:total_allocations, sub:`Active: ${alloc_by_status?.active||0}`, grad:GRADS.allocations },
+    { k:"customers", label:"Customers", value:total_customers, sub:"Active clients", grad:GRADS.customers },
+    { k:"vlans", label:"VLANs", value:total_vlans, sub:"Configured VLANs", grad:GRADS.vlans },
+    { k:"sites", label:"Sites", value:total_sites, sub:"Physical locations", grad:GRADS.sites },
   ];
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:20}}>
 
-      {/* System Health */}
+      {/* ── System Health Bar ── */}
       {health && (
-        <div className="card" style={{padding:"12px 18px",display:"flex",alignItems:"center",gap:16}}>
-          <span style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em",color:"var(--text-dim)",whiteSpace:"nowrap"}}>
-            System Health
-          </span>
-          <div style={{display:"flex",gap:12,flex:1,flexWrap:"wrap"}}>
+        <div className="card" style={{padding:"10px 18px",display:"flex",alignItems:"center",gap:14,borderLeft:"3px solid var(--accent)"}}>
+          <span style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",color:"var(--text-dim)",whiteSpace:"nowrap"}}>System</span>
+          <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
             {health.map(h => (
-              <div key={h.key} style={{
-                display:"flex",alignItems:"center",gap:8,
-                padding:"6px 10px",borderRadius:6,
-                background:h.ok ? "var(--success-surface)" : "var(--danger-surface)",
-                fontSize:12,
-              }}>
-                <span style={{width:8,height:8,borderRadius:"50%",background:h.ok?"var(--success)":"var(--danger)",flexShrink:0}}/>
-                <span style={{fontWeight:600,color:h.ok?"var(--success)":"var(--danger)"}}>{h.label}</span>
-                <span style={{color:"var(--text-muted)"}}>{h.detail}</span>
-                {h.key !== "database" && h.key !== "redis" && h.ok && (
-                  <a href={`http://127.0.0.1:${h.key==="grafana"?3100:9090}`} target="_blank" rel="noreferrer"
-                    style={{fontSize:11,color:"var(--accent)",textDecoration:"none",borderBottom:"1px dashed"}}>open</a>
-                )}
+              <div key={h.k} style={{display:"flex",alignItems:"center",gap:6,padding:"4px 10px",borderRadius:6,background:h.ok?"#052e16":"#450a0a",fontSize:11}}>
+                <span style={{width:7,height:7,borderRadius:"50%",background:h.ok?"#22c55e":"#ef4444",flexShrink:0,animation:h.ok?"pls 2s infinite":"none"}}/>
+                <span style={{fontWeight:600,color:h.ok?"#22c55e":"#ef4444"}}>{h.l}</span>
+                <span style={{color:"#94a3b8"}}>{h.d}</span>
               </div>
             ))}
           </div>
+          <div style={{flex:1}}/>
+          <a href="http://127.0.0.1:3100" target="_blank" rel="noreferrer"
+            style={{fontSize:10,color:"var(--accent)",textDecoration:"none",borderBottom:"1px dashed var(--accent)"}}>Grafana →</a>
         </div>
       )}
 
-      {/* Stat Cards */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:16}}>
-        {STAT_CARDS.map(c=>(
-          <StatCard key={c.label} {...c}/>
+      <style>{`@keyframes pls{0%,100%{opacity:1}50%{opacity:0.4}} @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}`}</style>
+
+      {/* ── Stat Cards with Glassmorphism ── */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(185px,1fr))",gap:16,animation:"fadeUp 0.5s ease"}}>
+        {cards.map((c,i) => (
+          <div key={c.k} className="card" style={{
+            padding:0,overflow:"hidden",position:"relative",border:"none",
+            animation:`fadeUp 0.4s ease ${i*0.08}s both`,
+            cursor:"pointer",transition:"transform 0.2s,box-shadow 0.2s",
+          }}
+            onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 8px 30px rgba(0,0,0,0.3)";}}
+            onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";}}
+            onClick={()=>onNavigate?.(c.k==="networks"?"ipv4":c.k==="allocations"?"ipv4":c.k==="customers"?"customers":c.k==="vlans"?"vlans":"sites")}>
+            <div style={{background:c.grad,padding:"16px 18px 12px",position:"relative"}}>
+              <div style={{position:"absolute",top:-10,right:-10,fontSize:48,opacity:0.1,pointerEvents:"none"}}>{ICONS[c.k]}</div>
+              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+                <div style={{width:36,height:36,borderRadius:10,background:"rgba(255,255,255,0.15)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,backdropFilter:"blur(4px)"}}>
+                  {ICONS[c.k]}
+                </div>
+                <span style={{fontSize:11,fontWeight:500,color:"rgba(255,255,255,0.7)",textTransform:"uppercase",letterSpacing:"0.06em"}}>{c.label}</span>
+              </div>
+              <div style={{fontSize:28,fontWeight:700,color:"#fff",fontVariantNumeric:"tabular-nums"}}>
+                <CountUp to={c.value}/>
+              </div>
+            </div>
+            <div style={{padding:"8px 18px",display:"flex",alignItems:"center",gap:6,background:"var(--bg-secondary,var(--bg))"}}>
+              <span style={{fontSize:10,color:"var(--text-dim)"}} dangerouslySetInnerHTML={{__html:c.sub}}/>
+            </div>
+          </div>
         ))}
       </div>
 
-      {/* Charts Row */}
-      <div style={{display:"grid",gridTemplateColumns:"240px 1fr",gap:16}}>
-
-        {/* Pie chart */}
+      {/* ── Charts Row ── */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 2fr",gap:16,animation:"fadeUp 0.6s ease 0.3s both"}}>
         <div className="card" style={{padding:20}}>
-          <div style={{fontSize:13,fontWeight:600,color:"var(--text)",marginBottom:16}}>
-            IP Address Status
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}>
+            <div style={{width:3,height:14,background:"var(--accent)",borderRadius:99}}/>
+            <span style={{fontSize:12,fontWeight:600,color:"var(--text)"}}>IP Status Distribution</span>
           </div>
           <div style={{display:"flex",flexDirection:"column",alignItems:"center"}}>
-            <div style={{position:"relative",width:140,height:140}}>
-              <ResponsiveContainer width={140} height={140}>
+            <div style={{position:"relative",width:150,height:150}}>
+              <ResponsiveContainer width={150} height={150}>
                 <PieChart>
-                  <Pie data={pieData} cx={65} cy={65}
-                    innerRadius={42} outerRadius={62}
-                    dataKey="value" strokeWidth={0} paddingAngle={2}>
+                  <Pie data={pieData} cx={75} cy={75} innerRadius={46} outerRadius={68} dataKey="value" strokeWidth={0} paddingAngle={3}>
                     {pieData.map((e,i)=><Cell key={i} fill={e.color}/>)}
                   </Pie>
-                  <Tooltip content={<CustomTooltip/>}/>
+                  <Tooltip/>
                 </PieChart>
               </ResponsiveContainer>
-              <div style={{
-                position:"absolute",inset:0,
-                display:"flex",flexDirection:"column",
-                alignItems:"center",justifyContent:"center",
-                pointerEvents:"none",
-              }}>
-                <span style={{fontSize:20,fontWeight:700,color:"var(--text)",fontVariantNumeric:"tabular-nums"}}>{utilPct}%</span>
-                <span style={{fontSize:10,color:"var(--text-muted)"}}>Utilized</span>
+              <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
+                <span style={{fontSize:22,fontWeight:700,color:"var(--text)"}}>{utilPct}%</span>
+                <span style={{fontSize:9,color:"var(--text-muted)"}}>utilized</span>
               </div>
             </div>
-
-            <div style={{width:"100%",marginTop:16,display:"flex",flexDirection:"column",gap:8}}>
-              {pieData.map(d=>(
+            <div style={{width:"100%",marginTop:16,display:"flex",flexDirection:"column",gap:6}}>
+              {pieData.map(d => (
                 <div key={d.name} style={{display:"flex",alignItems:"center",gap:8}}>
                   <div style={{width:8,height:8,borderRadius:"50%",background:d.color,flexShrink:0}}/>
-                  <span style={{flex:1,fontSize:12,color:"var(--text-muted)",textTransform:"capitalize"}}>{d.name}</span>
-                  <span style={{fontSize:12,fontWeight:600,color:"var(--text)",fontVariantNumeric:"tabular-nums"}}>
-                    {d.value?.toLocaleString()}
-                  </span>
+                  <span style={{flex:1,fontSize:11,color:"var(--text-muted)",textTransform:"capitalize"}}>{d.name}</span>
+                  <span style={{fontSize:11,fontWeight:600,color:"var(--text)"}}>{d.value?.toLocaleString()}</span>
                 </div>
               ))}
             </div>
           </div>
         </div>
 
-        {/* Bar chart */}
         <div className="card" style={{padding:20}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
-            <div style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>Network Utilization</div>
-            <button onClick={()=>onNavigate?.("ipv4")}
-              style={{fontSize:12,color:"var(--accent)",background:"none",border:"none",cursor:"pointer",fontWeight:500}}>
-              View all →
-            </button>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <div style={{width:3,height:14,background:"#3b82f6",borderRadius:99}}/>
+              <span style={{fontSize:12,fontWeight:600,color:"var(--text)"}}>Network Utilization</span>
+            </div>
+            <button onClick={()=>onNavigate?.("ipv4")} style={{fontSize:11,color:"var(--accent)",background:"none",border:"none",cursor:"pointer",fontWeight:500}}>View all →</button>
           </div>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={barData} barGap={3} barCategoryGap="30%">
-              <XAxis dataKey="name"
-                tick={{fontSize:10,fill:"#94a3b8",fontFamily:"var(--font-mono)"}}
-                axisLine={false} tickLine={false}
-                interval={0}/>
-              <YAxis
-                tick={{fontSize:10,fill:"#64748b"}}
-                axisLine={false} tickLine={false}/>
-              <Tooltip content={<CustomTooltip/>}/>
-              <Bar dataKey="total"  name="Total"  fill="#334155" radius={[3,3,0,0]}/>
+          <ResponsiveContainer width="100%" height={180}>
+            <BarChart data={barData} barGap={3} barCategoryGap="20%">
+              <XAxis dataKey="name" tick={{fontSize:9,fill:"#94a3b8",fontFamily:"var(--font-mono)"}} axisLine={false} tickLine={false} interval={0}/>
+              <YAxis tick={{fontSize:9,fill:"#64748b"}} axisLine={false} tickLine={false}/>
+              <Tooltip/>
+              <Bar dataKey="total" name="Total" fill="#334155" radius={[3,3,0,0]}/>
               <Bar dataKey="active" name="Active" fill="#3b82f6" radius={[3,3,0,0]}/>
             </BarChart>
           </ResponsiveContainer>
-          <div style={{display:"flex",alignItems:"center",gap:16,marginTop:8,justifyContent:"center"}}>
-            {[["Total","#334155"],["Active","#3b82f6"]].map(([l,c])=>(
-              <div key={l} style={{display:"flex",alignItems:"center",gap:6}}>
-                <div style={{width:10,height:10,borderRadius:2,background:c}}/>
-                <span style={{fontSize:11,color:"var(--text-muted)"}}>{l}</span>
-              </div>
-            ))}
-          </div>
         </div>
       </div>
 
-      {/* Quick Actions */}
-      <div className="card" style={{padding:"14px 18px",display:"flex",alignItems:"center",gap:12}}>
-        <span style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em",color:"var(--text-dim)",whiteSpace:"nowrap"}}>
-          Quick Actions
-        </span>
+      {/* ── Quick Actions ── */}
+      <div className="card" style={{padding:"12px 18px",display:"flex",alignItems:"center",gap:14,borderLeft:"3px solid #f59e0b",animation:"fadeUp 0.5s ease 0.5s both"}}>
+        <span style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",color:"var(--text-dim)",whiteSpace:"nowrap"}}>Quick Actions</span>
         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-          <button onClick={()=>onNavigate?.("ipv4")} className="btn btn-sm"
-            style={{display:"flex",alignItems:"center",gap:5,fontSize:12}}>
-            <span>🌐</span> Add Block
-          </button>
-          <button onClick={()=>onNavigate?.("customers")} className="btn btn-sm"
-            style={{display:"flex",alignItems:"center",gap:5,fontSize:12}}>
-            <span>👥</span> Add Customer
-          </button>
-          <button onClick={()=>onNavigate?.("sites")} className="btn btn-sm"
-            style={{display:"flex",alignItems:"center",gap:5,fontSize:12}}>
-            <span>📍</span> Add Site
-          </button>
-          <button onClick={()=>onNavigate?.("scan")} className="btn btn-sm"
-            style={{display:"flex",alignItems:"center",gap:5,fontSize:12}}>
-            <span>🔍</span> IP Scan
-          </button>
-          <button onClick={()=>onNavigate?.("ping")} className="btn btn-sm"
-            style={{display:"flex",alignItems:"center",gap:5,fontSize:12}}>
-            <span>📡</span> Ping & Trace
-          </button>
+          {[
+            {id:"ipv4", icon:"🌐", label:"Add Network"},
+            {id:"customers", icon:"👥", label:"Add Customer"},
+            {id:"sites", icon:"📍", label:"Add Site"},
+            {id:"scan", icon:"🔍", label:"IP Scan"},
+            {id:"ping", icon:"📡", label:"Ping & Trace"},
+          ].map(a => (
+            <button key={a.id} onClick={()=>onNavigate?.(a.id)}
+              className="btn btn-sm"
+              style={{display:"flex",alignItems:"center",gap:5,fontSize:11,padding:"5px 12px",borderRadius:6,
+                transition:"all 0.15s",background:"var(--surface-3,transparent)"}}
+              onMouseEnter={e=>{e.currentTarget.style.background="var(--accent-dim)";e.currentTarget.style.color="var(--accent)"}}
+              onMouseLeave={e=>{e.currentTarget.style.background="";e.currentTarget.style.color=""}}>
+              <span>{a.icon}</span> {a.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Bottom row */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-
-        {/* Breakdown bars */}
+      {/* ── Bottom Row ── */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,animation:"fadeUp 0.5s ease 0.6s both"}}>
         <div className="card" style={{padding:20}}>
-          <div style={{fontSize:13,fontWeight:600,color:"var(--text)",marginBottom:16}}>
-            Allocation Breakdown
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}>
+            <div style={{width:3,height:14,background:"#22c55e",borderRadius:99}}/>
+            <span style={{fontSize:12,fontWeight:600,color:"var(--text)"}}>Allocation Breakdown</span>
           </div>
           {Object.entries(alloc_by_status||{}).map(([k,v])=>(
-            <UsageBar key={k} label={k} value={v} total={totalAlloc} color={STATUS_HEX[k]}/>
+            <div key={k} style={{marginBottom:12}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                <span style={{fontSize:12,fontWeight:500,color:"var(--text)",textTransform:"capitalize"}}>{k}</span>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <span style={{fontSize:12,fontWeight:600,color:"var(--text)"}}>{v?.toLocaleString()}</span>
+                  <span style={{fontSize:10,color:"var(--text-muted)"}}>{totalAlloc ? Math.round(v/totalAlloc*100) : 0}%</span>
+                </div>
+              </div>
+              <div style={{height:6,background:"var(--surface-3)",borderRadius:99,overflow:"hidden"}}>
+                <div style={{width:`${totalAlloc ? (v/totalAlloc*100) : 0}%`,height:"100%",background:STATUS_HEX[k]||"#94a3b8",borderRadius:99,transition:"width 0.8s ease"}}/>
+              </div>
+            </div>
           ))}
         </div>
 
-        {/* Recent networks table */}
         <div className="card" style={{overflow:"hidden"}}>
-          <div style={{
-            display:"flex",alignItems:"center",justifyContent:"space-between",
-            padding:"14px 18px",
-            borderBottom:"1px solid var(--border-subtle)",
-          }}>
-            <div style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>Recent Networks</div>
-            <button onClick={()=>onNavigate?.("ipv4")}
-              style={{fontSize:12,color:"var(--accent)",background:"none",border:"none",cursor:"pointer",fontWeight:500}}>
-              View all →
-            </button>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 18px",borderBottom:"1px solid var(--border-subtle)"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <div style={{width:3,height:14,background:"#a855f7",borderRadius:99}}/>
+              <span style={{fontSize:12,fontWeight:600,color:"var(--text)"}}>Recent Networks</span>
+            </div>
+            <button onClick={()=>onNavigate?.("ipv4")} style={{fontSize:11,color:"var(--accent)",background:"none",border:"none",cursor:"pointer",fontWeight:500}}>View all →</button>
           </div>
           <table style={{width:"100%",borderCollapse:"collapse"}}>
-            <thead>
-              <tr>
-                {["Network","Site","Alloc","Util"].map(h=>(
-                  <th key={h} className="table-header">{h}</th>
-                ))}
-              </tr>
-            </thead>
+            <thead><tr>{["Network","Site","Alloc","Util"].map(h=><th key={h} className="table-header" style={{fontSize:10}}>{h}</th>)}</tr></thead>
             <tbody>
               {(recent_blocks||[]).map((b,i)=>{
-                const pct = b.total_allocations
-                  ? Math.round(b.active_allocations/b.total_allocations*100) : 0;
-                const barClr = pct>85?"var(--danger)":pct>60?"var(--warning)":"var(--success)";
+                const pct = b.total_allocations ? Math.round(b.active_allocations/b.total_allocations*100) : 0;
+                const barClr = pct>85?"#ef4444":pct>60?"#f59e0b":"#22c55e";
                 return (
-                  <tr key={i} className="table-row" style={{cursor:"pointer"}}
-                    onClick={()=>onNavigate?.("ipv4")}>
+                  <tr key={i} className="table-row" style={{cursor:"pointer"}} onClick={()=>onNavigate?.("ipv4")}>
                     <td className="table-cell">
-                      <div style={{fontFamily:"var(--font-mono)",fontSize:12,fontWeight:500,color:"var(--text)"}}>{b.prefix}</div>
-                      <div style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>{b.ip_version}</div>
+                      <div style={{fontFamily:"var(--font-mono)",fontSize:11,fontWeight:500,color:"var(--text)"}}>{b.prefix}</div>
+                      <div style={{fontSize:9,color:"var(--text-dim)",marginTop:1}}>{b.ip_version}</div>
                     </td>
+                    <td className="table-cell"><span style={{fontSize:11,color:"var(--text-muted)"}}>{b.site_name||"—"}</span></td>
+                    <td className="table-cell"><span style={{fontFamily:"var(--font-mono)",fontSize:11,color:"var(--text)",fontWeight:500}}>{b.active_allocations}</span><span style={{fontSize:10,color:"var(--text-dim)"}}>/{b.total_allocations}</span></td>
                     <td className="table-cell">
-                      <span style={{fontSize:12,color:"var(--text-muted)"}}>{b.site_name||"—"}</span>
-                    </td>
-                    <td className="table-cell">
-                      <span style={{fontFamily:"var(--font-mono)",fontSize:12,color:"var(--text)",fontWeight:500}}>
-                        {b.active_allocations}
-                      </span>
-                      <span style={{fontSize:11,color:"var(--text-dim)"}}>/{b.total_allocations}</span>
-                    </td>
-                    <td className="table-cell">
-                      <div style={{display:"flex",alignItems:"center",gap:8}}>
-                        <div style={{flex:1,height:4,background:"var(--surface-3)",borderRadius:99,overflow:"hidden"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:6}}>
+                        <div style={{flex:1,height:4,background:"var(--surface-3)",borderRadius:99,overflow:"hidden",minWidth:40}}>
                           <div style={{width:`${pct}%`,height:"100%",background:barClr,borderRadius:99}}/>
                         </div>
-                        <span style={{fontSize:11,fontWeight:600,color:barClr,minWidth:28,textAlign:"right",fontVariantNumeric:"tabular-nums"}}>
-                          {pct}%
-                        </span>
+                        <span style={{fontSize:10,fontWeight:600,color:barClr,minWidth:24,textAlign:"right"}}>{pct}%</span>
                       </div>
                     </td>
                   </tr>
