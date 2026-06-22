@@ -80,7 +80,7 @@ export default function Dashboard({ onNavigate }) {
             ))}
           </div>
           <div style={{flex:1}}/>
-          <a href="http://127.0.0.1:3100" target="_blank" rel="noreferrer"
+          <a href="http://103.10.120.11:3100" target="_blank" rel="noreferrer"
             style={{fontSize:10,color:"var(--accent)",textDecoration:"none",borderBottom:"1px dashed var(--accent)"}}>Grafana →</a>
         </div>
       )}
