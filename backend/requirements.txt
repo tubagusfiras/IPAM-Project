@@ -1,0 +1,23 @@
+# IPAM Backend Dependencies
+# Generated: 2026-06-23
+# Usage: pip install -r requirements.txt
+
+fastapi
+uvicorn[standard]
+asyncpg
+python-dotenv
+python-multipart
+openpyxl
+weasyprint
+redis[hiredis]
+bcrypt
+pyjwt
+slowapi
+prometheus-client
+loguru
+
+# Development
+ruff
+pytest
+pytest-asyncio
+httpx
