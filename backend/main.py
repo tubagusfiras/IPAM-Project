@@ -59,14 +59,17 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         raise HTTPException(401, "Not authenticated")
     return decode_jwt_token(credentials.credentials)
 
+pool: asyncpg.Pool = None
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global pool
+    from core.database import pool as db_pool
     pool = await asyncpg.create_pool(DATABASE_URL, min_size=2, max_size=10)
+    import core.database
+    core.database.pool = pool
     yield
     await pool.close()
-
-pool: asyncpg.Pool = None
 
 app = FastAPI(title="IPAM API", version="2.0.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=ALLOWED_ORIGINS, allow_methods=["*"], allow_headers=["*"], allow_credentials=True)
