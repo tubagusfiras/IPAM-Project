@@ -133,6 +133,41 @@ def log_action(conn, table, record_id, action, old=None, new=None):
 async def health():
     return {"status": "ok"}
 
+@app.get("/api/v1/health/detailed")
+async def health_detailed():
+    """Comprehensive health check - DB, Redis, uptime"""
+    health = {"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat(), "services": {}}
+
+    # Check DB
+    try:
+        await pool.fetchval("SELECT 1")
+        health["services"]["database"] = {
+            "status": "ok",
+            "pool_size": pool.get_size(),
+            "pool_free": pool.get_idle_size(),
+        }
+    except Exception as e:
+        health["services"]["database"] = {"status": "error", "error": str(e)}
+        health["status"] = "degraded"
+
+    # Check Redis
+    try:
+        await redis_client.ping()
+        info = await redis_client.info("memory")
+        health["services"]["redis"] = {
+            "status": "ok",
+            "used_memory_human": info.get("used_memory_human", "unknown"),
+        }
+    except Exception as e:
+        health["services"]["redis"] = {"status": "error", "error": str(e)}
+        health["status"] = "degraded"
+
+    # Summary
+    health["ok_count"] = sum(1 for s in health["services"].values() if s["status"] == "ok")
+    health["total_count"] = len(health["services"])
+
+    return health
+
 @app.get("/api/v1/dashboard/stats")
 async def dashboard_stats(db=Depends(get_db)):
     stats = {}
