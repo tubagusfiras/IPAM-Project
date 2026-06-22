@@ -6,7 +6,7 @@ import os, json, math, ipaddress
 
 import asyncpg
 from fastapi import FastAPI, HTTPException, Query, Depends, UploadFile, File
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse, JSONResponse, Response
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
@@ -17,6 +17,9 @@ from pydantic import BaseModel
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+from loguru import logger
+import time as time_module
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://ipam:ipam@db:5432/ipam")
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
@@ -81,12 +84,26 @@ limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# Prometheus metrics
+REQUEST_COUNT = Counter(
+    "ipam_requests_total",
+    "Total requests",
+    ["method", "endpoint", "status"],
+)
+REQUEST_LATENCY = Histogram(
+    "ipam_request_duration_seconds",
+    "Request latency in seconds",
+    ["method", "endpoint"],
+    buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
+)
+
 # ------------------------------------------------------------------
 # AUTH MIDDLEWARE — protect semua endpoint kecuali whitelist
 # ------------------------------------------------------------------
 PUBLIC_PATHS = {
     "/api/v1/auth/login",
     "/api/v1/health/detailed",
+    "/metrics",
     "/docs", "/openapi.json", "/redoc",
 }
 
@@ -114,6 +131,16 @@ async def auth_middleware(request: Request, call_next):
         return JSONResponse(status_code=e.status_code, content={"detail": e.detail})
 
     return await call_next(request)
+
+@app.middleware("http")
+async def metrics_middleware(request: Request, call_next):
+    start = time_module.time()
+    response = await call_next(request)
+    duration = time_module.time() - start
+    endpoint = request.url.path
+    REQUEST_COUNT.labels(request.method, endpoint, str(response.status_code)).inc()
+    REQUEST_LATENCY.labels(request.method, endpoint).observe(duration)
+    return response
 
 async def get_db():
     async with pool.acquire() as conn:
@@ -168,6 +195,11 @@ async def health_detailed():
     health["total_count"] = len(health["services"])
 
     return health
+
+@app.get("/metrics")
+async def metrics():
+    """Prometheus metrics endpoint"""
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 @app.get("/api/v1/dashboard/stats")
 async def dashboard_stats(db=Depends(get_db)):
@@ -1457,7 +1489,7 @@ async def _save_scan_to_redis(scan_id: str):
         if session:
             await redis_client.set(f"scan:{scan_id}", json.dumps(session, default=str), ex=SCAN_TTL)
     except Exception as e:
-        print(f"Redis save error: {e}")
+        logger.error("Redis save error: {}", e)
 
 async def _load_scan_from_redis(scan_id: str) -> dict | None:
     """Load scan session dari Redis jika tidak ada di memory (misal setelah API restart)."""
@@ -1466,14 +1498,14 @@ async def _load_scan_from_redis(scan_id: str) -> dict | None:
         if data:
             return json.loads(data)
     except Exception as e:
-        print(f"Redis load error: {e}")
+        logger.error("Redis load error: {}", e)
     return None
 
 async def _delete_scan_from_redis(scan_id: str):
     try:
         await redis_client.delete(f"scan:{scan_id}")
     except Exception as e:
-        print(f"Redis delete error: {e}")
+        logger.error("Redis delete error: {}", e)
 
 async def _log_audit(db, action: str, entity_type: str, entity_id, entity_prefix: str,
                       description: str = "", old_data: dict = None, new_data: dict = None,
@@ -1489,7 +1521,7 @@ async def _log_audit(db, action: str, entity_type: str, entity_id, entity_prefix
             json.dumps(new_data, default=str) if new_data else None,
         )
     except Exception as e:
-        print(f"Audit log error: {e}")
+        logger.error("Audit log error: {}", e)
 
 @app.post("/api/v1/scan/start")
 async def start_scan(body: dict, db=Depends(get_db)):
