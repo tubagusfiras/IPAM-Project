@@ -1,3 +1,4 @@
+import { authFetch } from "../api.js";
 import { useState, useRef, useCallback, useEffect } from "react";
 
 const IP_REGEX = /\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b/;
@@ -56,7 +57,7 @@ export default function PingTrace() {
     if (!ip || ipamCache[ip] !== undefined) return;
     setIpamCache(prev => ({...prev, [ip]: null})); // mark as loading
     try {
-      const res = await fetch(`/api/v1/ping-trace/lookup?target=${ip}`);
+      const res = await authFetch(`/api/v1/ping-trace/lookup?target=${ip}`);
       const d = await res.json();
       setIpamCache(prev => ({...prev, [ip]: d.ipam_info}));
     } catch {

@@ -3,7 +3,7 @@ import AllocModal, { BlockEditModal, ConfirmModal, SubnetCalc } from "./AllocMod
 import IPGrid from "./IPGrid.jsx";
 import { createPortal } from "react-dom";
 import { getBlock, updateBlock, getSites, getCustomers, getVlans,
-         createAllocation, updateAllocation, deleteAllocation, createCustomer, createVlan } from "../api.js";
+         createAllocation, updateAllocation, deleteAllocation, createCustomer, createVlan, authFetch} from "../api.js";
 
 // ── CONSTANTS ────────────────────────────────────────────────────────────────
 const OWNER_TYPES = [
@@ -400,7 +400,7 @@ export default function BlockDetail({ blockId, onBack, dark }) {
       else {
         let cust=customers.find(c=>c.name.toLowerCase()===value.toLowerCase());
         if (!cust) {
-          const r=await fetch("/api/v1/customers",{method:"POST",
+          const r=await authFetch("/api/v1/customers",{method:"POST",
             headers:{"Content-Type":"application/json"},
             body:JSON.stringify({name:value,is_active:true})});
           cust=await r.json();
@@ -415,7 +415,7 @@ export default function BlockDetail({ blockId, onBack, dark }) {
         const vid=parseInt(value);
         let vlan=vlans.find(v=>v.vid===vid);
         if (!vlan) {
-          const r=await fetch("/api/v1/vlans",{method:"POST",
+          const r=await authFetch("/api/v1/vlans",{method:"POST",
             headers:{"Content-Type":"application/json"},
             body:JSON.stringify({vid,name:"",status:"active"})});
           if(r.ok){vlan=await r.json();setVlans(prev=>[...prev,vlan]);}

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { getBlocks } from "../api.js";
+import { getBlocks, authFetch} from "../api.js";
 
 function ipToInt(ip) {
   const p = ip.split(".").map(Number);
@@ -101,7 +101,7 @@ export default function Export({ dark }) {
   const loadPreview = async (block) => {
     setLoading(true); setPreview(null);
     try {
-      const res = await fetch(`/api/v1/blocks/${block.id}`);
+      const res = await authFetch(`/api/v1/blocks/${block.id}`);
       setPreview(await res.json());
     } catch(e) { console.error(e); }
     setLoading(false);

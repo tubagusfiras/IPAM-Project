@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { getVlans, getSites, createVlan, updateVlan, deleteVlan } from "../api.js";
+import { getVlans, getSites, createVlan, updateVlan, deleteVlan, authFetch} from "../api.js";
 
 const STATUS_STYLE = {
   active:     { color:"var(--success)", bg:"var(--success-surface)", border:"var(--success-border)" },
@@ -174,7 +174,7 @@ export default function Vlans() {
     setRouterMap(initMap);
 
     Promise.all(items.map(v =>
-      fetch(`/api/v1/allocations?vlan_id=${v.id}&limit=100`)
+      authFetch(`/api/v1/allocations?vlan_id=${v.id}&limit=100`)
         .then(r=>r.json())
         .then(d=>{
           const allocs = d.items || [];

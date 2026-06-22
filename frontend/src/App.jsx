@@ -1,4 +1,6 @@
 import { useState, useEffect, Suspense, lazy } from "react";
+import { getToken, getStoredUser, clearToken } from "./api.js";
+import Login from "./pages/Login.jsx";
 
 const Dashboard  = lazy(()=>import("./pages/Dashboard.jsx"));
 const Blocks     = lazy(()=>import("./pages/Blocks.jsx"));
@@ -65,7 +67,7 @@ function Icon({ id, size=16 }) {
   return <span style={{width:size,height:size,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{IC[id]}</span>;
 }
 
-function Sidebar({ active, onNavigate, collapsed, onToggle }) {
+function Sidebar({ active, onNavigate, collapsed, onToggle, user }) {
   return (
     <aside style={{
       position:"fixed", left:0, top:0, height:"100%", zIndex:30,
@@ -152,11 +154,11 @@ function Sidebar({ active, onNavigate, collapsed, onToggle }) {
               background:"var(--accent-dim)",
               display:"flex",alignItems:"center",justifyContent:"center",
             }}>
-              <span style={{color:"var(--accent)",fontSize:11,fontWeight:700}}>AD</span>
+              <span style={{color:"var(--accent)",fontSize:11,fontWeight:700}}>{(user?.username||"??").slice(0,2).toUpperCase()}</span>
             </div>
             <div style={{overflow:"hidden"}}>
-              <div style={{fontSize:12,fontWeight:600,color:"var(--text)",whiteSpace:"nowrap"}}>admin</div>
-              <div style={{fontSize:10,color:"var(--text-muted)",whiteSpace:"nowrap"}}>Super Admin</div>
+              <div style={{fontSize:12,fontWeight:600,color:"var(--text)",whiteSpace:"nowrap"}}>{user?.username||"—"}</div>
+              <div style={{fontSize:10,color:"var(--text-muted)",whiteSpace:"nowrap"}}>{user?.role==="admin"?"Administrator":"User"}</div>
             </div>
           </div>
         )}
@@ -177,8 +179,11 @@ function Sidebar({ active, onNavigate, collapsed, onToggle }) {
   );
 }
 
-function Header({ title, subtitle, onBack, dark, onToggleDark, collapsed }) {
+function Header({ title, subtitle, onBack, dark, onToggleDark, collapsed, user, onLogout }) {
   const [search, setSearch] = useState("");
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const initials = (user?.username || "??").slice(0,2).toUpperCase();
+  const roleLabel = user?.role === "admin" ? "Administrator" : "User";
   return (
     <header style={{
       position:"fixed", top:0, right:0, zIndex:20,
@@ -236,22 +241,50 @@ function Header({ title, subtitle, onBack, dark, onToggleDark, collapsed }) {
       </button>
 
       {/* User */}
-      <div style={{
-        display:"flex",alignItems:"center",gap:8,
-        paddingLeft:12,
-        borderLeft:"1px solid var(--border-soft)",
-      }}>
-        <div style={{
-          width:30,height:30,borderRadius:"50%",
-          background:"var(--accent-dim)",
-          display:"flex",alignItems:"center",justifyContent:"center",
+      <div style={{position:"relative"}}>
+        <div onClick={()=>setShowUserMenu(v=>!v)} style={{
+          display:"flex",alignItems:"center",gap:8,
+          paddingLeft:12,cursor:"pointer",
+          borderLeft:"1px solid var(--border-soft)",
         }}>
-          <span style={{color:"var(--accent)",fontSize:11,fontWeight:700}}>AD</span>
+          <div style={{
+            width:30,height:30,borderRadius:"50%",
+            background:"var(--accent-dim)",
+            display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,
+          }}>
+            <span style={{color:"var(--accent)",fontSize:11,fontWeight:700}}>{initials}</span>
+          </div>
+          <div>
+            <div style={{fontSize:12,fontWeight:600,color:"var(--text)"}}>{user?.username || "—"}</div>
+            <div style={{fontSize:10,color:"var(--text-muted)"}}>{roleLabel}</div>
+          </div>
         </div>
-        <div>
-          <div style={{fontSize:12,fontWeight:600,color:"var(--text)"}}>admin</div>
-          <div style={{fontSize:10,color:"var(--text-muted)"}}>Super Admin</div>
-        </div>
+
+        {showUserMenu && (
+          <>
+            <div onClick={()=>setShowUserMenu(false)} style={{
+              position:"fixed",inset:0,zIndex:90,
+            }}/>
+            <div style={{
+              position:"absolute",top:"calc(100% + 8px)",right:0,zIndex:100,
+              background:"var(--modal-bg)",border:"1px solid var(--modal-border)",
+              borderRadius:"var(--radius)",boxShadow:"var(--shadow-lg)",
+              minWidth:180,padding:6,
+            }}>
+              <div style={{padding:"8px 10px",borderBottom:"1px solid var(--border-soft)",marginBottom:4}}>
+                <div style={{fontSize:12,fontWeight:600,color:"var(--text)"}}>{user?.email}</div>
+              </div>
+              <button onClick={onLogout} style={{
+                width:"100%",textAlign:"left",padding:"8px 10px",
+                background:"none",border:"none",cursor:"pointer",
+                fontSize:13,color:"var(--danger)",borderRadius:"var(--radius-sm)",
+              }} onMouseEnter={e=>e.currentTarget.style.background="var(--danger-surface)"}
+                 onMouseLeave={e=>e.currentTarget.style.background="none"}>
+                Sign out
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </header>
   );
@@ -283,6 +316,30 @@ export default function App() {
   const [route,     setRoute]     = useState(()=>{ const p=parseHash(); return p?.page==="block-detail"?p:null; });
   const [dark,      setDark]      = useState(()=>document.documentElement.classList.contains("dark"));
   const [collapsed, setCollapsed] = useState(false);
+  const [user, setUser] = useState(() => getStoredUser());
+  const [authChecked, setAuthChecked] = useState(false);
+
+  useEffect(() => {
+    const token = getToken();
+    const storedUser = getStoredUser();
+    if (token && storedUser) {
+      // Verify token masih valid via /auth/me
+      fetch("/api/v1/auth/me", { headers: { "Authorization": `Bearer ${token}` } })
+        .then(res => {
+          if (res.ok) { setUser(storedUser); }
+          else { clearToken(); setUser(null); }
+        })
+        .catch(() => { clearToken(); setUser(null); })
+        .finally(() => setAuthChecked(true));
+    } else {
+      setAuthChecked(true);
+    }
+  }, []);
+
+  const handleLogout = () => {
+    clearToken();
+    setUser(null);
+  };
 
   const toggleDark = () => {
     const next = !dark;
@@ -342,6 +399,26 @@ export default function App() {
     }
   };
 
+  // Loading state saat verify token
+  if (!authChecked) {
+    return (
+      <div style={{minHeight:"100vh",background:"var(--bg)",display:"flex",
+        alignItems:"center",justifyContent:"center"}}>
+        <div style={{
+          width:32,height:32,borderRadius:"50%",
+          border:"2px solid var(--accent-dim)",borderTopColor:"var(--accent)",
+          animation:"spin 0.8s linear infinite",
+        }}/>
+        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      </div>
+    );
+  }
+
+  // Belum login -> tampilkan Login page
+  if (!user) {
+    return <Login dark={dark} onLoginSuccess={(u)=>setUser(u)}/>;
+  }
+
   return (
     <div style={{minHeight:"100vh",background:"var(--bg)"}}>
       <Sidebar
@@ -349,6 +426,7 @@ export default function App() {
         onNavigate={navigate}
         collapsed={collapsed}
         onToggle={()=>setCollapsed(v=>!v)}
+        user={user}
       />
       <Header
         title={pageTitle}
@@ -357,6 +435,8 @@ export default function App() {
         dark={dark}
         onToggleDark={toggleDark}
         collapsed={collapsed}
+        user={user}
+        onLogout={handleLogout}
       />
       <main style={{
         paddingTop:"var(--topbar-h)",

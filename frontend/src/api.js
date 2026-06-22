@@ -1,7 +1,47 @@
 const BASE = "/api/v1";
 
+export function getToken() {
+  return localStorage.getItem("ipam_token");
+}
+export function setToken(token) {
+  localStorage.setItem("ipam_token", token);
+}
+export function clearToken() {
+  localStorage.removeItem("ipam_token");
+  localStorage.removeItem("ipam_user");
+}
+export function getStoredUser() {
+  try { return JSON.parse(localStorage.getItem("ipam_user") || "null"); }
+  catch { return null; }
+}
+
+// Helper untuk raw fetch calls di komponen (auto attach token + handle 401)
+export async function authFetch(url, opts = {}) {
+  const token = getToken();
+  const headers = { ...(opts.headers || {}) };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const res = await fetch(url, { ...opts, headers });
+  if (res.status === 401) {
+    clearToken();
+    window.location.href = "/";
+    throw new Error("Session expired");
+  }
+  return res;
+}
+
 async function request(path, opts = {}) {
-  const res = await fetch(BASE + path, opts);
+  const token = getToken();
+  const headers = { ...(opts.headers || {}) };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch(BASE + path, { ...opts, headers });
+
+  if (res.status === 401) {
+    clearToken();
+    window.location.href = "/";
+    throw new Error("Session expired, please login again");
+  }
+
   if (!res.ok) {
     const msg = await res.text();
     throw new Error(msg || `HTTP ${res.status}`);

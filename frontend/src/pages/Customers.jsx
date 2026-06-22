@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { getCustomers, createCustomer, updateCustomer, deleteCustomer } from "../api.js";
+import { getCustomers, createCustomer, updateCustomer, deleteCustomer, authFetch} from "../api.js";
 
 function CustomerModal({ customer, onClose, onSaved }) {
   const isEdit = !!customer?.id;
@@ -161,7 +161,7 @@ export default function Customers() {
     const ids = items.map(c=>c.id);
     // Fetch allocations untuk semua customer yang visible
     Promise.all(ids.map(id =>
-      fetch(`/api/v1/allocations?customer_id=${id}&limit=100`)
+      authFetch(`/api/v1/allocations?customer_id=${id}&limit=100`)
         .then(r=>r.json())
         .then(d=>{
           const allocs = d.items || [];

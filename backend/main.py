@@ -6,7 +6,7 @@ import os, json, math, ipaddress
 
 import asyncpg
 from fastapi import FastAPI, HTTPException, Query, Depends, UploadFile, File
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
@@ -23,6 +23,41 @@ import redis.asyncio as aioredis
 redis_client = aioredis.from_url(REDIS_URL, decode_responses=True)
 SCAN_TTL = 60 * 60 * 24  # 24 jam
 
+import bcrypt, jwt
+from datetime import datetime, timedelta, timezone
+from fastapi import Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
+JWT_SECRET = os.getenv("JWT_SECRET", "change-me-in-production")
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRE_HOURS = 8
+
+security = HTTPBearer(auto_error=False)
+
+def create_jwt_token(user_id: str, username: str, role: str) -> str:
+    payload = {
+        "sub": str(user_id),
+        "username": username,
+        "role": role,
+        "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRE_HOURS),
+        "iat": datetime.now(timezone.utc),
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+def decode_jwt_token(token: str) -> dict:
+    try:
+        return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(401, "Session expired, please login again")
+    except jwt.InvalidTokenError:
+        raise HTTPException(401, "Invalid token")
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
+    if not credentials:
+        raise HTTPException(401, "Not authenticated")
+    payload = decode_jwt_token(credentials.credentials)
+    return payload
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global pool
@@ -32,6 +67,39 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="IPAM API", version="2.0.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+# ------------------------------------------------------------------
+# AUTH MIDDLEWARE — protect semua endpoint kecuali whitelist
+# ------------------------------------------------------------------
+PUBLIC_PATHS = {
+    "/api/v1/auth/login",
+    "/docs", "/openapi.json", "/redoc",
+}
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    path = request.url.path
+
+    # Whitelist: public paths, OPTIONS (CORS preflight), dan static/health check
+    if path in PUBLIC_PATHS or request.method == "OPTIONS" or path == "/":
+        return await call_next(request)
+
+    # Hanya protect /api/v1/* — biarkan path lain (jika ada) lewat
+    if not path.startswith("/api/v1/"):
+        return await call_next(request)
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+
+    token = auth_header.replace("Bearer ", "", 1)
+    try:
+        payload = decode_jwt_token(token)
+        request.state.user = payload
+    except HTTPException as e:
+        return JSONResponse(status_code=e.status_code, content={"detail": e.detail})
+
+    return await call_next(request)
 
 async def get_db():
     async with pool.acquire() as conn:
@@ -1696,6 +1764,134 @@ async def stream_traceroute(target: str = Query(...), max_hops: int = Query(30, 
     cmd = ["traceroute", "-m", str(max_hops), "-w", "2", target]
     return StreamingResponse(_stream_command(cmd), media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+# ------------------------------------------------------------------
+# AUTH
+# ------------------------------------------------------------------
+
+class LoginIn(BaseModel):
+    username: str
+    password: str
+
+class ChangePasswordIn(BaseModel):
+    old_password: Optional[str] = None
+    new_password: str
+
+class UserIn(BaseModel):
+    username: str
+    email: str
+    password: str
+    role: str = "user"
+
+class UserUpdateIn(BaseModel):
+    email: Optional[str] = None
+    role: Optional[str] = None
+    is_active: Optional[bool] = None
+
+@app.post("/api/v1/auth/login")
+async def login(body: LoginIn, db=Depends(get_db)):
+    user = await db.fetchrow(
+        "SELECT * FROM users WHERE username=$1 AND is_active=true", body.username
+    )
+    if not user or not bcrypt.checkpw(body.password.encode(), user["password_hash"].encode()):
+        raise HTTPException(401, "Invalid username or password")
+
+    await db.execute("UPDATE users SET last_login_at=NOW() WHERE id=$1::uuid", user["id"])
+    token = create_jwt_token(user["id"], user["username"], user["role"])
+
+    return {
+        "token": token,
+        "user": {
+            "id": str(user["id"]),
+            "username": user["username"],
+            "email": user["email"],
+            "role": user["role"],
+        },
+        "expires_in_hours": JWT_EXPIRE_HOURS,
+    }
+
+@app.get("/api/v1/auth/me")
+async def get_me(current_user: dict = Depends(get_current_user), db=Depends(get_db)):
+    user = await db.fetchrow("SELECT id, username, email, role, last_login_at FROM users WHERE id=$1::uuid", current_user["sub"])
+    if not user:
+        raise HTTPException(404, "User not found")
+    return dict(user)
+
+@app.post("/api/v1/auth/change-password")
+async def change_password(body: ChangePasswordIn, current_user: dict = Depends(get_current_user), db=Depends(get_db)):
+    user = await db.fetchrow("SELECT * FROM users WHERE id=$1::uuid", current_user["sub"])
+    if not user:
+        raise HTTPException(404, "User not found")
+    # Admin bisa skip old_password check untuk reset user lain, tapi untuk self-change tetap perlu old_password
+    if body.old_password and not bcrypt.checkpw(body.old_password.encode(), user["password_hash"].encode()):
+        raise HTTPException(400, "Old password is incorrect")
+    new_hash = bcrypt.hashpw(body.new_password.encode(), bcrypt.gensalt()).decode()
+    await db.execute("UPDATE users SET password_hash=$1, updated_at=NOW() WHERE id=$2::uuid", new_hash, current_user["sub"])
+    return {"status": "password_changed"}
+
+# ------------------------------------------------------------------
+# USER MANAGEMENT (admin only)
+# ------------------------------------------------------------------
+
+def require_admin(current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") != "admin":
+        raise HTTPException(403, "Admin access required")
+    return current_user
+
+@app.get("/api/v1/users")
+async def list_users(current_user: dict = Depends(require_admin), db=Depends(get_db)):
+    rows = await db.fetch("SELECT id, username, email, role, is_active, last_login_at, created_at FROM users ORDER BY created_at")
+    return {"items": [dict(r) for r in rows]}
+
+@app.post("/api/v1/users", status_code=201)
+async def create_user(body: UserIn, current_user: dict = Depends(require_admin), db=Depends(get_db)):
+    existing = await db.fetchrow("SELECT id FROM users WHERE username=$1 OR email=$2", body.username, body.email)
+    if existing:
+        raise HTTPException(409, "Username or email already exists")
+    hashed = bcrypt.hashpw(body.password.encode(), bcrypt.gensalt()).decode()
+    row = await db.fetchrow(
+        "INSERT INTO users (username, email, password_hash, role) VALUES ($1,$2,$3,$4) RETURNING id, username, email, role, is_active, created_at",
+        body.username, body.email, hashed, body.role
+    )
+    await _log_audit(db, "create", "user", row["id"], body.username, description=f"User created: {body.username}", changed_by=current_user["username"])
+    return dict(row)
+
+@app.put("/api/v1/users/{user_id}")
+async def update_user(user_id: str, body: UserUpdateIn, current_user: dict = Depends(require_admin), db=Depends(get_db)):
+    existing = await db.fetchrow("SELECT * FROM users WHERE id=$1::uuid", user_id)
+    if not existing:
+        raise HTTPException(404, "User not found")
+    email = body.email if body.email is not None else existing["email"]
+    role = body.role if body.role is not None else existing["role"]
+    is_active = body.is_active if body.is_active is not None else existing["is_active"]
+    row = await db.fetchrow(
+        "UPDATE users SET email=$1, role=$2, is_active=$3, updated_at=NOW() WHERE id=$4::uuid RETURNING id, username, email, role, is_active",
+        email, role, is_active, user_id
+    )
+    await _log_audit(db, "update", "user", user_id, existing["username"], description=f"User updated: {existing['username']}", changed_by=current_user["username"])
+    return dict(row)
+
+@app.delete("/api/v1/users/{user_id}")
+async def delete_user(user_id: str, current_user: dict = Depends(require_admin), db=Depends(get_db)):
+    if str(user_id) == current_user["sub"]:
+        raise HTTPException(400, "Cannot delete your own account")
+    existing = await db.fetchrow("SELECT username FROM users WHERE id=$1::uuid", user_id)
+    if not existing:
+        raise HTTPException(404, "User not found")
+    await db.execute("DELETE FROM users WHERE id=$1::uuid", user_id)
+    await _log_audit(db, "delete", "user", user_id, existing["username"], description=f"User deleted: {existing['username']}", changed_by=current_user["username"])
+    return {"status": "deleted"}
+
+@app.post("/api/v1/users/{user_id}/reset-password")
+async def reset_user_password(user_id: str, body: ChangePasswordIn, current_user: dict = Depends(require_admin), db=Depends(get_db)):
+    existing = await db.fetchrow("SELECT username FROM users WHERE id=$1::uuid", user_id)
+    if not existing:
+        raise HTTPException(404, "User not found")
+    new_hash = bcrypt.hashpw(body.new_password.encode(), bcrypt.gensalt()).decode()
+    await db.execute("UPDATE users SET password_hash=$1, updated_at=NOW() WHERE id=$2::uuid", new_hash, user_id)
+    await _log_audit(db, "update", "user", user_id, existing["username"], description=f"Password reset by {current_user['username']}", changed_by=current_user["username"])
+    return {"status": "password_reset"}
 
 
 # ------------------------------------------------------------------

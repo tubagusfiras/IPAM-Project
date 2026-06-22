@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { createAllocation, updateAllocation, getBlock, updateBlock } from "../api.js";
+import { createAllocation, updateAllocation, getBlock, updateBlock, authFetch} from "../api.js";
 
 // ── CONSTANTS ────────────────────────────────────────────────────────────────
 const OWNER_TYPES = [
@@ -469,7 +469,7 @@ function AllocModal({ alloc, blockId, blockPrefix, prefillPrefix, customers, vla
   const allocationsRef = useRef([]);
   const [allocLoaded, setAllocLoaded] = useState(false);
   useEffect(()=>{
-    if (blockId) fetch(`/api/v1/blocks/${blockId}`)
+    if (blockId) authFetch(`/api/v1/blocks/${blockId}`)
       .then(r=>r.json())
       .then(d=>{
         allocationsRef.current = (d.allocations||[]).filter(a=>!alloc?.id||a.id!==alloc?.id);
@@ -516,7 +516,7 @@ function AllocModal({ alloc, blockId, blockPrefix, prefillPrefix, customers, vla
       if (ownerType==="customer" && custName.trim()) {
         let cust = customers.find(c=>c.name.toLowerCase()===custName.trim().toLowerCase());
         if (!cust) {
-          const r = await fetch("/api/v1/customers",{
+          const r = await authFetch("/api/v1/customers",{
             method:"POST",headers:{"Content-Type":"application/json"},
             body:JSON.stringify({name:custName.trim(),is_active:true})
           });
@@ -530,7 +530,7 @@ function AllocModal({ alloc, blockId, blockPrefix, prefillPrefix, customers, vla
         const vid = parseInt(vlanVid);
         let vlan = vlans.find(v=>v.vid===vid);
         if (!vlan) {
-          const r = await fetch("/api/v1/vlans",{
+          const r = await authFetch("/api/v1/vlans",{
             method:"POST",headers:{"Content-Type":"application/json"},
             body:JSON.stringify({vid,name:"",status:"active"})
           });

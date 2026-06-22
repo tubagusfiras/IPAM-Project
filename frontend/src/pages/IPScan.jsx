@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { getBlocks } from "../api.js";
+import { getBlocks, authFetch} from "../api.js";
 
 function formatEta(sec) {
   if (!sec || sec <= 0) return "";
@@ -58,7 +58,7 @@ export default function IPScan() {
 
   const pollStatus = useCallback(async (id) => {
     try {
-      const res = await fetch(`/api/v1/scan/status/${id}`);
+      const res = await authFetch(`/api/v1/scan/status/${id}`);
       const d   = await res.json();
       setScanData(d);
       if (d.status === "done" || d.status === "cancelled") {
@@ -80,7 +80,7 @@ export default function IPScan() {
     setScanData(null);
     setPolling(true);
     try {
-      const res = await fetch("/api/v1/scan/start", {
+      const res = await authFetch("/api/v1/scan/start", {
         method: "POST", headers: {"Content-Type":"application/json"},
         body: JSON.stringify({block_id: blockId}),
       });
@@ -94,7 +94,7 @@ export default function IPScan() {
 
   const cancelScan = async () => {
     if (!scanData) return;
-    await fetch(`/api/v1/scan/cancel/${scanData.scan_id}`, {method:"POST"});
+    await authFetch(`/api/v1/scan/cancel/${scanData.scan_id}`, {method:"POST"});
     setPolling(false);
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
     pollStatus(scanData.scan_id);
@@ -102,7 +102,7 @@ export default function IPScan() {
 
   const doAction = async (action, alloc_id, prefix) => {
     try {
-      await fetch("/api/v1/scan/action", {
+      await authFetch("/api/v1/scan/action", {
         method: "POST", headers: {"Content-Type":"application/json"},
         body: JSON.stringify({action, alloc_id}),
       });

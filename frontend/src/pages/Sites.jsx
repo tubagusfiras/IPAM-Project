@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { getSites, createSite, updateSite, deleteSite } from "../api.js";
+import { getSites, createSite, updateSite, deleteSite, authFetch} from "../api.js";
 
 function SiteModal({ site, onClose, onSaved }) {
   const isEdit = !!site?.id;
@@ -114,7 +114,7 @@ export default function Sites() {
   useEffect(()=>{
     if (!items.length) return;
     Promise.all(items.map(s=>
-      fetch(`/api/v1/blocks?site_id=${s.id}&limit=100`)
+      authFetch(`/api/v1/blocks?site_id=${s.id}&limit=100`)
         .then(r=>r.json())
         .then(d=>[ s.id, { total: d.total||0, items: d.items||[] } ])
         .catch(()=>[s.id,{total:0,items:[]}])

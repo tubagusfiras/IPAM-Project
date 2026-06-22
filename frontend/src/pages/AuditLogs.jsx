@@ -1,3 +1,4 @@
+import { authFetch } from "../api.js";
 import { useState, useEffect, useCallback } from "react";
 
 const ACTION_STYLE = {
@@ -44,7 +45,7 @@ export default function AuditLogs() {
       ...(actionFilter && {action: actionFilter}),
       ...(entityFilter && {entity_type: entityFilter}),
     });
-    fetch(`/api/v1/audit-logs?${params}`)
+    authFetch(`/api/v1/audit-logs?${params}`)
       .then(r=>r.json())
       .then(d=>{ setItems(d.items||[]); setTotal(d.total||0); })
       .catch(console.error)
