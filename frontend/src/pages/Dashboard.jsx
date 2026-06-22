@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { getDashboardStats, authFetch } from "../api.js";
+import { getDashboardStats } from "../api.js";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 const SVC = {
@@ -105,21 +105,13 @@ export default function Dashboard({ onNavigate }) {
   useEffect(() => {
     const check = async () => {
       try {
-        const h = await authFetch("/api/v1/health/detailed").then(r=>r.json());
-        const results = [];
-        try {
-          const g = await fetch("http://127.0.0.1:3100/api/health").then(r=>r.json());
-          results.push({ key:"grafana", label:"Grafana", ok: g?.database === "ok", detail: `v${g?.version || "?"}` });
-        } catch { results.push({ key:"grafana", label:"Grafana", ok: false, detail:"offline" }); }
-        try {
-          const p = await fetch("http://127.0.0.1:9090/api/v1/status/config").then(r=>r.json());
-          results.push({ key:"prometheus", label:"Prometheus", ok: p?.status === "success", detail:"scraping api:8000" });
-        } catch { results.push({ key:"prometheus", label:"Prometheus", ok: false, detail:"offline" }); }
-        const db = h?.services?.database;
-        if (db) results.push({ key:"database", label:"Database", ok: db?.status === "ok", detail:`pool ${db?.pool_free}/${db?.pool_size}` });
-        const rd = h?.services?.redis;
-        if (rd) results.push({ key:"redis", label:"Redis", ok: rd?.status === "ok", detail:rd?.used_memory_human });
-        setHealth(results);
+        const h = await fetch("/api/v1/health/detailed").then(r=>r.json());
+        setHealth([
+          { key:"database", label:"Database",  ok: h?.services?.database?.status==="ok", detail:`pool ${h?.services?.database?.pool_free}/${h?.services?.database?.pool_size}` },
+          { key:"redis",    label:"Redis",     ok: h?.services?.redis?.status==="ok",    detail:h?.services?.redis?.used_memory_human },
+          { key:"grafana",  label:"Grafana",   ok: false, detail:"external" },
+          { key:"prometheus",label:"Prometheus",ok: false, detail:"external" },
+        ]);
       } catch {}
     };
     check();
@@ -292,6 +284,35 @@ export default function Dashboard({ onNavigate }) {
               </div>
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="card" style={{padding:"14px 18px",display:"flex",alignItems:"center",gap:12}}>
+        <span style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em",color:"var(--text-dim)",whiteSpace:"nowrap"}}>
+          Quick Actions
+        </span>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <button onClick={()=>onNavigate?.("ipv4")} className="btn btn-sm"
+            style={{display:"flex",alignItems:"center",gap:5,fontSize:12}}>
+            <span>🌐</span> Add Block
+          </button>
+          <button onClick={()=>onNavigate?.("customers")} className="btn btn-sm"
+            style={{display:"flex",alignItems:"center",gap:5,fontSize:12}}>
+            <span>👥</span> Add Customer
+          </button>
+          <button onClick={()=>onNavigate?.("sites")} className="btn btn-sm"
+            style={{display:"flex",alignItems:"center",gap:5,fontSize:12}}>
+            <span>📍</span> Add Site
+          </button>
+          <button onClick={()=>onNavigate?.("scan")} className="btn btn-sm"
+            style={{display:"flex",alignItems:"center",gap:5,fontSize:12}}>
+            <span>🔍</span> IP Scan
+          </button>
+          <button onClick={()=>onNavigate?.("ping")} className="btn btn-sm"
+            style={{display:"flex",alignItems:"center",gap:5,fontSize:12}}>
+            <span>📡</span> Ping & Trace
+          </button>
         </div>
       </div>
 
