@@ -44,8 +44,19 @@ async function request(path, opts = {}) {
 
   if (!res.ok) {
     const msg = await res.text();
+    // Fire error toast
+    try { window.dispatchEvent(new CustomEvent("app-toast", { detail: { msg: msg || `HTTP ${res.status}`, type: "error" } })); } catch {}
     throw new Error(msg || `HTTP ${res.status}`);
   }
+
+  // Fire success toast for mutations
+  if (opts.method === "POST" || opts.method === "PUT" || opts.method === "DELETE") {
+    const labels = { POST:"Created", PUT:"Updated", DELETE:"Deleted" };
+    const name = path.split("/")[1]?.replace(/s$/, "") || "Item";
+    const msg = opts.method === "DELETE" ? `${name} deleted` : `${name} ${labels[opts.method]}`;
+    try { window.dispatchEvent(new CustomEvent("app-toast", { detail: { msg, type: "success" } })); } catch {}
+  }
+
   if (res.status === 204) return null;
   return res.json();
 }

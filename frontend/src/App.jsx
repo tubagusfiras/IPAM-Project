@@ -1,5 +1,6 @@
 import { useState, useEffect, Suspense, lazy } from "react";
 import { getToken, getStoredUser, clearToken } from "./api.js";
+import { ToastProvider, useToast } from "./components/Toast.jsx";
 import Login from "./pages/Login.jsx";
 
 const Dashboard  = lazy(()=>import("./pages/Dashboard.jsx"));
@@ -337,6 +338,14 @@ export default function App() {
     }
   }, []);
 
+  // ── GLOBAL TOAST via custom event ──
+  const addToast = useToast();
+  useEffect(() => {
+    const h = (e) => addToast(e.detail.msg, e.detail.type);
+    window.addEventListener("app-toast", h);
+    return () => window.removeEventListener("app-toast", h);
+  }, [addToast]);
+
   const handleLogout = () => {
     clearToken();
     setUser(null);
@@ -422,36 +431,38 @@ export default function App() {
   }
 
   return (
-    <div style={{minHeight:"100vh",background:"var(--bg)"}}>
-      <Sidebar
-        active={route ? "" : active}
-        onNavigate={navigate}
-        collapsed={collapsed}
-        onToggle={()=>setCollapsed(v=>!v)}
-        user={user}
-      />
-      <Header
-        title={pageTitle}
-        subtitle={pageSubtitle}
-        onBack={route ? goBack : null}
-        dark={dark}
-        onToggleDark={toggleDark}
-        collapsed={collapsed}
-        user={user}
-        onLogout={handleLogout}
-      />
-      <main style={{
-        paddingTop:"var(--topbar-h)",
-        marginLeft: collapsed ? "var(--sidebar-collapsed)" : "var(--sidebar-w)",
-        transition:"margin-left var(--transition)",
-        minHeight:"100vh",
-      }}>
-        <div style={{padding:24}}>
-          <Suspense fallback={<Loading/>}>
-            {renderPage()}
-          </Suspense>
-        </div>
-      </main>
-    </div>
+    <ToastProvider>
+      <div style={{minHeight:"100vh",background:"var(--bg)"}}>
+        <Sidebar
+          active={route ? "" : active}
+          onNavigate={navigate}
+          collapsed={collapsed}
+          onToggle={()=>setCollapsed(v=>!v)}
+          user={user}
+        />
+        <Header
+          title={pageTitle}
+          subtitle={pageSubtitle}
+          onBack={route ? goBack : null}
+          dark={dark}
+          onToggleDark={toggleDark}
+          collapsed={collapsed}
+          user={user}
+          onLogout={handleLogout}
+        />
+        <main style={{
+          paddingTop:"var(--topbar-h)",
+          marginLeft: collapsed ? "var(--sidebar-collapsed)" : "var(--sidebar-w)",
+          transition:"margin-left var(--transition)",
+          minHeight:"100vh",
+        }}>
+          <div style={{padding:24}}>
+            <Suspense fallback={<Loading/>}>
+              {renderPage()}
+            </Suspense>
+          </div>
+        </main>
+      </div>
+    </ToastProvider>
   );
 }
