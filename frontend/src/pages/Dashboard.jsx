@@ -4,11 +4,6 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveCo
 
 const STATUS_HEX = { active:"#22c55e", available:"#38e8c6", reserved:"#a855f7", deprecated:"#f59e0b" };
 const ICONS = { networks:"🌐", allocations:"📡", customers:"👥", vlans:"🔗", sites:"📍" };
-const GRADS = {
-  networks:"linear-gradient(135deg,#1e40af,#3b82f6)", allocations:"linear-gradient(135deg,#166534,#22c55e)",
-  customers:"linear-gradient(135deg,#9a3412,#f97316)", vlans:"linear-gradient(135deg,#6b21a8,#a855f7)",
-  sites:"linear-gradient(135deg,#0e7490,#38e8c6)",
-};
 
 function CountUp({ to, suffix="" }) {
   const [n, setN] = useState(0);
@@ -61,11 +56,11 @@ export default function Dashboard({ onNavigate }) {
   const barData = (recent_blocks||[]).map(b => ({ name: b.prefix.split("/")[0].split(".").slice(-2).join(".")+"/"+b.prefix.split("/")[1], full: b.prefix, active: b.active_allocations, total: b.total_allocations }));
 
   const cards = [
-    { k:"networks", label:"Total Networks", value:total_blocks, sub:`IPv4: ${ipv4_blocks} &middot; IPv6: ${ipv6_blocks}`, grad:GRADS.networks },
-    { k:"allocations", label:"IP Allocations", value:total_allocations, sub:`Active: ${alloc_by_status?.active||0}`, grad:GRADS.allocations },
-    { k:"customers", label:"Customers", value:total_customers, sub:"Active clients", grad:GRADS.customers },
-    { k:"vlans", label:"VLANs", value:total_vlans, sub:"Configured VLANs", grad:GRADS.vlans },
-    { k:"sites", label:"Sites", value:total_sites, sub:"Physical locations", grad:GRADS.sites },
+    { k:"networks", label:"Total Networks", value:total_blocks, sub:`IPv4: ${ipv4_blocks} · IPv6: ${ipv6_blocks}` },
+    { k:"allocations", label:"IP Allocations", value:total_allocations, sub:`Active: ${alloc_by_status?.active||0}` },
+    { k:"customers", label:"Customers", value:total_customers, sub:"Active clients" },
+    { k:"vlans", label:"VLANs", value:total_vlans, sub:"Configured VLANs" },
+    { k:"sites", label:"Sites", value:total_sites, sub:"Physical locations" },
   ];
 
   return (
@@ -92,31 +87,29 @@ export default function Dashboard({ onNavigate }) {
 
       <style>{`@keyframes pls{0%,100%{opacity:1}50%{opacity:0.4}} @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}`}</style>
 
-      {/* ── Stat Cards with Glassmorphism ── */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(185px,1fr))",gap:16,animation:"fadeUp 0.5s ease"}}>
+      {/* ── Stat Cards with clean dark theme ── */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(185px,1fr))",gap:14,animation:"fadeUp 0.5s ease"}}>
         {cards.map((c,i) => (
           <div key={c.k} className="card" style={{
-            padding:0,overflow:"hidden",position:"relative",border:"none",
+            padding:0,overflow:"hidden",cursor:"pointer",
             animation:`fadeUp 0.4s ease ${i*0.08}s both`,
-            cursor:"pointer",transition:"transform 0.2s,box-shadow 0.2s",
+            transition:"transform 0.15s,box-shadow 0.15s",
+            border:"1px solid var(--border-soft)",
           }}
-            onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 8px 30px rgba(0,0,0,0.3)";}}
+            onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 6px 20px rgba(0,0,0,0.25)";}}
             onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";}}
             onClick={()=>onNavigate?.(c.k==="networks"?"ipv4":c.k==="allocations"?"ipv4":c.k==="customers"?"customers":c.k==="vlans"?"vlans":"sites")}>
-            <div style={{background:c.grad,padding:"16px 18px 12px",position:"relative"}}>
-              <div style={{position:"absolute",top:-10,right:-10,fontSize:48,opacity:0.1,pointerEvents:"none"}}>{ICONS[c.k]}</div>
-              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
-                <div style={{width:36,height:36,borderRadius:10,background:"rgba(255,255,255,0.15)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,backdropFilter:"blur(4px)"}}>
-                  {ICONS[c.k]}
-                </div>
-                <span style={{fontSize:11,fontWeight:500,color:"rgba(255,255,255,0.7)",textTransform:"uppercase",letterSpacing:"0.06em"}}>{c.label}</span>
+            <div style={{padding:"14px 16px 10px",display:"flex",alignItems:"center",gap:10,borderBottom:"1px solid var(--border-subtle)"}}>
+              <div style={{width:32,height:32,borderRadius:8,background:"var(--surface-3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>
+                {ICONS[c.k]}
               </div>
-              <div style={{fontSize:28,fontWeight:700,color:"#fff",fontVariantNumeric:"tabular-nums"}}>
+              <span style={{fontSize:11,fontWeight:500,color:"var(--text-muted)"}}>{c.label}</span>
+            </div>
+            <div style={{padding:"8px 16px 6px"}}>
+              <div style={{fontSize:24,fontWeight:700,color:"var(--text)",fontVariantNumeric:"tabular-nums",lineHeight:1.2}}>
                 <CountUp to={c.value}/>
               </div>
-            </div>
-            <div style={{padding:"8px 18px",display:"flex",alignItems:"center",gap:6,background:"var(--bg-secondary,var(--bg))"}}>
-              <span style={{fontSize:10,color:"var(--text-dim)"}} dangerouslySetInnerHTML={{__html:c.sub}}/>
+              <div style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>{c.sub}</div>
             </div>
           </div>
         ))}
