@@ -415,75 +415,22 @@ logger.info("User login", request_id=request.state.request_id, username=username
 
 ## 📊 Operations & Monitoring
 
-### 11. Add Backup Automation
+### 11. Add Backup Automation ✅ DONE
 **Priority:** Critical  
 **Effort:** 4 hours  
-**Impact:** Data protection, disaster recovery, compliance
+**Impact:** Data protection, disaster recovery, compliance  
+**Completed:** 2026-06-23  
+**Why was this CRITICAL:** No backup existed - risk of total data loss
 
-**Current:** No documented backup procedure  
-**Problem:** Can't recover from data loss, no disaster recovery plan
+**What was implemented:**
+- **`scripts/backup.sh`**: Database dump + gzip compression + integrity verification + retention (30 days)
+- **`scripts/restore.sh`**: Interactive restore with confirmation and post-restore verification
+- **Cron job:** `0 2 * * *` (daily at 2 AM WIB)
+- **Location:** `/opt/backups/ipam/`
+- **Logs:** `/var/log/ipam/`
+- **Test result:** Success (22K backup in <1 minute)
 
-**Implementation:**
-```bash
-#!/bin/bash
-# scripts/backup.sh
-
-DATE=$(date +%Y%m%d_%H%M%S)
-BACKUP_DIR="/opt/backups/ipam"
-RETENTION_DAYS=30
-
-# Create backup
-docker exec ipam-db pg_dump -U ipam ipam | gzip > "$BACKUP_DIR/ipam_$DATE.sql.gz"
-
-# Verify backup
-if [ -f "$BACKUP_DIR/ipam_$DATE.sql.gz" ]; then
-    echo "Backup successful: ipam_$DATE.sql.gz ($(du -h $BACKUP_DIR/ipam_$DATE.sql.gz | cut -f1))"
-    # Test restore on separate DB (optional but recommended)
-    # gunzip -c "$BACKUP_DIR/ipam_$DATE.sql.gz" | docker exec -i ipam-db psql -U ipam test_ipam
-else
-    echo "Backup FAILED!" | mail -s "IPAM Backup Failed" admin@sdi.net.id
-    exit 1
-fi
-
-# Cleanup old backups
-find "$BACKUP_DIR" -name "ipam_*.sql.gz" -mtime +$RETENTION_DAYS -delete
-
-# Optional: Upload to S3/GCS for offsite backup
-# aws s3 cp "$BACKUP_DIR/ipam_$DATE.sql.gz" s3://sdi-backups/ipam/
-## 📊 Operations & Monitoring
-
-### 11. Add Backup Automation
-**Priority:** Critical  
-**Effort:** 4 hours  
-**Impact:** Data protection, disaster recovery, compliance
-
-**Current:** No documented backup procedure  
-**Problem:** Can't recover from data loss, no disaster recovery plan
-
-**Implementation:**
-```bash
-#!/bin/bash
-# scripts/backup.sh
-DATE=$(date +%Y%m%d_%H%M%S)
-BACKUP_DIR="/opt/backups/ipam"
-RETENTION_DAYS=30
-
-# Create backup
-docker exec ipam-db pg_dump -U ipam ipam | gzip > "$BACKUP_DIR/ipam_$DATE.sql.gz"
-
-# Verify backup
-if [ -f "$BACKUP_DIR/ipam_$DATE.sql.gz" ]; then
-    echo "Backup successful"
-else
-    echo "FAILED!" | mail -s "IPAM Backup Failed" admin@sdi.net.id
-    exit 1
-fi
-
-# Cleanup old backups
-find "$BACKUP_DIR" -name "ipam_*.sql.gz" -mtime +$RETENTION_DAYS -delete
-```
-
-**Crontab:** `0 2 * * * /opt/database-ipaddresses/scripts/backup.sh`
+**Rollback:** `gunzip -c /opt/backups/ipam/ipam_20260623_*.sql.gz | docker exec -i ipam-db psql -U ipam -d ipam`
 
 ---
 
