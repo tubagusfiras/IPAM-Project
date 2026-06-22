@@ -14,6 +14,9 @@ import io
 from weasyprint import HTML as WeasyprintHTML
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://ipam:ipam@db:5432/ipam")
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
@@ -28,7 +31,9 @@ from datetime import datetime, timedelta, timezone
 from fastapi import Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
-JWT_SECRET = os.getenv("JWT_SECRET", "change-me-in-production")
+JWT_SECRET = os.getenv("JWT_SECRET")
+if not JWT_SECRET:
+    raise RuntimeError("JWT_SECRET environment variable must be set")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_HOURS = 8
 
@@ -66,7 +71,15 @@ async def lifespan(app: FastAPI):
     await pool.close()
 
 app = FastAPI(title="IPAM API", version="2.0.0", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+# CORS configuration from env var (comma-separated origins)
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:8100,http://localhost:3000").split(",")
+app.add_middleware(CORSMiddleware, allow_origins=ALLOWED_ORIGINS, allow_methods=["*"], allow_headers=["*"], allow_credentials=True)
+
+# Rate limiting
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # ------------------------------------------------------------------
 # AUTH MIDDLEWARE — protect semua endpoint kecuali whitelist
@@ -1492,49 +1505,55 @@ async def start_scan(body: dict, db=Depends(get_db)):
     # Run scan in background
     async def run_scan():
         session = _scan_sessions[scan_id]
-        BATCH = 32  # parallel workers
-        for i in range(0, total, BATCH):
-            if session["status"] == "cancelled":
-                break
-            batch = hosts[i:i+BATCH]
-            tasks = [_scan_ip(ip) for ip in batch]
-            results = await asyncio.gather(*tasks)
-            for r in results:
-                ip = r["ip"]
-                responding = r["responding"]
-                method = r["method"]
-                # Find matching allocation (exact /32 or subnet containing this IP)
-                alloc = None
-                ip_obj = ipaddress.ip_address(ip)
-                for prefix, a in alloc_map.items():
-                    try:
-                        if ip_obj in ipaddress.ip_network(prefix, strict=False):
-                            alloc = a
-                            break
-                    except: pass
+        try:
+            BATCH = 32  # parallel workers
+            for i in range(0, total, BATCH):
+                if session["status"] == "cancelled":
+                    break
+                batch = hosts[i:i+BATCH]
+                tasks = [_scan_ip(ip) for ip in batch]
+                results = await asyncio.gather(*tasks)
+                for r in results:
+                    ip = r["ip"]
+                    responding = r["responding"]
+                    method = r["method"]
+                    # Find matching allocation (exact /32 or subnet containing this IP)
+                    alloc = None
+                    ip_obj = ipaddress.ip_address(ip)
+                    for prefix, a in alloc_map.items():
+                        try:
+                            if ip_obj in ipaddress.ip_network(prefix, strict=False):
+                                alloc = a
+                                break
+                        except: pass
 
-                discrepancy = None
-                if responding and not alloc:
-                    discrepancy = "unregistered"  # Respond tapi tidak di IPAM
-                elif not responding and alloc and alloc["status"] == "active":
-                    discrepancy = "ghost"  # Di IPAM tapi tidak respond
+                    discrepancy = None
+                    if responding and not alloc:
+                        discrepancy = "unregistered"  # Respond tapi tidak di IPAM
+                    elif not responding and alloc and alloc["status"] == "active":
+                        discrepancy = "ghost"  # Di IPAM tapi tidak respond
 
-                session["results"].append({
-                    "ip": ip,
-                    "responding": responding,
-                    "method": method,
-                    "alloc_prefix": alloc["prefix"] if alloc else None,
-                    "alloc_id": alloc["id"] if alloc else None,
-                    "owner_type": alloc["owner_type"] if alloc else None,
-                    "customer_name": alloc["customer_name"] if alloc else None,
-                    "alloc_status": alloc["status"] if alloc else None,
-                    "discrepancy": discrepancy,
-                })
-            session["scanned"] = min(i + BATCH, total)
+                    session["results"].append({
+                        "ip": ip,
+                        "responding": responding,
+                        "method": method,
+                        "alloc_prefix": alloc["prefix"] if alloc else None,
+                        "alloc_id": alloc["id"] if alloc else None,
+                        "owner_type": alloc["owner_type"] if alloc else None,
+                        "customer_name": alloc["customer_name"] if alloc else None,
+                        "alloc_status": alloc["status"] if alloc else None,
+                        "discrepancy": discrepancy,
+                    })
+                session["scanned"] = min(i + BATCH, total)
+                await _save_scan_to_redis(scan_id)
+            session["status"] = "done"
+            session["finished_at"] = time.time()
             await _save_scan_to_redis(scan_id)
-        session["status"] = "done"
-        session["finished_at"] = time.time()
-        await _save_scan_to_redis(scan_id)
+        except Exception as e:
+            session["status"] = "failed"
+            session["error"] = str(e)
+            session["finished_at"] = time.time()
+            await _save_scan_to_redis(scan_id)
 
     asyncio.create_task(run_scan())
     await _save_scan_to_redis(scan_id)
@@ -1790,7 +1809,8 @@ class UserUpdateIn(BaseModel):
     is_active: Optional[bool] = None
 
 @app.post("/api/v1/auth/login")
-async def login(body: LoginIn, db=Depends(get_db)):
+@limiter.limit("5/minute")  # Rate limit: 5 login attempts per minute per IP
+async def login(request: Request, body: LoginIn, db=Depends(get_db)):
     user = await db.fetchrow(
         "SELECT * FROM users WHERE username=$1 AND is_active=true", body.username
     )
