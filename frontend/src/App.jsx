@@ -214,8 +214,9 @@ function Header({ title, subtitle, onBack, dark, onToggleDark, collapsed, user, 
 
   const handleSelect = (type, id) => {
     setSearch(""); setSearchResults(null);
-    if (type === "block") { window.location.hash = "block-detail/" + id; }
-    else if (type === "customer") { /* navigate to customer detail */ }
+    if (type === "blocks" && id) { window.location.hash = "block-detail/" + id; window.dispatchEvent(new Event("hashchange")); }
+    else if (type === "customers") { onNavigate?.("customers"); }
+    else if (type === "allocations") { onNavigate?.("ipv4"); }
   };
 
   const CAT_COLORS = { blocks:"#3b82f6", allocations:"#22c55e", customers:"#f97316" };
