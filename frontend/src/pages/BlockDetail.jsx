@@ -749,7 +749,7 @@ export default function BlockDetail({ blockId, onBack, dark }) {
           {/* Search */}
           <div style={{position:"relative",flex:1,minWidth:200,maxWidth:300}}>
             <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",
-              color:"var(--text-dim)",pointerEvents:"none",fontSize:13}}>🔍</span>
+              color:"var(--text-dim)",pointerEvents:"none",fontSize:13}}>S</span>
             <input value={search} onChange={e=>setSearch(e.target.value)}
               placeholder="Search prefix, customer, VLAN..."
               className="input" style={{paddingLeft:32,height:32,fontSize:12}}/>

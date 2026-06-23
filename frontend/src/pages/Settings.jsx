@@ -383,7 +383,7 @@ export default function Settings({ dark, onToggleDark }) {
           <div style={{fontSize:13,fontWeight:600,color:"var(--text)",marginBottom:4}}>Theme</div>
           <div style={{fontSize:12,color:"var(--text-muted)",marginBottom:16}}>Pilih tampilan terang atau gelap</div>
           <div style={{display:"flex",gap:10}}>
-            {[["light","☀️ Light"],["dark","🌙 Dark"]].map(([key,label])=>(
+            {[["light","Light"],["dark","Dark"]].map(([key,label])=>(
               <button key={key} onClick={()=>{ if ((key==="dark")!==dark) onToggleDark(); }}
                 style={{
                   flex:1,padding:"14px",borderRadius:"var(--radius-sm)",cursor:"pointer",

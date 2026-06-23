@@ -159,7 +159,7 @@ export default function Sites() {
       <div className="card" style={{padding:"10px 14px",display:"flex",alignItems:"center",gap:10}}>
         <div style={{position:"relative",flex:1,maxWidth:300}}>
           <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",
-            color:"var(--text-dim)",pointerEvents:"none",fontSize:14}}>🔍</span>
+            color:"var(--text-dim)",pointerEvents:"none",fontSize:14}}>S</span>
           <input value={search} onChange={e=>setSearch(e.target.value)}
             placeholder="Search site name or city..."
             className="input" style={{paddingLeft:32,height:34,fontSize:13}}/>
@@ -190,7 +190,7 @@ export default function Sites() {
       ) : items.length===0 ? (
         <div className="card" style={{padding:60}}>
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
-            <div style={{fontSize:36}}>📍</div>
+            <div style={{fontSize:20,fontWeight:700}}>S</div>
             <div style={{fontSize:14,fontWeight:600,color:"var(--text)"}}>No sites found</div>
             <div style={{fontSize:12,color:"var(--text-muted)"}}>
               {search?"Try a different search":"Add your first site/location"}
@@ -238,7 +238,7 @@ export default function Sites() {
                 {(s.city||s.region) && (
                   <div style={{fontSize:12,color:"var(--text-muted)",marginBottom:8,
                     display:"flex",alignItems:"center",gap:4}}>
-                    <span style={{fontSize:11}}>📍</span>
+                    <span style={{fontSize:11}}>S</span>
                     {[s.city,s.region].filter(Boolean).join(", ")}
                   </div>
                 )}

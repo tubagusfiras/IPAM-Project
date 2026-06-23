@@ -295,7 +295,7 @@ export default function IPGrid({ blockPrefix, allocations, onAllocate, onEdit, d
                     <>
                       {isAvailable && (
                         <div style={{fontSize:10,color:"var(--warning)",marginBottom:4,fontWeight:600}}>
-                          ⚠ Status: available (belum dialokasikan)
+                          ! Status: available (belum dialokasikan)
                         </div>
                       )}
                       <div style={{fontSize:10,color:"var(--success)",marginBottom:2}}>Free — available</div>

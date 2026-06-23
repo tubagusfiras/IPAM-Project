@@ -166,7 +166,7 @@ export default function IPScan() {
           <div style={{display:"flex",gap:8,alignSelf:"flex-end"}}>
             {!isRunning ? (
               <button onClick={startScan} className="btn btn-primary" style={{height:38,paddingLeft:18,paddingRight:18}} disabled={!blockId}>
-                🔍 Start Scan
+                Start Scan
               </button>
             ) : (
               <button onClick={cancelScan} className="btn btn-secondary"
@@ -177,7 +177,7 @@ export default function IPScan() {
             {isDone && (
               <button onClick={()=>{ sessionStorage.removeItem("ipscan_data"); setScanData(null); }}
                 className="btn btn-ghost" style={{height:38}}>
-                🗑 Clear
+                Clear
               </button>
             )}
           </div>
@@ -226,8 +226,8 @@ export default function IPScan() {
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginTop:16}}>
                 {[
                   {key:"responding",   label:"Responding",   val:scanData.responding_count,   icon:"✓", color:"var(--success)", bg:"var(--success-surface)", border:"var(--success-border)"},
-                  {key:"ghost",        label:"Ghost",         val:scanData.ghost_count,         icon:"👻", color:"#ef4444",         bg:"rgba(239,68,68,0.08)",   border:"rgba(239,68,68,0.22)"},
-                  {key:"unregistered", label:"Unregistered",  val:scanData.unregistered_count,  icon:"⚠",  color:"#f59e0b",         bg:"rgba(245,158,11,0.08)", border:"rgba(245,158,11,0.22)"},
+                  {key:"ghost",        label:"Ghost",         val:scanData.ghost_count,         icon:"ghost", color:"#ef4444",         bg:"rgba(239,68,68,0.08)",   border:"rgba(239,68,68,0.22)"},
+                  {key:"unregistered", label:"Unregistered",  val:scanData.unregistered_count,  icon:"warn",  color:"#f59e0b",         bg:"rgba(245,158,11,0.08)", border:"rgba(245,158,11,0.22)"},
                 ].map(s=>(
                   <div key={s.key}
                     onClick={()=>setFilterType(filterType===s.key ? "all" : s.key)}
@@ -279,7 +279,7 @@ export default function IPScan() {
             <div className="card" style={{overflow:"hidden"}}>
               <div style={{padding:"14px 16px",borderBottom:"1px solid var(--border-medium)",
                 display:"flex",alignItems:"center",gap:10,background:"var(--surface-2)"}}>
-                <span style={{fontSize:16}}>👻</span>
+                <span style={{fontSize:16,fontWeight:700}}>GHOST</span>
                 <span style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>Ghost Allocations</span>
                 <span style={{fontSize:11,color:"#ef4444",background:"rgba(239,68,68,0.1)",
                   border:"1px solid rgba(239,68,68,0.25)",padding:"2px 8px",borderRadius:99,fontWeight:600}}>
@@ -355,7 +355,7 @@ export default function IPScan() {
             <div className="card" style={{overflow:"hidden"}}>
               <div style={{padding:"14px 16px",borderBottom:"1px solid var(--border-medium)",
                 display:"flex",alignItems:"center",gap:10,background:"var(--surface-2)"}}>
-                <span style={{fontSize:16}}>⚠️</span>
+                <span style={{fontSize:16,fontWeight:700}}>WARN</span>
                 <span style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>Unregistered Devices</span>
                 <span style={{fontSize:11,color:"#f59e0b",background:"rgba(245,158,11,0.1)",
                   border:"1px solid rgba(245,158,11,0.25)",padding:"2px 8px",borderRadius:99,fontWeight:600}}>
@@ -426,7 +426,7 @@ export default function IPScan() {
           {/* All clean */}
           {ghosts.length===0 && unregistered.length===0 && (
             <div className="card" style={{padding:48,textAlign:"center"}}>
-              <div style={{fontSize:40,marginBottom:10}}>✅</div>
+              <div style={{fontSize:24,fontWeight:700}}>OK</div>
               <div style={{fontSize:15,fontWeight:600,color:"var(--text)",marginBottom:4}}>
                 Tidak ada discrepancy ditemukan
               </div>

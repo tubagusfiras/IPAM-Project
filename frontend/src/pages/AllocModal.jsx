@@ -5,8 +5,8 @@ import { createAllocation, updateAllocation, getBlock, updateBlock, authFetch} f
 const OWNER_TYPES = [
   { value:"customer",   label:"Customer",   color:"var(--accent)",   icon:"👤" },
   { value:"internal",   label:"Internal",   color:"var(--accent2)",  icon:"🖥️" },
-  { value:"ptp",        label:"PTP",        color:"var(--warning)",  icon:"🔗" },
-  { value:"peering",    label:"Peering",    color:"#a855f7",         icon:"🌐" },
+  { value:"ptp",        label:"PTP",        color:"var(--warning)",  icon:"ptp" },
+  { value:"peering",    label:"Peering",    color:"#a855f7",         icon:"peering" },
   { value:"management", label:"Mgmt",       color:"var(--info)",     icon:"⚙️" },
   { value:"reserved",   label:"Reserved",   color:"var(--text-dim)", icon:"🔒" },
 ];
@@ -889,7 +889,7 @@ function SubnetCalc({ blockPrefix, allocations, onSelect }) {
         </div>
         <div style={{fontSize:12,paddingBottom:4}}>
           {slots.length===0
-            ? <span style={{color:"var(--warning)"}}>⚠ No available slots</span>
+            ? <span style={{color:"var(--warning)"}}>! No available slots</span>
             : <span style={{color:"var(--success)"}}>✓ {slots.length} slot{slots.length>1?"s":""} available</span>
           }
         </div>

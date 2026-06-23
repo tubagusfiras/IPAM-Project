@@ -352,7 +352,7 @@ export default function Blocks({ ipVersion="", onSelectBlock }) {
                     display:"flex",flexDirection:"column",alignItems:"center",
                     justifyContent:"center",padding:"60px 0",gap:10,
                   }}>
-                    <div style={{fontSize:36}}>🌐</div>
+                    <div style={{fontSize:20,fontWeight:700}}>IP</div>
                     <div style={{fontSize:14,fontWeight:600,color:"var(--text)"}}>No networks found</div>
                     <div style={{fontSize:12,color:"var(--text-muted)"}}>
                       {search ? "Try a different search term" : "Add your first IP block to get started"}

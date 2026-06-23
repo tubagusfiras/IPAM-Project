@@ -185,11 +185,11 @@ export default function Dashboard({ onNavigate }) {
         <span style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",color:"var(--text-dim)",whiteSpace:"nowrap"}}>Quick Actions</span>
         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
           {[
-            {id:"ipv4", icon:"🌐", label:"Add Network"},
-            {id:"customers", icon:"👥", label:"Add Customer"},
-            {id:"sites", icon:"📍", label:"Add Site"},
-            {id:"scan", icon:"🔍", label:"IP Scan"},
-            {id:"ping", icon:"📡", label:"Ping & Trace"},
+            {id:"ipv4", icon:"peering", label:"Add Network"},
+            {id:"customers", label:"Add Customer"},
+            {id:"sites", label:"Add Site"},
+            {id:"scan", label:"IP Scan"},
+            {id:"ping", label:"Ping & Trace"},
           ].map(a => (
             <button key={a.id} onClick={()=>onNavigate?.(a.id)}
               className="btn btn-sm"
