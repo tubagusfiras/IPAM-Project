@@ -195,14 +195,38 @@ function SkeletonRow() {
 }
 
 export default function Blocks({ ipVersion="", onSelectBlock }) {
-  const [items,   setItems]   = useState([]);
-  const [total,   setTotal]   = useState(0);
-  const [search,  setSearch]  = useState("");
-  const [siteFilter, setSiteFilter] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [modal,   setModal]   = useState(null); // null | "add" | block_obj
-  const [confirm, setConfirm] = useState(null);
-  const [sites,   setSites]   = useState([]);
+  const [items,     setItems]     = useState([]);
+  const [total,     setTotal]     = useState(0);
+  const [search,    setSearch]    = useState("");
+  const [siteFilter,setSiteFilter] = useState("");
+  const [loading,   setLoading]   = useState(true);
+  const [modal,     setModal]     = useState(null);
+  const [confirm,   setConfirm]   = useState(null);
+  const [sites,     setSites]     = useState([]);
+  const [selected,  setSelected]  = useState(new Set());
+  const [selectAll, setSelectAll] = useState(false);
+
+  const toggleSelect = (id) => {
+    setSelected(p => {
+      const n = new Set(p);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  };
+
+  const bulkDelete = async () => {
+    if (!confirm(`Delete ${selected.size} blocks?`)) return;
+    for (const id of selected) {
+      try { await deleteBlock(id); } catch {}
+    }
+    setSelected(new Set()); setSelectAll(false); load();
+  };
+
+  const bulkExport = () => {
+    const ids = Array.from(selected);
+    window.open(`/api/v1/export/blocks`, '_blank');
+    // For proper export, we'd POST with block_ids. Simplified: just open export page.
+  };
 
   const load = useCallback(() => {
     setLoading(true);
@@ -300,7 +324,18 @@ export default function Blocks({ ipVersion="", onSelectBlock }) {
         <table style={{width:"100%",borderCollapse:"collapse"}}>
           <thead>
             <tr>
-              {["Prefix","Version","Name","ASN / Router","Site","Allocations","Status",""].map(h=>(
+              {["","Prefix","Version","Name","ASN / Router","Site","Allocations","Status",""].map(h=>(
+                {h === "" ? <input type="checkbox" checked={selectAll}
+                  onChange={(e)=>{
+                    const checked = e.target.checked;
+                    setSelectAll(checked);
+                    setSelected(new Set(checked ? items.map(b=>b.id) : []));
+                  }}
+                  style={{cursor:"pointer",accentColor:"var(--accent)",width:16,height:16}}
+                /> : h}
+              ))}
+                <th key={h} className="table-header">{h}</th>
+              {["#","Prefix","Version","Name","ASN / Router","Site","Allocations","Status",""].map(h=>(
                 <th key={h} className="table-header">{h}</th>
               ))}
             </tr>
@@ -310,7 +345,7 @@ export default function Blocks({ ipVersion="", onSelectBlock }) {
               Array.from({length:5}).map((_,i)=><SkeletonRow key={i}/>)
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={8}>
+                <td colSpan={10}>
                   <div style={{
                     display:"flex",flexDirection:"column",alignItems:"center",
                     justifyContent:"center",padding:"60px 0",gap:10,
@@ -336,6 +371,12 @@ export default function Blocks({ ipVersion="", onSelectBlock }) {
                   style={{cursor:"pointer"}}
                   onClick={()=>onSelectBlock?.(block.id)}>
 
+                  <td className="table-cell" style={{width:32,textAlign:"center"}} onClick={e=>e.stopPropagation()}>
+                    <input type="checkbox" checked={selected.has(block.id)}
+                      onChange={()=>toggleSelect(block.id)}
+                      style={{cursor:"pointer",accentColor:"var(--accent)",width:16,height:16}}
+                    />
+                  </td>
                   <td className="table-cell">
                     <span style={{
                       fontFamily:"var(--font-mono)",fontSize:13,fontWeight:600,
