@@ -87,12 +87,13 @@ function Sidebar({ active, onNavigate, collapsed, onToggle, user }) {
         borderBottom:"1px solid var(--border-subtle)",
         flexShrink:0,
       }}>
-        <div style={{
+        <div onClick={(e)=>{e.stopPropagation(); onNavigate("dashboard");}} style={{
           width:28, height:28, borderRadius:7, flexShrink:0,
-          background:"var(--accent)", display:"flex",
+          background:"transparent", display:"flex",
           alignItems:"center", justifyContent:"center",
+          cursor:"pointer", overflow:"hidden",
         }}>
-          <span style={{color:"#fff",fontWeight:700,fontSize:12}}>IP</span>
+          <img src="/sdi_logo.png" alt="SDI" style={{width:28,height:28,objectFit:"contain"}}/>
         </div>
         {!collapsed && (
           <div style={{overflow:"hidden"}}>

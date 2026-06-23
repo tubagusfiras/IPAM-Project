@@ -3,7 +3,8 @@ import { getDashboardStats } from "../api.js";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 const STATUS_HEX = { active:"#22c55e", available:"#38e8c6", reserved:"#a855f7", deprecated:"#f59e0b" };
-const ICONS = { networks:"🌐", allocations:"📡", customers:"👥", vlans:"🔗", sites:"📍" };
+import { Icon } from "../components/ui.jsx";
+const ICONS = {};
 
 function CountUp({ to, suffix="" }) {
   const [n, setN] = useState(0);

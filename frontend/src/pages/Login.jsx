@@ -40,14 +40,11 @@ export default function Login({ onLoginSuccess, dark }) {
       <div style={{width:"100%",maxWidth:380,padding:20}}>
 
         {/* Logo / Brand */}
-        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:32,justifyContent:"center"}}>
-          <div style={{
-            width:40,height:40,borderRadius:10,background:"var(--accent)",
-            display:"flex",alignItems:"center",justifyContent:"center",
-            fontSize:16,fontWeight:700,color:"#fff",
-          }}>IP</div>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:32,justifyContent:"center"}}>
+          <img src="/sdi_logo.png" alt="SDI"
+            style={{width:42,height:42,borderRadius:10,objectFit:"contain"}}/>
           <div>
-            <div style={{fontSize:17,fontWeight:700,color:"var(--text)",lineHeight:1.1}}>IPAM</div>
+            <div style={{fontSize:17,fontWeight:700,color:"var(--text)",lineHeight:1.1}}>IPAM SDI</div>
             <div style={{fontSize:11,color:"var(--text-dim)"}}>IP Address Management</div>
           </div>
         </div>
