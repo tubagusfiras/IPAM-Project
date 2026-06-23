@@ -1,7 +1,7 @@
 # CSV IMPORT WORKFLOW - Implementation Guide
 
 **Created:** 2026-06-22  
-**Status:** 📋 Design Document (Not Yet Implemented)  
+**Status:** ⚠️ Parser implemented & tested — endpoint not yet built  
 **Purpose:** How to implement CSV import despite non-uniform formats
 
 ---
@@ -316,5 +316,6 @@ function CSVImport() {
 ---
 
 **Status:** Ready for implementation  
-**Estimated effort:** 2-3 days (backend + frontend + testing)  
+**Parser test results:** 3/3 IPv4 samples parsed successfully (123/123 valid prefixes)
+**Estimated effort:** 1 day (backend endpoint only) — parser already done  
 **Priority:** Medium (user explicitly requested this workflow)

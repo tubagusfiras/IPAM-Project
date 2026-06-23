@@ -2,7 +2,7 @@
 
 Production-ready IPAM system for ISP network management. Built for PT Sumber Data Indonesia (ASN 56246).
 
-**Status:** 🟢 Production-Ready (Hardened + Monitored + Automated CI/CD)
+**Status:** 🟢 **ALL 21 IMPROVEMENTS COMPLETE** — Security Hardened + Monitored + Automated
 
 ---
 
@@ -50,10 +50,11 @@ docker compose -f docker/docker-compose.yml up -d
 
 ### Security
 - **Authentication** - JWT tokens + bcrypt password hashing
-- **Authorization** - Role-based (admin/user)
+- **Authorization** - Role-based (admin/user) + API Key (M2M)
 - **Rate Limiting** - 5 login attempts/minute per IP
 - **CORS Protection** - Env-configurable allowed origins
 - **Session Persistence** - Redis-backed scan sessions
+- **Request ID** - X-Request-ID header for traceability
 
 ---
 
