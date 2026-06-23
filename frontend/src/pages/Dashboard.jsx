@@ -4,7 +4,17 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveCo
 
 const STATUS_HEX = { active:"#22c55e", available:"#38e8c6", reserved:"#a855f7", deprecated:"#f59e0b" };
 import { Icon } from "../components/ui.jsx";
-const ICONS = {};
+const ICON_MAP = {
+  networks: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" style="width:16px;height:16px"><circle cx="12" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/><path d="M12 7v4M12 11l-5.5 6M12 11l5.5 6"/></svg>',
+  allocations: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" style="width:16px;height:16px"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
+  customers:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" style="width:16px;height:16px"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>',
+  vlans:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" style="width:16px;height:16px"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v6c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 11v6c0 1.66 4.03 3 9 3s9-1.34 9-3v-6"/></svg>',
+  sites:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" style="width:16px;height:16px"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>',
+};
+
+function SvgIcon({ svg, size=16 }) {
+  return <span style={{width:size,height:size,display:"inline-flex",flexShrink:0}} dangerouslySetInnerHTML={{__html:svg.replace('style="width:16px;height:16px"',`style="width:${size}px;height:${size}px"`)}}/>;
+}
 
 function CountUp({ to, suffix="" }) {
   const [n, setN] = useState(0);
@@ -41,7 +51,7 @@ export default function Dashboard({ onNavigate }) {
     check(); const iv = setInterval(check, 30000); return () => clearInterval(iv);
   }, []);
 
-  if (err) return <div className="card" style={{padding:20,color:"var(--danger)",fontSize:14,background:"var(--danger-surface)",border:"1px solid var(--danger-border)"}}>⛔ {err}</div>;
+  if (err) return <div className="card" style={{padding:20,color:"var(--danger)",fontSize:14,background:"var(--danger-surface)",border:"1px solid var(--danger-border)"}}><SvgIcon svg={ICON_MAP.warning} size={14}/> {err}</div>;
   if (!stats) return (
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:300,gap:16}}>
       <div style={{width:40,height:40,borderRadius:"50%",border:"3px solid var(--accent-dim)",borderTopColor:"var(--accent)",animation:"sp1n 0.8s linear infinite"}}/>
@@ -102,7 +112,7 @@ export default function Dashboard({ onNavigate }) {
             onClick={()=>onNavigate?.(c.k==="networks"?"ipv4":c.k==="allocations"?"ipv4":c.k==="customers"?"customers":c.k==="vlans"?"vlans":"sites")}>
             <div style={{padding:"14px 16px 10px",display:"flex",alignItems:"center",gap:10,borderBottom:"1px solid var(--border-subtle)"}}>
               <div style={{width:32,height:32,borderRadius:8,background:"var(--surface-3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>
-                {ICONS[c.k]}
+                <SvgIcon svg={ICON_MAP[c.k]}/>
               </div>
               <span style={{fontSize:11,fontWeight:500,color:"var(--text-muted)"}}>{c.label}</span>
             </div>
