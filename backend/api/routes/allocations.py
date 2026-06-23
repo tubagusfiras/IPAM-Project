@@ -1,3 +1,4 @@
+import base64, json
 from fastapi import APIRouter, HTTPException, Query, Depends
 from typing import Optional
 from models.schemas import AllocIn
@@ -58,6 +59,56 @@ async def list_allocations(
         WHERE {where}
     """, *params[:-2])
     return {"total": total, "items": [dict(r) for r in rows]}
+
+@router.get("/api/v1/allocations/cursor", summary="List allocations with cursor pagination", tags=["Allocations"])
+async def list_allocations_cursor(
+    cursor: Optional[str] = Query(None, description="Base64 cursor from previous response"),
+    limit: int = Query(100, ge=1, le=1000),
+    search: Optional[str]=Query(None),
+    block_id: Optional[str]=Query(None),
+    customer_id: Optional[str]=Query(None),
+    db=Depends(get_db)
+):
+    conditions, params = ["1=1"], []
+    if search:
+        params.append(f"%{search}%")
+        conditions.append(f"(a.prefix::text ILIKE ${len(params)} OR c.name ILIKE ${len(params)})")
+    if block_id:
+        params.append(block_id)
+        conditions.append(f"a.block_id = ${len(params)}::uuid")
+    if customer_id:
+        params.append(customer_id)
+        conditions.append(f"a.customer_id = ${len(params)}::uuid")
+
+    if cursor:
+        try:
+            dec = json.loads(base64.b64decode(cursor).decode())
+            params.append(dec["prefix"])
+            conditions.append(f"a.prefix::inet < ${len(params)}::inet")
+        except:
+            raise HTTPException(400, "Invalid cursor")
+
+    where = " AND ".join(conditions)
+    params.append(limit + 1)
+    rows = await db.fetch(f"""
+        SELECT a.id, a.prefix::text, a.ip_version, a.status, a.owner_type, a.description, a.notes,
+               a.created_at, a.updated_at,
+               b.prefix::text AS block_prefix, c.name AS customer_name, c.code AS customer_code
+        FROM allocations a
+        JOIN ip_blocks b ON a.block_id=b.id
+        LEFT JOIN customers c ON a.customer_id=c.id
+        WHERE {where}
+        ORDER BY a.prefix::inet DESC
+        LIMIT ${len(params)}
+    """, *params)
+
+    has_more = len(rows) > limit
+    if has_more: rows = rows[:-1]
+    items = [dict(r) for r in rows]
+    next_cursor = None
+    if has_more and items:
+        next_cursor = base64.b64encode(json.dumps({"prefix": str(items[-1]["prefix"])}).encode()).decode()
+    return {"items": items, "next_cursor": next_cursor, "has_more": has_more}
 
 @router.post("/api/v1/allocations", status_code=201)
 async def create_allocation(body: AllocIn, db=Depends(get_db)):
