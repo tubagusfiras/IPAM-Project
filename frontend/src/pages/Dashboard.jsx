@@ -3,7 +3,7 @@ import { getDashboardStats } from "../api.js";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 // ── Tokens (CSS variables = auto dark/light) ────────────
-const A = "var(--accent)";
+const ACCENT = "var(--accent)";
 const BG = "var(--bg)";
 const CARD = "var(--surface-1)";
 const BORDER = "var(--border-medium)";
@@ -46,7 +46,7 @@ function MiniSpark({ used, total }) {
 function StatCard({ icon, label, value, sub, pct, color }) {
   return (
     <div style={{
-      background:CARD_BG,border:`1px solid ${BORDER}`,borderRadius:10,padding:"14px 16px",
+      background:CARD,border:`1px solid ${BORDER}`,borderRadius:10,padding:"14px 16px",
       transition:"all 0.15s",cursor:"pointer",
     }}
       onMouseEnter={e=>{e.currentTarget.style.borderColor=color;e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow=`0 4px 20px rgba(0,0,0,0.3)`}}
@@ -89,7 +89,7 @@ export default function Dashboard({ onNavigate }) {
   if (err) return <div style={{padding:20,color:DANGER,background:"var(--danger-surface)",border:"1px solid #7f1d1d",borderRadius:10,fontSize:14}}>Cannot reach API: {err}</div>;
   if (!stats) return (
     <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:300}}>
-      <div style={{width:32,height:32,borderRadius:"50%",border:"2px solid transparent",borderTopColor:A,animation:"sp1n 0.8s linear infinite"}}/>
+      <div style={{width:32,height:32,borderRadius:"50%",border:"2px solid transparent",borderTopColor:ACCENT,animation:"sp1n 0.8s linear infinite"}}/>
       <style>{`@keyframes sp1n{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
@@ -111,13 +111,13 @@ export default function Dashboard({ onNavigate }) {
         </div>
         <div style={{display:"flex",gap:8}}>
           {health?.map(h => (
-            <div key={h.k} style={{display:"flex",alignItems:"center",gap:5,padding:"4px 10px",background:CARD_BG,border:`1px solid ${BORDER}`,borderRadius:6,fontSize:"11px"}}>
+            <div key={h.k} style={{display:"flex",alignItems:"center",gap:5,padding:"4px 10px",background:CARD,border:`1px solid ${BORDER}`,borderRadius:6,fontSize:"11px"}}>
               <span style={{width:6,height:6,borderRadius:"50%",background:h.ok?SUCCESS:DANGER,animation:h.ok?"pulse 2s infinite":"none",flexShrink:0}}/>
               <span style={{fontWeight:500,color:h.ok?SUCCESS:DANGER}}>{h.l}</span>
               <span style={{color:MUTED}}>{h.d}</span>
             </div>
           ))}
-          <a href="http://103.10.120.11:3100" target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",gap:4,padding:"4px 10px",background:CARD_BG,border:`1px solid ${BORDER}`,borderRadius:6,fontSize:"11px",color:A,textDecoration:"none"}}>Grafana ↗</a>
+          <a href="http://103.10.120.11:3100" target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",gap:4,padding:"4px 10px",background:CARD,border:`1px solid ${BORDER}`,borderRadius:6,fontSize:"11px",color:ACCENT,textDecoration:"none"}}>Grafana ↗</a>
         </div>
       </div>
 
@@ -126,7 +126,7 @@ export default function Dashboard({ onNavigate }) {
       {/* ── UTILIZATION GAUGE + STATS ── */}
       <div style={{display:"grid",gridTemplateColumns:"200px 1fr",gap:16}}>
         {/* Gauge */}
-        <div style={{background:CARD_BG,border:`1px solid ${BORDER}`,borderRadius:10,padding:"16px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+        <div style={{background:CARD,border:`1px solid ${BORDER}`,borderRadius:10,padding:"16px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
           <div style={{position:"relative",width:130,height:130}}>
             <svg width="130" height="130" viewBox="0 0 130 130">
               <circle cx="65" cy="65" r="52" fill="none" stroke={BORDER} strokeWidth="8"/>
@@ -161,7 +161,7 @@ export default function Dashboard({ onNavigate }) {
       {/* ── CHARTS ROW ── */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 2fr",gap:16}}>
         {/* Pie */}
-        <div style={{background:CARD_BG,border:`1px solid ${BORDER}`,borderRadius:10,padding:"16px"}}>
+        <div style={{background:CARD,border:`1px solid ${BORDER}`,borderRadius:10,padding:"16px"}}>
           <div style={{fontSize:"12px",fontWeight:600,color:TEXT,marginBottom:12}}>Allocation Status</div>
           {pieData.length > 0 ? (
             <div style={{display:"flex",flexDirection:"column",alignItems:"center"}}>
@@ -191,17 +191,17 @@ export default function Dashboard({ onNavigate }) {
         </div>
 
         {/* Bar Chart */}
-        <div style={{background:CARD_BG,border:`1px solid ${BORDER}`,borderRadius:10,padding:"16px"}}>
+        <div style={{background:CARD,border:`1px solid ${BORDER}`,borderRadius:10,padding:"16px"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
             <div style={{fontSize:"12px",fontWeight:600,color:TEXT}}>Network Utilization</div>
-            <button onClick={()=>onNavigate?.("ipv4")} style={{fontSize:"11px",color:A,background:"none",border:"none",cursor:"pointer",fontWeight:500}}>View all →</button>
+            <button onClick={()=>onNavigate?.("ipv4")} style={{fontSize:"11px",color:ACCENT,background:"none",border:"none",cursor:"pointer",fontWeight:500}}>View all →</button>
           </div>
           {barData.length > 0 ? (
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={barData} barGap={3} barCategoryGap="20%">
                 <XAxis dataKey="name" tick={{fontSize:9,fill:MUTED}} axisLine={false} tickLine={false} interval={0}/>
                 <YAxis tick={{fontSize:9,fill:DIM}} axisLine={false} tickLine={false}/>
-                <Tooltip contentStyle={{background:CARD_BG,border:`1px solid ${BORDER}`,borderRadius:6,fontSize:12}}/>
+                <Tooltip contentStyle={{background:CARD,border:`1px solid ${BORDER}`,borderRadius:6,fontSize:12}}/>
                 <Bar dataKey="total" name="Total" fill={BORDER} radius={[3,3,0,0]}/>
                 <Bar dataKey="active" name="Active" fill={A} radius={[3,3,0,0]}/>
               </BarChart>
@@ -215,7 +215,7 @@ export default function Dashboard({ onNavigate }) {
       {/* ── BOTTOM ROW ── */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1.5fr",gap:16}}>
         {/* Breakdown */}
-        <div style={{background:CARD_BG,border:`1px solid ${BORDER}`,borderRadius:10,padding:"16px"}}>
+        <div style={{background:CARD,border:`1px solid ${BORDER}`,borderRadius:10,padding:"16px"}}>
           <div style={{fontSize:"12px",fontWeight:600,color:TEXT,marginBottom:12}}>Allocation Breakdown</div>
           {Object.entries(alloc_by_status||{}).map(([k,v])=>{
             const pct = totalAlloc ? Math.round(v/totalAlloc*100) : 0;
@@ -234,10 +234,10 @@ export default function Dashboard({ onNavigate }) {
         </div>
 
         {/* Recent Networks */}
-        <div style={{background:CARD_BG,border:`1px solid ${BORDER}`,borderRadius:10,overflow:"hidden"}}>
+        <div style={{background:CARD,border:`1px solid ${BORDER}`,borderRadius:10,overflow:"hidden"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",borderBottom:`1px solid ${BORDER}`}}>
             <div style={{fontSize:"12px",fontWeight:600,color:TEXT}}>Recent Networks</div>
-            <button onClick={()=>onNavigate?.("ipv4")} style={{fontSize:"11px",color:A,background:"none",border:"none",cursor:"pointer",fontWeight:500}}>View all →</button>
+            <button onClick={()=>onNavigate?.("ipv4")} style={{fontSize:"11px",color:ACCENT,background:"none",border:"none",cursor:"pointer",fontWeight:500}}>View all →</button>
           </div>
           {(recent_blocks||[]).length > 0 ? (
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:"11px"}}>
@@ -290,8 +290,8 @@ export default function Dashboard({ onNavigate }) {
           { id:"ping", label:"Ping & Trace" },
         ].map(a => (
           <button key={a.id} onClick={()=>onNavigate?.(a.id)}
-            style={{padding:"6px 14px",borderRadius:6,border:`1px solid ${BORDER}`,background:CARD_BG,color:MUTED,fontSize:"11px",fontWeight:500,cursor:"pointer",transition:"all 0.12s"}}
-            onMouseEnter={e=>{e.currentTarget.style.borderColor=A;e.currentTarget.style.color=A}}
+            style={{padding:"6px 14px",borderRadius:6,border:`1px solid ${BORDER}`,background:CARD,color:MUTED,fontSize:"11px",fontWeight:500,cursor:"pointer",transition:"all 0.12s"}}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor=ACCENT;e.currentTarget.style.color=ACCENT}}
             onMouseLeave={e=>{e.currentTarget.style.borderColor=BORDER;e.currentTarget.style.color=MUTED}}>
             + {a.label}
           </button>
