@@ -181,11 +181,45 @@ function Sidebar({ active, onNavigate, collapsed, onToggle, user }) {
   );
 }
 
-function Header({ title, subtitle, onBack, dark, onToggleDark, collapsed, user, onLogout }) {
+function Header({ title, subtitle, onBack, dark, onToggleDark, collapsed, user, onLogout, onNavigate }) {
   const [search, setSearch] = useState("");
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [searchResults, setSearchResults] = useState(null);
+  const [searching, setSearching] = useState(false);
   const initials = (user?.username || "??").slice(0,2).toUpperCase();
   const roleLabel = user?.role === "admin" ? "Administrator" : "User";
+
+  // Debounced search
+  useEffect(() => {
+    if (search.length < 2) { setSearchResults(null); return; }
+    const timer = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const token = getToken();
+        const res = await fetch(`/api/v1/search?q=${encodeURIComponent(search)}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (res.ok) setSearchResults(await res.json());
+      } catch {} finally { setSearching(false); }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Close on outside click
+  useEffect(() => {
+    const close = () => { setSearchResults(null); setSearching(false); };
+    window.addEventListener("click", close);
+    return () => window.removeEventListener("click", close);
+  }, []);
+
+  const handleSelect = (type, id) => {
+    setSearch(""); setSearchResults(null);
+    if (type === "block") { window.location.hash = "block-detail/" + id; }
+    else if (type === "customer") { /* navigate to customer detail */ }
+  };
+
+  const CAT_COLORS = { blocks:"#3b82f6", allocations:"#22c55e", customers:"#f97316" };
+
   return (
     <header style={{
       position:"fixed", top:0, right:0, zIndex:20,
@@ -213,17 +247,60 @@ function Header({ title, subtitle, onBack, dark, onToggleDark, collapsed, user, 
         {subtitle && <div style={{fontSize:11,color:"var(--text-muted)"}}>{subtitle}</div>}
       </div>
 
-      {/* Search */}
-      <div style={{position:"relative",display:"flex",alignItems:"center"}}>
-        <span style={{position:"absolute",left:10,color:"var(--text-dim)",pointerEvents:"none"}}>
-          <Icon id="search" size={14}/>
-        </span>
-        <input
-          value={search} onChange={e=>setSearch(e.target.value)}
-          placeholder="Search IP, Network, Customer..."
-          className="input"
-          style={{paddingLeft:32,width:260,height:34,fontSize:13}}
-        />
+      {/* Search with Autocomplete */}
+      <div style={{position:"relative"}} onClick={e=>e.stopPropagation()}>
+        <div style={{position:"relative",display:"flex",alignItems:"center"}}>
+          <span style={{position:"absolute",left:10,color:"var(--text-dim)",pointerEvents:"none",zIndex:1}}>
+            {searching ? <span style={{fontSize:12}}>⟳</span> : <Icon id="search" size={14}/>}
+          </span>
+          <input value={search} onChange={e=>setSearch(e.target.value)}
+            placeholder="Search IP, Network, Customer..."
+            className="input"
+            style={{paddingLeft:32,width:280,height:34,fontSize:13}}
+          />
+          {search && (
+            <button onClick={()=>{setSearch("");setSearchResults(null);}}
+              style={{position:"absolute",right:8,background:"none",border:"none",color:"var(--text-dim)",cursor:"pointer",fontSize:14,padding:"2px 4px",zIndex:1}}>✕</button>
+          )}
+        </div>
+
+        {/* Dropdown Results */}
+        {searchResults && (searchResults.blocks?.length||searchResults.allocations?.length||searchResults.customers?.length) && (
+          <div style={{
+            position:"absolute",top:"calc(100% + 6px)",left:0,right:0,zIndex:200,
+            background:"var(--modal-bg)",border:"1px solid var(--modal-border)",
+            borderRadius:"var(--radius)",boxShadow:"var(--shadow-lg)",
+            maxHeight:360,overflowY:"auto",fontSize:13,
+          }}>
+            {Object.entries(searchResults).map(([cat, items]) =>
+              items?.length > 0 && (
+                <div key={cat}>
+                  <div style={{padding:"6px 10px",fontSize:9,fontWeight:700,textTransform:"uppercase",
+                    letterSpacing:"0.08em",color:CAT_COLORS[cat]||"var(--text-dim)",
+                    background:"var(--surface-2,transparent)",borderBottom:"1px solid var(--border-subtle)"}}>
+                    {cat}
+                  </div>
+                  {items.slice(0,5).map((item,i) => (
+                    <div key={i} onClick={()=>handleSelect(cat,item.id)}
+                      style={{padding:"7px 10px",cursor:"pointer",display:"flex",alignItems:"center",gap:8,
+                        borderBottom:i<items.slice(0,5).length-1?"1px solid var(--border-subtle)":"none",
+                        transition:"background 0.1s"}}
+                      onMouseEnter={e=>e.currentTarget.style.background="var(--surface-3)"}
+                      onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                      <div style={{width:6,height:6,borderRadius:"50%",background:CAT_COLORS[cat]||"var(--text-dim)",flexShrink:0}}/>
+                      <div>
+                        <div style={{fontWeight:500,color:"var(--text)",fontFamily:cat==="blocks"||cat==="allocations"?"monospace":"inherit"}}>
+                          {item.label || item.name}
+                        </div>
+                        <div style={{fontSize:10,color:"var(--text-dim)",marginTop:1}}>{cat==="customers"?item.code||"":item.ip_version||""}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
+          </div>
+        )}
       </div>
 
       {/* Dark mode */}
@@ -449,6 +526,7 @@ export default function App() {
           collapsed={collapsed}
           user={user}
           onLogout={handleLogout}
+          onNavigate={navigate}
         />
         <main style={{
           paddingTop:"var(--topbar-h)",
