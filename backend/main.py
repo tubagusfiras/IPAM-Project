@@ -148,11 +148,11 @@ app.include_router(allocations_router)
 # ------------------------------------------------------------------
 # HEALTH & DASHBOARD
 # ------------------------------------------------------------------
-@app.get("/health")
+@app.get("/health", summary="Simple health check", tags=["Health"])
 async def health():
     return {"status": "ok"}
 
-@app.get("/api/v1/health/detailed")
+@app.get("/api/v1/health/detailed", summary="Detailed health — DB + Redis status", tags=["Health"])
 async def health_detailed():
     h = {"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat(), "services": {}}
     try:
@@ -172,11 +172,11 @@ async def health_detailed():
     h["total_count"] = len(h["services"])
     return h
 
-@app.get("/metrics")
+@app.get("/metrics", summary="Prometheus metrics endpoint", tags=["Monitoring"])
 async def metrics():
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
-@app.get("/api/v1/dashboard/stats")
+@app.get("/api/v1/dashboard/stats", summary="Dashboard stats — counts + utilization", tags=["Dashboard"])
 async def dashboard_stats(db=Depends(get_db)):
     stats = {}
     stats["total_blocks"]      = await db.fetchval("SELECT COUNT(*) FROM ip_blocks")
@@ -721,7 +721,7 @@ ALL_BLOCKS_QUERY = """
     GROUP BY b.id,s.name ORDER BY b.prefix::inet
 """
 
-@app.get("/api/v1/export/block/{block_id}")
+@app.get("/api/v1/export/block/{block_id}", summary="Export block to Excel", tags=["Export"])
 async def export_block(block_id: str, db=Depends(get_db)):
     row = await db.fetchrow(BLOCK_QUERY, block_id)
     if not row: raise HTTPException(404, "Block not found")
@@ -741,7 +741,7 @@ async def export_block(block_id: str, db=Depends(get_db)):
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f"attachment; filename={fname}"})
 
-@app.post("/api/v1/export/blocks")
+@app.post("/api/v1/export/blocks", summary="Export multiple blocks to Excel", tags=["Export"])
 async def export_blocks(body: dict, db=Depends(get_db)):
     block_ids = body.get("block_ids", [])
     wb = openpyxl.Workbook()
@@ -789,7 +789,7 @@ async def export_blocks(body: dict, db=Depends(get_db)):
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition":"attachment; filename=IPAM_Export.xlsx"})
 
-@app.get("/api/v1/export/summary")
+@app.get("/api/v1/export/summary", summary="Export all blocks summary to Excel", tags=["Export"])
 async def export_summary(db=Depends(get_db)):
     return await export_blocks({"block_ids": []}, db)
 
@@ -992,7 +992,7 @@ def _build_multi_pdf_html(blocks_allocs: list, dark: bool = False) -> str:
 # PDF EXPORT ENDPOINTS
 # ------------------------------------------------------------------
 
-@app.get("/api/v1/export/block/{block_id}/pdf")
+@app.get("/api/v1/export/block/{block_id}/pdf", summary="Export block to PDF", tags=["Export"])
 async def export_block_pdf(block_id: str, theme: str = "dark", db=Depends(get_db)):
     row = await db.fetchrow(BLOCK_QUERY, block_id)
     if not row:
@@ -1012,7 +1012,7 @@ async def export_block_pdf(block_id: str, theme: str = "dark", db=Depends(get_db
     )
 
 
-@app.get("/api/v1/export/summary/pdf")
+@app.get("/api/v1/export/summary/pdf", summary="Export summary to PDF", tags=["Export"])
 async def export_summary_pdf(theme: str = "dark", db=Depends(get_db)):
     all_blocks = await db.fetch(ALL_BLOCKS_QUERY)
     all_list = [dict(b) for b in all_blocks]
@@ -1112,7 +1112,7 @@ async def _log_audit(db, action: str, entity_type: str, entity_id, entity_prefix
     except Exception as e:
         logger.error("Audit log error: {}", e)
 
-@app.post("/api/v1/scan/start")
+@app.post("/api/v1/scan/start", summary="Start IP scan for a block", tags=["IP Scan"])
 async def start_scan(body: dict, db=Depends(get_db)):
     """Start background scan for a block."""
     block_id = body.get("block_id")
@@ -1216,7 +1216,7 @@ async def start_scan(body: dict, db=Depends(get_db)):
     await _save_scan_to_redis(scan_id)
     return {"scan_id": scan_id, "status": "started", "total": total}
 
-@app.get("/api/v1/scan/status/{scan_id}")
+@app.get("/api/v1/scan/status/{scan_id}", summary="Get scan progress + results", tags=["IP Scan"])
 async def scan_status(scan_id: str):
     """Get current scan progress and results."""
     if scan_id not in _scan_sessions:
@@ -1284,7 +1284,7 @@ async def scan_status(scan_id: str):
         "results": results,
     }
 
-@app.post("/api/v1/scan/cancel/{scan_id}")
+@app.post("/api/v1/scan/cancel/{scan_id}", summary="Cancel ongoing scan", tags=["IP Scan"])
 async def cancel_scan(scan_id: str):
     """Cancel ongoing scan."""
     if scan_id not in _scan_sessions:
@@ -1293,7 +1293,7 @@ async def cancel_scan(scan_id: str):
     await _save_scan_to_redis(scan_id)
     return {"status": "cancelled"}
 
-@app.delete("/api/v1/scan/clear/{scan_id}")
+@app.delete("/api/v1/scan/clear/{scan_id}", summary="Clear scan session", tags=["IP Scan"])
 async def clear_scan(scan_id: str):
     """Clear scan session."""
     if scan_id in _scan_sessions:
@@ -1301,7 +1301,7 @@ async def clear_scan(scan_id: str):
     await _delete_scan_from_redis(scan_id)
     return {"status": "cleared"}
 
-@app.post("/api/v1/scan/action")
+@app.post("/api/v1/scan/action", summary="Take action on scan result", tags=["IP Scan"])
 async def scan_action(body: dict, db=Depends(get_db)):
     """Perform action on scan result — mark or delete allocation."""
     action = body.get("action")  # "delete" | "mark_deprecated"
@@ -1334,7 +1334,7 @@ async def scan_action(body: dict, db=Depends(get_db)):
     else:
         raise HTTPException(400, "Invalid action")
 
-@app.get("/api/v1/audit-logs")
+@app.get("/api/v1/audit-logs", summary="List audit logs", tags=["Audit"])
 async def list_audit_logs(
     entity_type: Optional[str] = Query(None),
     action: Optional[str] = Query(None),
@@ -1393,7 +1393,7 @@ async def _lookup_ipam(target: str, db) -> dict:
     except Exception:
         return None
 
-@app.get("/api/v1/ping-trace/lookup")
+@app.get("/api/v1/ping-trace/lookup", summary="Lookup target in IPAM", tags=["Ping & Trace"])
 async def lookup_target(target: str = Query(...), db=Depends(get_db)):
     """Cek apakah target ada di IPAM sebelum ping/trace."""
     if not _validate_target(target):
@@ -1425,7 +1425,7 @@ async def _stream_command(cmd: list):
             try: proc.kill()
             except: pass
 
-@app.get("/api/v1/ping-trace/ping")
+@app.get("/api/v1/ping-trace/ping", summary="Ping target (SSE stream)", tags=["Ping & Trace"])
 async def stream_ping(target: str = Query(...), count: int = Query(4, ge=1, le=20)):
     if not _validate_target(target):
         raise HTTPException(400, "Invalid target format")
@@ -1433,7 +1433,7 @@ async def stream_ping(target: str = Query(...), count: int = Query(4, ge=1, le=2
     return StreamingResponse(_stream_command(cmd), media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
-@app.get("/api/v1/ping-trace/traceroute")
+@app.get("/api/v1/ping-trace/traceroute", summary="Traceroute target (SSE stream)", tags=["Ping & Trace"])
 async def stream_traceroute(target: str = Query(...), max_hops: int = Query(30, ge=1, le=64)):
     if not _validate_target(target):
         raise HTTPException(400, "Invalid target format")
@@ -1465,7 +1465,7 @@ class UserUpdateIn(BaseModel):
     role: Optional[str] = None
     is_active: Optional[bool] = None
 
-@app.post("/api/v1/auth/login")
+@app.post("/api/v1/auth/login", summary="Login with username/password", tags=["Authentication"])
 @limiter.limit("5/minute")  # Rate limit: 5 login attempts per minute per IP
 async def login(request: Request, body: LoginIn, db=Depends(get_db)):
     user = await db.fetchrow(
@@ -1488,14 +1488,14 @@ async def login(request: Request, body: LoginIn, db=Depends(get_db)):
         "expires_in_hours": JWT_EXPIRE_HOURS,
     }
 
-@app.get("/api/v1/auth/me")
+@app.get("/api/v1/auth/me", summary="Current user info", tags=["Authentication"])
 async def get_me(current_user: dict = Depends(get_current_user), db=Depends(get_db)):
     user = await db.fetchrow("SELECT id, username, email, role, last_login_at FROM users WHERE id=$1::uuid", current_user["sub"])
     if not user:
         raise HTTPException(404, "User not found")
     return dict(user)
 
-@app.post("/api/v1/auth/change-password")
+@app.post("/api/v1/auth/change-password", summary="Change password", tags=["Authentication"])
 async def change_password(body: ChangePasswordIn, current_user: dict = Depends(get_current_user), db=Depends(get_db)):
     user = await db.fetchrow("SELECT * FROM users WHERE id=$1::uuid", current_user["sub"])
     if not user:
@@ -1516,12 +1516,12 @@ def require_admin(current_user: dict = Depends(get_current_user)):
         raise HTTPException(403, "Admin access required")
     return current_user
 
-@app.get("/api/v1/users")
+@app.get("/api/v1/users", summary="List all users (admin)", tags=["User Management"])
 async def list_users(current_user: dict = Depends(require_admin), db=Depends(get_db)):
     rows = await db.fetch("SELECT id, username, email, role, is_active, last_login_at, created_at FROM users ORDER BY created_at")
     return {"items": [dict(r) for r in rows]}
 
-@app.post("/api/v1/users", status_code=201)
+@app.post("/api/v1/users", status_code=201, summary="Create user (admin)", tags=["User Management"])
 async def create_user(body: UserIn, current_user: dict = Depends(require_admin), db=Depends(get_db)):
     existing = await db.fetchrow("SELECT id FROM users WHERE username=$1 OR email=$2", body.username, body.email)
     if existing:
@@ -1534,7 +1534,7 @@ async def create_user(body: UserIn, current_user: dict = Depends(require_admin),
     await _log_audit(db, "create", "user", row["id"], body.username, description=f"User created: {body.username}", changed_by=current_user["username"])
     return dict(row)
 
-@app.put("/api/v1/users/{user_id}")
+@app.put("/api/v1/users/{user_id}", summary="Update user (admin)", tags=["User Management"])
 async def update_user(user_id: str, body: UserUpdateIn, current_user: dict = Depends(require_admin), db=Depends(get_db)):
     existing = await db.fetchrow("SELECT * FROM users WHERE id=$1::uuid", user_id)
     if not existing:
@@ -1549,7 +1549,7 @@ async def update_user(user_id: str, body: UserUpdateIn, current_user: dict = Dep
     await _log_audit(db, "update", "user", user_id, existing["username"], description=f"User updated: {existing['username']}", changed_by=current_user["username"])
     return dict(row)
 
-@app.delete("/api/v1/users/{user_id}")
+@app.delete("/api/v1/users/{user_id}", summary="Delete user (admin)", tags=["User Management"])
 async def delete_user(user_id: str, current_user: dict = Depends(require_admin), db=Depends(get_db)):
     if str(user_id) == current_user["sub"]:
         raise HTTPException(400, "Cannot delete your own account")
@@ -1560,7 +1560,7 @@ async def delete_user(user_id: str, current_user: dict = Depends(require_admin),
     await _log_audit(db, "delete", "user", user_id, existing["username"], description=f"User deleted: {existing['username']}", changed_by=current_user["username"])
     return {"status": "deleted"}
 
-@app.post("/api/v1/users/{user_id}/reset-password")
+@app.post("/api/v1/users/{user_id}/reset-password", summary="Reset user password (admin)", tags=["User Management"])
 async def reset_user_password(user_id: str, body: ChangePasswordIn, current_user: dict = Depends(require_admin), db=Depends(get_db)):
     existing = await db.fetchrow("SELECT username FROM users WHERE id=$1::uuid", user_id)
     if not existing:
@@ -1574,7 +1574,7 @@ async def reset_user_password(user_id: str, body: ChangePasswordIn, current_user
 # ------------------------------------------------------------------
 # SEARCH
 # ------------------------------------------------------------------
-@app.get("/api/v1/search")
+@app.get("/api/v1/search", summary="Global search", tags=["Search"])
 async def global_search(q: str = Query(..., min_length=2), db=Depends(get_db)):
     results = {}
     results["blocks"]      = [dict(r) for r in await db.fetch("SELECT id, prefix::text AS label, name, ip_version FROM ip_blocks WHERE prefix::text ILIKE $1 OR name ILIKE $1 LIMIT 5", f"%{q}%")]
