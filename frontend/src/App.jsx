@@ -212,11 +212,12 @@ function Header({ title, subtitle, onBack, dark, onToggleDark, collapsed, user, 
     return () => window.removeEventListener("click", close);
   }, []);
 
-  const handleSelect = (type, id) => {
+  const handleSelect = (type, item) => {
     setSearch(""); setSearchResults(null);
-    if (type === "blocks" && id) { window.location.hash = "block-detail/" + id; window.dispatchEvent(new Event("hashchange")); }
-    else if (type === "customers") { onNavigate?.("customers"); }
-    else if (type === "allocations") { onNavigate?.("ipv4"); }
+    const go = onNavigate;
+    if (type === "blocks" && item?.id) go("block-detail", { id: item.id, prefix: item.label || item.name });
+    else if (type === "customers") go("customers");
+    else if (type === "allocations") go("ipv4");
   };
 
   const CAT_COLORS = { blocks:"#3b82f6", allocations:"#22c55e", customers:"#f97316" };
@@ -282,7 +283,7 @@ function Header({ title, subtitle, onBack, dark, onToggleDark, collapsed, user, 
                     {cat}
                   </div>
                   {items.slice(0,5).map((item,i) => (
-                    <div key={i} onClick={()=>handleSelect(cat,item.id)}
+                    <div key={i} onClick={()=>handleSelect(cat,item)}
                       style={{padding:"7px 10px",cursor:"pointer",display:"flex",alignItems:"center",gap:8,
                         borderBottom:i<items.slice(0,5).length-1?"1px solid var(--border-subtle)":"none",
                         transition:"background 0.1s"}}

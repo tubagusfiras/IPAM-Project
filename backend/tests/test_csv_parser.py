@@ -3,15 +3,8 @@
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-# Import parser functions directly from main.py (temporary until refactored)
-import importlib.util
-spec = importlib.util.spec_from_file_location("main", os.path.join(os.path.dirname(__file__), "..", "main.py"))
-main = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(main)
-
-parse_ipv4_csv = main.parse_ipv4_csv
-parse_ipv6_csv = main.parse_ipv6_csv
-to_plen = main.to_plen
+# Import parser functions from services module
+from services.csv_parser import parse_ipv4_csv, parse_ipv6_csv, to_plen
 
 
 # ── SAMPLE DATA ────────────────────────────────────────────

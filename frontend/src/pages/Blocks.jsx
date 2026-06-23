@@ -325,18 +325,20 @@ export default function Blocks({ ipVersion="", onSelectBlock }) {
           <thead>
             <tr>
               {["","Prefix","Version","Name","ASN / Router","Site","Allocations","Status",""].map(h=>(
-                {h === "" ? <input type="checkbox" checked={selectAll}
-                  onChange={(e)=>{
-                    const checked = e.target.checked;
-                    setSelectAll(checked);
-                    setSelected(new Set(checked ? items.map(b=>b.id) : []));
-                  }}
-                  style={{cursor:"pointer",accentColor:"var(--accent)",width:16,height:16}}
-                /> : h}
-              ))}
-                <th key={h} className="table-header">{h}</th>
-              {["#","Prefix","Version","Name","ASN / Router","Site","Allocations","Status",""].map(h=>(
-                <th key={h} className="table-header">{h}</th>
+                h === "" ? (
+                  <th key="checkbox" className="table-header" style={{width:32,textAlign:"center"}}>
+                    <input type="checkbox" checked={selectAll}
+                      onChange={(e)=>{
+                        const checked = e.target.checked;
+                        setSelectAll(checked);
+                        setSelected(new Set(checked ? items.map(b=>b.id) : []));
+                      }}
+                      style={{cursor:"pointer",accentColor:"var(--accent)",width:16,height:16}}
+                    />
+                  </th>
+                ) : (
+                  <th key={h} className="table-header">{h}</th>
+                )
               ))}
             </tr>
           </thead>
