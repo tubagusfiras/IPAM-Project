@@ -3,6 +3,8 @@ import asyncio, subprocess, ipaddress, time, os, json, math, io, csv
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List
 
+import uuid
+
 import asyncpg
 from fastapi import FastAPI, HTTPException, Query, Depends, UploadFile, File, Request
 from fastapi.responses import StreamingResponse, JSONResponse, Response
@@ -104,6 +106,14 @@ async def auth_middleware(request: Request, call_next):
     except HTTPException as e:
         return JSONResponse(status_code=e.status_code, content={"detail": e.detail})
     return await call_next(request)
+
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    req_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())[:12]
+    request.state.request_id = req_id
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = req_id
+    return response
 
 @app.middleware("http")
 async def metrics_middleware(request: Request, call_next):
