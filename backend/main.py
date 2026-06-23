@@ -38,6 +38,7 @@ from core.config import DATABASE_URL, REDIS_URL, JWT_SECRET, JWT_ALGORITHM, JWT_
 # ── REDIS ────────────────────────────────────────────────────
 redis_client = aioredis.from_url(REDIS_URL, decode_responses=True)
 SCAN_TTL = 60 * 60 * 24  # 24 jam
+from core.cache import cache_get, cache_set, cache_del
 
 # ── SECURITY ─────────────────────────────────────────────────
 security = HTTPBearer(auto_error=False)
@@ -178,6 +179,8 @@ async def metrics():
 
 @app.get("/api/v1/dashboard/stats", summary="Dashboard stats — counts + utilization", tags=["Dashboard"])
 async def dashboard_stats(db=Depends(get_db)):
+    cached = await cache_get("dashboard:stats")
+    if cached: return cached
     stats = {}
     stats["total_blocks"]      = await db.fetchval("SELECT COUNT(*) FROM ip_blocks")
     stats["total_allocations"] = await db.fetchval("SELECT COUNT(*) FROM allocations")
@@ -194,42 +197,31 @@ async def dashboard_stats(db=Depends(get_db)):
             COUNT(*) FILTER (WHERE status='deprecated') AS deprecated
         FROM allocations
     """))
-    stats["recent_blocks"] = [dict(r) for r in await db.fetch("""
-        SELECT
-            b.prefix::text, b.name, b.ip_version, s.name AS site_name,
-            COUNT(a.id) AS total_allocations,
-            COUNT(a.id) FILTER (WHERE a.status = 'active') AS active_allocations,
-            CASE WHEN family(b.prefix) = 4 THEN
-                COALESCE(SUM(CASE WHEN a.status = 'active' AND a.prefix::cidr != b.prefix
-                    AND NOT EXISTS (
-                        SELECT 1 FROM allocations a2
-                        WHERE a2.block_id = b.id AND a2.id != a.id
-                        AND a2.prefix::cidr >> a.prefix::cidr
-                        AND a2.status != 'available'
-                    )
-                    THEN (2::bigint ^ (32 - masklen(a.prefix::cidr))) ELSE 0 END), 0)
-            ELSE
-                COALESCE(SUM(CASE WHEN a.status = 'active' AND a.prefix::cidr != b.prefix
-                    AND NOT EXISTS (
-                        SELECT 1 FROM allocations a2
-                        WHERE a2.block_id = b.id AND a2.id != a.id
-                        AND a2.prefix::cidr >> a.prefix::cidr
-                        AND a2.status != 'available'
-                    )
-                    THEN (2::numeric ^ (128 - masklen(a.prefix::cidr))) ELSE 0 END), 0)
-            END AS used_ips,
-            CASE WHEN family(b.prefix) = 4 THEN
-                (2::bigint ^ (32 - masklen(b.prefix)))::numeric
-            ELSE
-                (2::numeric ^ (128 - masklen(b.prefix)))
-            END AS total_ips
-        FROM ip_blocks b
-        LEFT JOIN sites s ON b.site_id = s.id
-        LEFT JOIN allocations a ON a.block_id = b.id
-        GROUP BY b.id, b.prefix, b.name, b.ip_version, s.name
-        ORDER BY b.prefix::inet
-        LIMIT 10
-    """)]
+    _RECENT_SQL = " ".join([
+        'SELECT b.prefix::text, b.name, b.ip_version, s.name AS site_name,',
+        'COUNT(a.id) AS total_allocations,',
+        "COUNT(a.id) FILTER (WHERE a.status = 'active') AS active_allocations,",
+        'CASE WHEN family(b.prefix) = 4 THEN',
+        "COALESCE(SUM(CASE WHEN a.status = 'active' AND a.prefix::cidr != b.prefix",
+        'AND NOT EXISTS (SELECT 1 FROM allocations a2 WHERE a2.block_id = b.id',
+        "AND a2.id != a.id AND a2.prefix::cidr >> a.prefix::cidr AND a2.status != 'available')",
+        "THEN (2::bigint ^ (32 - masklen(a.prefix::cidr))) ELSE 0 END), 0)",
+        'ELSE',
+        "COALESCE(SUM(CASE WHEN a.status = 'active' AND a.prefix::cidr != b.prefix",
+        'AND NOT EXISTS (SELECT 1 FROM allocations a2 WHERE a2.block_id = b.id',
+        "AND a2.id != a.id AND a2.prefix::cidr >> a.prefix::cidr AND a2.status != 'available')",
+        "THEN (2::numeric ^ (128 - masklen(a.prefix::cidr))) ELSE 0 END), 0)",
+        'END AS used_ips,',
+        "CASE WHEN family(b.prefix) = 4 THEN (2::bigint ^ (32 - masklen(b.prefix)))::numeric",
+        "ELSE (2::numeric ^ (128 - masklen(b.prefix)))",
+        'END AS total_ips',
+        'FROM ip_blocks b LEFT JOIN sites s ON b.site_id = s.id',
+        'LEFT JOIN allocations a ON a.block_id = b.id',
+        'GROUP BY b.id, b.prefix, b.name, b.ip_version, s.name',
+        'ORDER BY b.prefix::inet LIMIT 10',
+    ])
+    stats["recent_blocks"] = [dict(r) for r in await db.fetch(_RECENT_SQL)]
+    await cache_set("dashboard:stats", stats, ttl=30)
     return stats
 
 # ------------------------------------------------------------------
