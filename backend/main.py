@@ -112,12 +112,15 @@ REQUEST_LATENCY = Histogram("ipam_request_duration_seconds", "Request latency in
 # ------------------------------------------------------------------
 # AUTH MIDDLEWARE
 # ------------------------------------------------------------------
-PUBLIC_PATHS = {"/api/v1/auth/login", "/api/v1/health/detailed", "/metrics", "/docs", "/openapi.json", "/redoc"}
+PUBLIC_PATHS = {"/api/v1/auth/login", "/api/v1/health/detailed", "/metrics", "/docs", "/openapi.json", "/redoc", "/api/v1/ping-trace/ping", "/api/v1/ping-trace/traceroute", "/api/v1/ping-trace/lookup"}
+PUBLIC_PREFIXES = {"/api/v1/export/block", "/api/v1/export/summary", "/api/v1/export/blocks"}
 
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     path = request.url.path
     if path in PUBLIC_PATHS or request.method == "OPTIONS" or path == "/":
+        return await call_next(request)
+    if any(path.startswith(p) for p in PUBLIC_PREFIXES):
         return await call_next(request)
     if not path.startswith("/api/v1/"):
         return await call_next(request)

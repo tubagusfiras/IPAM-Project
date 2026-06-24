@@ -96,7 +96,17 @@ export default function Dashboard({ onNavigate }) {
 
   const { total_blocks, total_allocations, total_customers, total_vlans, total_sites, ipv4_blocks, ipv6_blocks, alloc_by_status, recent_blocks } = stats;
   const totalAlloc = Object.values(alloc_by_status||{}).reduce((a,b)=>a+b,0);
-  const utilPct = totalAlloc ? Math.round((alloc_by_status?.active||0)/totalAlloc*100) : 0;
+  // Utilisasi by IP — dipisah IPv4 vs IPv6
+  const v4blocks = (recent_blocks||[]).filter(b => b.ip_version === 'IPv4');
+  const v6blocks = (recent_blocks||[]).filter(b => b.ip_version === 'IPv6');
+  const v4Used = v4blocks.reduce((s,b) => s + parseFloat(b.used_ips||0), 0);
+  const v4Total = v4blocks.reduce((s,b) => s + parseFloat(b.total_ips||1), 0);
+  const v4Pct = v4Total > 0 ? Math.min(100, Math.round(v4Used/v4Total*100)) : 0;
+  const v6Used = v6blocks.reduce((s,b) => s + parseFloat(b.used_ips||0), 0);
+  const v6Total = v6blocks.reduce((s,b) => s + parseFloat(b.total_ips||1), 0);
+  const v6Pct = v6Total > 0 ? Math.min(100, Math.round(v6Used/v6Total*100)) : 0;
+  // Overall hanya dari IPv4 (IPv6 terlalu besar, ga relevan digabung)
+  const utilPct = v4Pct;
   const pieData = Object.entries(alloc_by_status||{}).map(([k,v])=>({ name:k, value:v, color:STATUS_HEX[k]||"#94a3b8" }));
   const barData = (recent_blocks||[]).map(b => ({ name: b.prefix.split("/")[0].split(".").slice(-2).join(".")+"/"+b.prefix.split("/")[1], full: b.prefix, active: b.active_allocations, total: b.total_allocations }));
 
@@ -139,19 +149,19 @@ export default function Dashboard({ onNavigate }) {
             </div>
           </div>
           <div style={{fontSize:"11px",color:MUTED,marginTop:8,textAlign:"center"}}>
-            {alloc_by_status?.active||0} active · {totalAlloc} total
+            IPv4 {v4Pct}% · IPv6 {v6Pct}%
           </div>
         </div>
 
         {/* Stats Grid */}
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
           {[
-            { k:"networks", icon:"networks", label:"Networks", value:total_blocks, sub:`${ipv4_blocks} IPv4 · ${ipv6_blocks} IPv6`, color:A },
+            { k:"networks", icon:"networks", label:"Networks", value:total_blocks, sub:`${ipv4_blocks} IPv4 · ${ipv6_blocks} IPv6`, color:ACCENT },
             { k:"allocations", icon:"allocations", label:"Allocations", value:total_allocations, sub:`Active: ${alloc_by_status?.active||0}`, color:SUCCESS },
             { k:"customers", icon:"customers", label:"Customers", value:total_customers, sub:"Active clients", color:"#f97316" },
             { k:"vlans", icon:"vlans", label:"VLANs", value:total_vlans, sub:"Configured", color:"#a855f7" },
             { k:"sites", icon:"sites", label:"Sites", value:total_sites, sub:"Locations", color:"#06b6d4" },
-            { label:"Utilization", icon:"allocations", value:`${utilPct}%`, sub:`${alloc_by_status?.active||0} active of ${totalAlloc}`, color:utilPct>85?DANGER:SUCCESS, pct:utilPct },
+            { label:"Utilization", icon:"allocations", value:`${utilPct}%`, sub:`IPv4: ${v4Pct}% · IPv6: ${v6Pct}%`, color:utilPct>85?DANGER:SUCCESS, pct:utilPct },
           ].map((c,i)=>(
             <StatCard key={i} {...c} onClick={()=>onNavigate?.(c.k==="networks"?"ipv4":c.k==="allocations"?"ipv4":c.k==="customers"?"customers":c.k==="vlans"?"vlans":"sites")}/>
           ))}
@@ -203,7 +213,7 @@ export default function Dashboard({ onNavigate }) {
                 <YAxis tick={{fontSize:9,fill:DIM}} axisLine={false} tickLine={false}/>
                 <Tooltip contentStyle={{background:CARD,border:`1px solid ${BORDER}`,borderRadius:6,fontSize:12}}/>
                 <Bar dataKey="total" name="Total" fill={BORDER} radius={[3,3,0,0]}/>
-                <Bar dataKey="active" name="Active" fill={A} radius={[3,3,0,0]}/>
+                <Bar dataKey="active" name="Active" fill={ACCENT} radius={[3,3,0,0]}/>
               </BarChart>
             </ResponsiveContainer>
           ) : (
