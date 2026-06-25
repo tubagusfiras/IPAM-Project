@@ -112,7 +112,7 @@ REQUEST_LATENCY = Histogram("ipam_request_duration_seconds", "Request latency in
 # ------------------------------------------------------------------
 # AUTH MIDDLEWARE
 # ------------------------------------------------------------------
-PUBLIC_PATHS = {"/api/v1/auth/login", "/api/v1/health/detailed", "/metrics", "/docs", "/openapi.json", "/redoc", "/api/v1/ping-trace/ping", "/api/v1/ping-trace/traceroute", "/api/v1/ping-trace/lookup"}
+PUBLIC_PATHS = {"/api/v1/auth/login", "/api/v1/health/detailed", "/metrics", "/docs", "/openapi.json", "/redoc", "/api/v1/ping-trace/ping", "/api/v1/ping-trace/traceroute", "/api/v1/ping-trace/lookup", "/api/v1/ping-trace/mtr"}
 PUBLIC_PREFIXES = {"/api/v1/export/block", "/api/v1/export/summary", "/api/v1/export/blocks"}
 
 @app.middleware("http")
@@ -1272,6 +1272,51 @@ async def stream_traceroute(target: str = Query(...), max_hops: int = Query(30, 
     cmd = ["traceroute", "-m", str(max_hops), "-w", "2", target]
     return StreamingResponse(_stream_command(cmd), media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+async def _stream_mtr(target: str, max_hops: int, interval: float):
+    """Stream MTR results as SSE, one JSON event per cycle."""
+    cycle = 0
+    while True:
+        cmd = [
+            "mtr", "--report-wide", "--json",
+            "--interval", str(interval),
+            "--report-cycles", "1",
+            "-m", str(max_hops),
+            target
+        ]
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
+            data = json.loads(stdout.decode(errors="replace"))
+            hubs = data.get("report", {}).get("hubs", [])
+            cycle += 1
+            payload = json.dumps({"type": "mtr", "cycle": cycle, "hubs": hubs})
+            yield f"data: {payload}\n\n"
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            payload_err = json.dumps({"type": "error", "msg": str(e)})
+            yield f"data: {payload_err}\n\n"
+
+        await asyncio.sleep(interval)
+
+@app.get("/api/v1/ping-trace/mtr", summary="MTR realtime (SSE stream)", tags=["Ping & Trace"])
+async def stream_mtr(
+    target: str = Query(...),
+    max_hops: int = Query(30, ge=1, le=64),
+    interval: float = Query(2.0, ge=1.0, le=10.0)
+):
+    if not _validate_target(target):
+        raise HTTPException(400, "Invalid target format")
+    return StreamingResponse(
+        _stream_mtr(target, max_hops, interval),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+    )
 
 
 # ------------------------------------------------------------------
