@@ -293,15 +293,7 @@ export default function PingTrace() {
           setMtrHops(d.hubs || []);
           setMtrLastUpdate(Date.now());
           d.hubs && d.hubs.forEach(h => {
-            if (!h.host || h.host === "???" || /^\s*$/.test(h.host)) return;
-            if (!useDns) {
-              // no-dns mode: host sudah IP
-              lookupIp(h.host);
-            } else {
-              // dns mode: extract IP dari host jika berbentuk IP, otherwise skip lookup
-              const ipMatch = h.host.match(/\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b/);
-              if (ipMatch) lookupIp(ipMatch[1]);
-            }
+            if (h.ip) lookupIp(h.ip);
           });
           // auto-stop setelah MAX_MTR_CYCLES
           if (d.cycle >= MAX_MTR_CYCLES) {
@@ -468,7 +460,7 @@ export default function PingTrace() {
                 <div style={{ position: "absolute", top: 2, left: useDns ? 17 : 2, width: 14, height: 14, borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }} />
               </div>
               <span style={{ fontSize: 12, fontWeight: 600, color: useDns ? "var(--accent)" : "var(--text-muted)" }}>Use DNS</span>
-              <span style={{ fontSize: 10, color: "var(--text-dim)" }}>{useDns ? "hostname resolved · IPAM lookup by IP not available" : "IP only · IPAM lookup active"}</span>
+              <span style={{ fontSize: 10, color: "var(--text-dim)" }}>{useDns ? <span style={{color:"var(--warning)"}}>⚠ hostname mode · IPAM lookup unavailable</span> : "IP only · IPAM lookup active"}</span>
             </div>
           )}
 
@@ -682,8 +674,6 @@ export default function PingTrace() {
                     const isWorst = i === worstHopIdx && hop["Loss%"] > 0;
                     const lossColor = hop["Loss%"] === 0 ? "var(--success)" : hop["Loss%"] < 50 ? "var(--warning)" : "var(--danger)";
                     const rttColor = v => v < 50 ? "var(--success)" : v < 150 ? "var(--warning)" : "var(--danger)";
-                    const hopIp = !useDns ? hop.host : (hop.host||"").match(/\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b/)?.[1] || null;
-                    const info = hopIp ? ipamCache[hopIp] : undefined;
                     const prevHop = i > 0 ? mtrHops[i - 1] : null;
                     const delta = (!isTimeout && prevHop && prevHop["Loss%"] < 100) ? (hop.Avg - prevHop.Avg) : null;
                     return (
@@ -696,7 +686,7 @@ export default function PingTrace() {
                           {isWorst && <span style={{ marginLeft: 4, fontSize: 9, color: "#ef4444" }}>▲</span>}
                         </td>
                         <td style={{ padding: "7px 12px", fontFamily: "var(--font-mono)", color: isTimeout ? "var(--danger)" : "var(--accent)", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {isTimeout ? "* * *" : hop.host}
+                          {isTimeout ? "* * *" : (useDns && hop.hostname ? hop.hostname : (hop.ip || hop.host))}
                         </td>
                         <td style={{ padding: "7px 12px" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -720,21 +710,25 @@ export default function PingTrace() {
                         <td style={{ padding: "7px 12px", fontFamily: "var(--font-mono)", color: isTimeout ? "var(--text-dim)" : rttColor(hop.Wrst) }}>{isTimeout ? "-" : hop.Wrst.toFixed(1)}</td>
                         <td style={{ padding: "7px 12px", fontFamily: "var(--font-mono)", color: "var(--text-dim)" }}>{isTimeout ? "-" : hop.StDev.toFixed(1)}</td>
                         <td style={{ padding: "7px 12px" }}>
-                          {isTimeout ? (
-                            <span style={{ fontSize: 9, fontWeight: 600, color: "#ef4444" }}>—</span>
-                          ) : info === null ? (
-                            <div style={{ height: 10, width: 80, background: "var(--surface-3)", borderRadius: 99, animation: "pt-shimmer 1.5s infinite" }} />
-                          ) : info ? (
-                            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                                <span style={{ fontSize: 9, fontWeight: 600, padding: "1px 6px", borderRadius: 99, background: "var(--accent-dim)", color: "var(--accent)", textTransform: "uppercase" }}>{info.owner_type}</span>
-                                <span style={{ fontSize: 11, color: "var(--text)" }}>{info.customer_name || info.block_name || "—"}</span>
+                          {(() => {
+                            const hopIp = hop.ip || null;
+                            const info = hopIp ? ipamCache[hopIp] : undefined;
+                            return isTimeout ? (
+                              <span style={{ fontSize: 9, fontWeight: 600, color: "#ef4444" }}>—</span>
+                            ) : info === null ? (
+                              <div style={{ height: 10, width: 80, background: "var(--surface-3)", borderRadius: 99, animation: "pt-shimmer 1.5s infinite" }} />
+                            ) : info ? (
+                              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                  <span style={{ fontSize: 9, fontWeight: 600, padding: "1px 6px", borderRadius: 99, background: "var(--accent-dim)", color: "var(--accent)", textTransform: "uppercase" }}>{info.owner_type}</span>
+                                  <span style={{ fontSize: 11, color: "var(--text)" }}>{info.customer_name || info.block_name || "—"}</span>
+                                </div>
+                                {info.router && <span style={{ fontSize: 10, color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>{info.router}{info.site_name ? ` · ${info.site_name}` : ""}</span>}
                               </div>
-                              {info.router && <span style={{ fontSize: 10, color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>{info.router}{info.site_name ? ` · ${info.site_name}` : ""}</span>}
-                            </div>
-                          ) : (
-                            <span style={{ fontSize: 9, fontWeight: 600, padding: "2px 8px", borderRadius: 99, background: "rgba(245,158,11,0.1)", color: "#f59e0b" }}>NOT REGISTERED</span>
-                          )}
+                            ) : (
+                              <span style={{ fontSize: 9, fontWeight: 600, padding: "2px 8px", borderRadius: 99, background: "rgba(245,158,11,0.1)", color: "#f59e0b" }}>NOT REGISTERED</span>
+                            );
+                          })()}
                         </td>
                       </tr>
                     );

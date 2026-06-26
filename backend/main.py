@@ -1273,12 +1273,12 @@ async def stream_traceroute(target: str = Query(...), max_hops: int = Query(30, 
     return StreamingResponse(_stream_command(cmd), media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
-async def _stream_mtr(target: str, max_hops: int, interval: float):
+async def _stream_mtr(target: str, max_hops: int, interval: float, dns_enabled: bool = True):
     """Stream MTR results as SSE, one JSON event per cycle."""
     cycle = 0
     while True:
         cmd = [
-            "mtr", "--report-wide", "--json",
+            "mtr", "--report-wide", "--json", "--show-ips",
             "--interval", str(interval),
             "--report-cycles", "1",
             "-m", str(max_hops),
@@ -1293,6 +1293,20 @@ async def _stream_mtr(target: str, max_hops: int, interval: float):
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
             data = json.loads(stdout.decode(errors="replace"))
             hubs = data.get("report", {}).get("hubs", [])
+            # extract IP dari format "hostname (IP)" via --show-ips
+            import re
+            for hub in hubs:
+                h = hub.get("host","")
+                paren_match = re.search(r'\(([\d.]+)\)', h)
+                if paren_match:
+                    hub["ip"] = paren_match.group(1)
+                    hub["hostname"] = h.split(" (")[0].strip()
+                else:
+                    ip_only = re.search(r'\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b', h)
+                    hub["ip"] = ip_only.group(1) if ip_only else None
+                    hub["hostname"] = None
+                if not dns_enabled:
+                    hub["host"] = hub["ip"] or h
             cycle += 1
             payload = json.dumps({"type": "mtr", "cycle": cycle, "hubs": hubs})
             yield f"data: {payload}\n\n"
@@ -1308,12 +1322,13 @@ async def _stream_mtr(target: str, max_hops: int, interval: float):
 async def stream_mtr(
     target: str = Query(...),
     max_hops: int = Query(30, ge=1, le=64),
-    interval: float = Query(2.0, ge=1.0, le=10.0)
+    interval: float = Query(2.0, ge=1.0, le=10.0),
+    dns: bool = Query(True)
 ):
     if not _validate_target(target):
         raise HTTPException(400, "Invalid target format")
     return StreamingResponse(
-        _stream_mtr(target, max_hops, interval),
+        _stream_mtr(target, max_hops, interval, dns),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
     )

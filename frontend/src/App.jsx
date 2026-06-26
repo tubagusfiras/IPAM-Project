@@ -187,6 +187,10 @@ function Sidebar({ active, onNavigate, collapsed, onToggle, user }) {
 function Header({ title, subtitle, onBack, dark, onToggleDark, collapsed, user, onLogout, onNavigate }) {
   const [search, setSearch] = useState("");
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showNotif, setShowNotif] = useState(false);
+  const [notifs, setNotifs] = useState([]);
+  const [notifLoading, setNotifLoading] = useState(false);
+  const [notifUnread, setNotifUnread] = useState(0);
   const [searchResults, setSearchResults] = useState(null);
   const [searching, setSearching] = useState(false);
   const initials = (user?.username || "??").slice(0,2).toUpperCase();
@@ -313,11 +317,84 @@ function Header({ title, subtitle, onBack, dark, onToggleDark, collapsed, user, 
         <Icon id={dark?"sun":"moon"} size={16}/>
       </button>
 
-      {/* Notifications placeholder */}
-      <button className="btn-ghost btn-icon" style={{position:"relative"}}
-        onClick={() => { try { window.dispatchEvent(new CustomEvent("app-toast", { detail: { msg: "No notifications yet", type: "info" } })); } catch {} }}>
-        <Icon id="bell" size={16}/>
-      </button>
+      {/* Notifications */}
+      <div style={{position:"relative"}}>
+        <button className="btn-ghost btn-icon" style={{position:"relative"}}
+          onClick={async () => {
+            setShowNotif(v => !v);
+            if (!showNotif) {
+              setNotifLoading(true);
+              try {
+                const token = localStorage.getItem("ipam_token");
+                const res = await fetch("/api/v1/audit-logs?limit=15", { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+                const d = await res.json();
+                setNotifs(d.items || []);
+                setNotifUnread(0);
+              } catch {}
+              setNotifLoading(false);
+            }
+          }}>
+          <Icon id="bell" size={16}/>
+          {notifUnread > 0 && (
+            <span style={{position:"absolute",top:2,right:2,width:8,height:8,borderRadius:"50%",
+              background:"var(--danger)",border:"2px solid var(--bg)"}}/>
+          )}
+        </button>
+        {showNotif && (
+          <>
+            <div onClick={() => setShowNotif(false)} style={{position:"fixed",inset:0,zIndex:99}}/>
+            <div style={{position:"absolute",top:"calc(100% + 8px)",right:0,zIndex:100,
+              width:340,background:"var(--bg-secondary,var(--bg))",
+              border:"1px solid var(--border-medium)",borderRadius:"var(--radius)",
+              boxShadow:"var(--shadow-lg)",overflow:"hidden"}}>
+              <div style={{padding:"10px 14px",borderBottom:"1px solid var(--border-soft)",
+                display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <span style={{fontSize:12,fontWeight:600,color:"var(--text)"}}>Recent Activity</span>
+                <span style={{fontSize:10,color:"var(--text-dim)"}}>Last 15 events</span>
+              </div>
+              {notifLoading ? (
+                <div style={{padding:"24px 0",textAlign:"center",color:"var(--text-dim)",fontSize:12}}>Loading...</div>
+              ) : notifs.length === 0 ? (
+                <div style={{padding:"24px 0",textAlign:"center",color:"var(--text-dim)",fontSize:12}}>No activity yet</div>
+              ) : (
+                <div style={{maxHeight:360,overflowY:"auto"}}>
+                  {notifs.map((n, i) => {
+                    const actionColor = n.action === "create" ? "var(--success)" : n.action === "delete" ? "var(--danger)" : "var(--accent)";
+                    const actionBg = n.action === "create" ? "var(--success-surface)" : n.action === "delete" ? "var(--danger-surface)" : "var(--accent-dim)";
+                    const ts = new Date(n.created_at);
+                    const timeStr = ts.toLocaleString("id-ID", {day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"});
+                    return (
+                      <div key={i} style={{padding:"10px 14px",borderBottom:i<notifs.length-1?"1px solid var(--border-subtle)":"none",
+                        transition:"background 0.1s"}}
+                        onMouseEnter={e=>e.currentTarget.style.background="var(--surface-2)"}
+                        onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
+                          <span style={{fontSize:9,fontWeight:700,padding:"1px 6px",borderRadius:99,
+                            background:actionBg,color:actionColor,textTransform:"uppercase"}}>{n.action}</span>
+                          <span style={{fontSize:10,color:"var(--text-dim)",marginLeft:"auto"}}>{timeStr}</span>
+                        </div>
+                        <div style={{fontSize:12,color:"var(--text)",fontFamily:n.entity_type==="allocation"||n.entity_type==="block"?"var(--font-mono)":"inherit"}}>
+                          {n.entity_prefix || n.description || "—"}
+                        </div>
+                        <div style={{fontSize:10,color:"var(--text-dim)",marginTop:2,display:"flex",gap:8}}>
+                          <span style={{textTransform:"capitalize"}}>{n.entity_type}</span>
+                          {n.changed_by && <span>by {n.changed_by}</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <div style={{padding:"8px 14px",borderTop:"1px solid var(--border-soft)",textAlign:"center"}}>
+                <button onClick={()=>{setShowNotif(false); if(typeof onNavigate==="function") onNavigate("audit");}}
+                  style={{fontSize:11,color:"var(--accent)",background:"none",border:"none",cursor:"pointer"}}>
+                  View all audit logs →
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
 
       {/* User */}
       <div style={{position:"relative"}}>
