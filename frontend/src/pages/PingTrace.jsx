@@ -169,6 +169,7 @@ export default function PingTrace() {
   const [error, setError] = useState(null);
   const [pingStats, setPingStats] = useState(null);
   const [useMtr, setUseMtr] = useState(false);
+  const [useDns, setUseDns] = useState(false);
   const [mtrHops, setMtrHops] = useState([]);
   const [mtrCycle, setMtrCycle] = useState(0);
   const [mtrLastUpdate, setMtrLastUpdate] = useState(null);
@@ -280,7 +281,7 @@ export default function PingTrace() {
     setMtrHops([]); setMtrCycle(0); setMtrLastUpdate(null); setError(null); setRunning(true);
     mtrCycleRef.current = 0;
     if (esRef.current) esRef.current.close();
-    const url = `/api/v1/ping-trace/mtr?target=${encodeURIComponent(t)}&max_hops=30&interval=2`;
+    const url = `/api/v1/ping-trace/mtr?target=${encodeURIComponent(t)}&max_hops=30&interval=2&dns=${useDns}`;
     const es = new EventSource(url);
     esRef.current = es;
     es.onmessage = (event) => {
@@ -292,7 +293,15 @@ export default function PingTrace() {
           setMtrHops(d.hubs || []);
           setMtrLastUpdate(Date.now());
           d.hubs && d.hubs.forEach(h => {
-            if (h.host && h.host !== "???" && !/^\s*$/.test(h.host)) lookupIp(h.host);
+            if (!h.host || h.host === "???" || /^\s*$/.test(h.host)) return;
+            if (!useDns) {
+              // no-dns mode: host sudah IP
+              lookupIp(h.host);
+            } else {
+              // dns mode: extract IP dari host jika berbentuk IP, otherwise skip lookup
+              const ipMatch = h.host.match(/\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b/);
+              if (ipMatch) lookupIp(ipMatch[1]);
+            }
           });
           // auto-stop setelah MAX_MTR_CYCLES
           if (d.cycle >= MAX_MTR_CYCLES) {
@@ -450,6 +459,16 @@ export default function PingTrace() {
               </div>
               <span style={{ fontSize: 12, fontWeight: 600, color: useMtr ? "var(--accent)" : "var(--text-muted)" }}>MTR Realtime</span>
               {useMtr && <span style={{ fontSize: 10, color: "var(--text-dim)" }}>updates every 2s · auto-stop at {MAX_MTR_CYCLES} cycles</span>}
+            </div>
+          )}
+          {mode === "traceroute" && useMtr && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, paddingBottom: 2 }}>
+              <div onClick={() => { if (!running) setUseDns(!useDns); }}
+                style={{ width: 36, height: 20, borderRadius: 10, background: useDns ? "var(--accent)" : "var(--surface-3)", cursor: running ? "not-allowed" : "pointer", position: "relative", transition: "background 0.2s", border: "1px solid var(--border-soft)" }}>
+                <div style={{ position: "absolute", top: 2, left: useDns ? 17 : 2, width: 14, height: 14, borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }} />
+              </div>
+              <span style={{ fontSize: 12, fontWeight: 600, color: useDns ? "var(--accent)" : "var(--text-muted)" }}>Use DNS</span>
+              <span style={{ fontSize: 10, color: "var(--text-dim)" }}>{useDns ? "hostname resolved · IPAM lookup by IP not available" : "IP only · IPAM lookup active"}</span>
             </div>
           )}
 
@@ -663,7 +682,8 @@ export default function PingTrace() {
                     const isWorst = i === worstHopIdx && hop["Loss%"] > 0;
                     const lossColor = hop["Loss%"] === 0 ? "var(--success)" : hop["Loss%"] < 50 ? "var(--warning)" : "var(--danger)";
                     const rttColor = v => v < 50 ? "var(--success)" : v < 150 ? "var(--warning)" : "var(--danger)";
-                    const info = hop.host ? ipamCache[hop.host] : undefined;
+                    const hopIp = !useDns ? hop.host : (hop.host||"").match(/\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b/)?.[1] || null;
+                    const info = hopIp ? ipamCache[hopIp] : undefined;
                     const prevHop = i > 0 ? mtrHops[i - 1] : null;
                     const delta = (!isTimeout && prevHop && prevHop["Loss%"] < 100) ? (hop.Avg - prevHop.Avg) : null;
                     return (

@@ -313,15 +313,10 @@ function Header({ title, subtitle, onBack, dark, onToggleDark, collapsed, user, 
         <Icon id={dark?"sun":"moon"} size={16}/>
       </button>
 
-      {/* Bell */}
-      <button className="btn-ghost btn-icon" style={{position:"relative"}}>
+      {/* Notifications placeholder */}
+      <button className="btn-ghost btn-icon" style={{position:"relative"}}
+        onClick={() => { try { window.dispatchEvent(new CustomEvent("app-toast", { detail: { msg: "No notifications yet", type: "info" } })); } catch {} }}>
         <Icon id="bell" size={16}/>
-        <span style={{
-          position:"absolute",top:6,right:6,
-          width:7,height:7,borderRadius:"50%",
-          background:"var(--danger)",
-          border:"1.5px solid var(--bg-secondary,var(--bg))",
-        }}/>
       </button>
 
       {/* User */}
