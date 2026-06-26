@@ -307,7 +307,7 @@ function InlineCell({ value, onSave, mono, placeholder, suggestions=[], onCreate
   const [val, setVal]         = useState(value||"");
   const ref = useRef();
 
-  useEffect(()=>{ setVal(value||""); },[value]);
+  useEffect(()=>{ if(!editing) setVal(value||""); },[value, editing]);
   useEffect(()=>{ if(editing && ref.current) ref.current.focus(); },[editing]);
 
   const commit = async v => {
@@ -364,6 +364,7 @@ export default function BlockDetail({ blockId, onBack, dark }) {
   const [vlans,     setVlans]     = useState([]);
   const [showCalc,  setShowCalc]  = useState(false);
   const [showGrid,  setShowGrid]  = useState(true);
+  const [showFullTable, setShowFullTable] = useState(false);
   const [saveMsg,   setSaveMsg]   = useState(null);
 
   const load = useCallback(()=>{
@@ -438,7 +439,16 @@ export default function BlockDetail({ blockId, onBack, dark }) {
     try {
       await updateAllocation(allocId,payload);
       setSaveMsg("Saved ✓"); setTimeout(()=>setSaveMsg(null),1500);
-      load();
+      // optimistic update — jangan load() langsung agar fokus tidak hilang
+      setData(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          allocations: prev.allocations.map(a => a.id === allocId ? { ...a, ...payload, customer_name: field==="customer_name" ? value : a.customer_name, vlan_vid: field==="vlan_vid" ? (value?parseInt(value):null) : a.vlan_vid } : a)
+        };
+      });
+      // load di background setelah delay
+      setTimeout(() => load(), 1500);
     } catch(e) {
       setSaveMsg("Error: "+e.message); setTimeout(()=>setSaveMsg(null),3000);
     }
@@ -769,7 +779,20 @@ export default function BlockDetail({ blockId, onBack, dark }) {
             {STATUS_OPTS.map(s=><option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
           </select>
 
-          <span style={{fontSize:11,color:"var(--text-dim)",marginLeft:"auto"}}>{allocs.length}/{totalAllocs} rows</span>
+          <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontSize:11,color:"var(--text-dim)"}}>{allocs.length}/{totalAllocs} rows</span>
+            <button onClick={()=>setShowFullTable(true)} title="Fullscreen table"
+              style={{display:"flex",alignItems:"center",justifyContent:"center",width:28,height:28,
+                borderRadius:"var(--radius-sm)",border:"1px solid var(--border-soft)",
+                background:"var(--surface-2)",cursor:"pointer",color:"var(--text-muted)",transition:"all 0.12s"}}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor="var(--accent)";e.currentTarget.style.color="var(--accent)";}}
+              onMouseLeave={e=>{e.currentTarget.style.borderColor="var(--border-soft)";e.currentTarget.style.color="var(--text-muted)";}}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14">
+                <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+                <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+              </svg>
+            </button>
+          </div>
           <span style={{fontSize:10,color:"var(--text-dim)",fontStyle:"italic"}}>✎ click cell to edit</span>
         </div>
 
@@ -969,6 +992,132 @@ export default function BlockDetail({ blockId, onBack, dark }) {
           </table>
         </div>
       </div>
+
+      {/* Fullscreen Table Modal */}
+      {showFullTable && createPortal(
+        <div style={{position:"fixed",inset:0,zIndex:1000,display:"flex",flexDirection:"column",background:"var(--bg)"}}>
+          {/* Header */}
+          <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 20px",
+            borderBottom:"1px solid var(--border-medium)",background:"var(--surface-1)",flexShrink:0}}>
+            <span style={{fontFamily:"var(--font-mono)",fontSize:14,fontWeight:700,color:"var(--text)"}}>{data.prefix}</span>
+            <span style={{fontSize:12,color:"var(--text-dim)"}}>— Allocation Table</span>
+            <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:11,color:"var(--text-dim)"}}>{allocs.length}/{totalAllocs} rows</span>
+              <button onClick={()=>setShowFullTable(false)} title="Exit fullscreen"
+                style={{display:"flex",alignItems:"center",justifyContent:"center",width:28,height:28,
+                  borderRadius:"var(--radius-sm)",border:"1px solid var(--border-soft)",
+                  background:"var(--surface-2)",cursor:"pointer",color:"var(--text-muted)",transition:"all 0.12s"}}
+                onMouseEnter={e=>{e.currentTarget.style.borderColor="var(--danger)";e.currentTarget.style.color="var(--danger)";}}
+                onMouseLeave={e=>{e.currentTarget.style.borderColor="var(--border-soft)";e.currentTarget.style.color="var(--text-muted)";}}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14">
+                  <polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/>
+                  <line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+          {/* Table full height */}
+          <div style={{flex:1,overflowX:"auto",overflowY:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+              <thead style={{position:"sticky",top:0,zIndex:10}}>
+                <tr style={{background:"var(--surface-2)",borderBottom:"2px solid var(--border-medium)"}}>
+                  {["#","Type","Prefix","Usable Range","Owner / Customer","VLAN","End Device XC","Status",""].map((h,i)=>(
+                    <th key={i} style={{textAlign:"left",padding:"8px 10px",whiteSpace:"nowrap",
+                      fontSize:10,fontWeight:600,textTransform:"uppercase",
+                      letterSpacing:"0.07em",color:"var(--text-muted)",
+                      borderRight:"1px solid var(--border-soft)"}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {allocs.length===0 ? (
+                  <tr><td colSpan={9}>
+                    <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"48px 0",gap:8}}>
+                      <div style={{fontSize:28}}>📋</div>
+                      <div style={{fontSize:13,color:"var(--text-muted)"}}>No allocations found</div>
+                    </div>
+                  </td></tr>
+                ) : (() => {
+                  const rows = [
+                    ...allocs.map(r=>({...r, _type:"alloc"})),
+                    ...gaps.map(g=>({...g, _type:"gap"}))
+                  ].sort((a,b)=>{
+                    const ipA = a._type==="alloc" ? ipToInt(a.prefix.split("/")[0]) : a.start;
+                    const ipB = b._type==="alloc" ? ipToInt(b.prefix.split("/")[0]) : b.start;
+                    return ipA - ipB;
+                  });
+                  let allocIdx = 0;
+                  return rows.map((row,i)=>{
+                    if (row._type==="gap") return (
+                      <tr key={"gap-fs-"+i} style={{borderBottom:"1px solid var(--border-soft)",opacity:0.6}}>
+                        <td style={{padding:"5px 10px",color:"var(--text-dim)",fontFamily:"var(--font-mono)",fontSize:10,borderRight:"1px solid var(--border-soft)"}}>—</td>
+                        <td style={{padding:"5px 8px",borderRight:"1px solid var(--border-soft)"}}><span style={{fontSize:10,color:"var(--text-dim)",fontStyle:"italic"}}>free</span></td>
+                        <td style={{padding:"5px 10px",borderRight:"1px solid var(--border-soft)"}}>
+                          <span style={{fontFamily:"var(--font-mono)",fontSize:11,color:"var(--text-dim)"}}>{row.startIp} — {row.endIp}</span>
+                          <span style={{fontSize:10,color:"var(--text-dim)",marginLeft:8}}>({row.size} IPs)</span>
+                        </td>
+                        <td colSpan={5} style={{padding:"5px 10px"}}>
+                          <button onClick={()=>{setAllocModal({prefix:row.startIp+"/30"});setShowFullTable(false);}}
+                            className="btn btn-ghost btn-sm" style={{fontSize:10,padding:"2px 8px",opacity:0.7}}>+ Allocate</button>
+                        </td>
+                      </tr>
+                    );
+                    const oi = ownerInfo(row.owner_type);
+                    const ss = STATUS_STYLE[row.status]||STATUS_STYLE.available;
+                    const rowBg = row.status==="available"?"rgba(56,232,198,0.03)":row.status==="reserved"?"rgba(168,85,247,0.03)":i%2===0?"var(--surface-1)":"transparent";
+                    return (
+                      <tr key={"fs-"+row.id} style={{borderBottom:"1px solid var(--border-soft)",background:rowBg,transition:"background var(--transition)"}}
+                        onMouseEnter={e=>e.currentTarget.style.background="var(--surface-3)"}
+                        onMouseLeave={e=>e.currentTarget.style.background=rowBg}>
+                        <td style={{padding:"6px 10px",color:"var(--text-dim)",fontFamily:"var(--font-mono)",fontSize:10,borderRight:"1px solid var(--border-soft)"}}>{i+1}</td>
+                        <td style={{padding:"6px 8px",borderRight:"1px solid var(--border-soft)"}}>
+                          <select value={row.owner_type||"customer"} onChange={e=>saveField(row.id,"owner_type",e.target.value)} onClick={e=>e.stopPropagation()}
+                            style={{background:"transparent",border:"none",color:oi.color,fontSize:11,fontWeight:600,cursor:"pointer",outline:"none"}}>
+                            {OWNER_TYPES.map(o=>(<option key={o.value} value={o.value} style={{background:"var(--bg-secondary,var(--bg))",color:"var(--text)"}}>{o.icon} {o.label}</option>))}
+                          </select>
+                        </td>
+                        <td style={{padding:"6px 10px",borderRight:"1px solid var(--border-soft)"}}>
+                          <div style={{display:"flex",alignItems:"center",gap:4}}>
+                            <span style={{fontFamily:"var(--font-mono)",fontSize:12,fontWeight:600,color:"var(--accent)"}}>{row.prefix?.split("/")?.[0]}</span>
+                            <select value={row.prefix?.split("/")?.[1]||""} onClick={e=>e.stopPropagation()}
+                              onChange={e=>{const newPlen=parseInt(e.target.value);const newPrefix=changeMaskAligned(row.prefix,newPlen,data?.allocations?.filter(a=>a.id!==row.id)||[]);saveField(row.id,"mask",newPrefix.split("/")[1]+"__"+newPrefix.split("/")[0]);}}
+                              style={{background:"transparent",border:"1px solid var(--border-soft)",color:"var(--accent2)",fontSize:11,fontFamily:"var(--font-mono)",cursor:"pointer",outline:"none",borderRadius:"var(--radius-sm)",padding:"2px 4px"}}>
+                              {(isV6?V6_MASKS:V4_MASKS).map(p=>(<option key={p} value={p} style={{background:"var(--bg-secondary,var(--bg))",color:"var(--text)"}}>/{p}</option>))}
+                            </select>
+                          </div>
+                        </td>
+                        <td style={{padding:"6px 10px",borderRight:"1px solid var(--border-soft)"}}><span style={{fontFamily:"var(--font-mono)",fontSize:11,color:"var(--text-muted)"}}>{calcUsableRange(row.prefix)}</span></td>
+                        <td style={{padding:"4px 8px",borderRight:"1px solid var(--border-soft)",minWidth:160}}>
+                          {row.owner_type==="customer"?(
+                            <InlineCell value={row.customer_name} placeholder="assign customer" suggestions={custNames} onCreate={v=>saveField(row.id,"customer_name",v)} onSave={v=>saveField(row.id,"customer_name",v)}/>
+                          ):(
+                            <InlineCell value={row.description} placeholder="description" onSave={v=>saveField(row.id,"description",v)}/>
+                          )}
+                        </td>
+                        <td style={{padding:"4px 8px",borderRight:"1px solid var(--border-soft)"}}><InlineCell value={row.vlan_vid?String(row.vlan_vid):""} placeholder="—" suggestions={vlanVids} mono onSave={v=>saveField(row.id,"vlan_vid",v)}/></td>
+                        <td style={{padding:"4px 8px",borderRight:"1px solid var(--border-soft)",maxWidth:160}}><InlineCell value={row.description} placeholder="—" onSave={v=>saveField(row.id,"description",v)}/></td>
+                        <td style={{padding:"6px 8px",borderRight:"1px solid var(--border-soft)"}}>
+                          <select value={row.status} onChange={e=>saveField(row.id,"status",e.target.value)} onClick={e=>e.stopPropagation()}
+                            style={{background:"transparent",border:"none",color:ss.color,fontSize:11,fontFamily:"var(--font-mono)",cursor:"pointer",outline:"none",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.04em"}}>
+                            {STATUS_OPTS.map(s=>(<option key={s} value={s} style={{background:"var(--bg-secondary,var(--bg))",color:"var(--text)"}}>{s}</option>))}
+                          </select>
+                        </td>
+                        <td style={{padding:"4px 8px"}} onClick={e=>e.stopPropagation()}>
+                          <div style={{display:"flex",gap:4}}>
+                            <button onClick={()=>{setAllocModal(row);setShowFullTable(false);}} className="btn btn-ghost btn-sm" style={{padding:"3px 8px",fontSize:11}}>Edit</button>
+                            <button onClick={()=>setConfirm(row)} style={{padding:"3px 8px",fontSize:11,background:"var(--danger-surface)",color:"var(--danger)",border:"1px solid var(--danger-border)",borderRadius:"var(--radius-sm)",cursor:"pointer"}}>Del</button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  });
+                })()}
+              </tbody>
+            </table>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* Modals */}
       {editModal && (

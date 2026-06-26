@@ -104,12 +104,7 @@ def parse_ipv4_csv(content: str):
         max_bcast = max(r["bcast"] for r in g["rows"])
         size = max_bcast - min_net + 1
         plen = to_plen(size)
-        prefix = f"{base_ip}.{min_net}/{plen}"
-
-        try:
-            ipaddress.ip_network(prefix, strict=False)
-        except ValueError:
-            continue
+        prefix = str(ipaddress.ip_network(f"{base_ip}.{min_net}/{plen}", strict=False))
 
         vlan = None
         vr = g["vlan"].strip()

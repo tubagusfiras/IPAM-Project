@@ -395,7 +395,7 @@ function InlineCell({ value, onSave, mono, placeholder, suggestions=[], onCreate
   const [val, setVal]         = useState(value||"");
   const ref = useRef();
 
-  useEffect(()=>{ setVal(value||""); },[value]);
+  useEffect(()=>{ if(!editing) setVal(value||""); },[value, editing]);
   useEffect(()=>{ if(editing && ref.current) ref.current.focus(); },[editing]);
 
   const commit = async v => {
@@ -467,13 +467,11 @@ function AllocModal({ alloc, blockId, blockPrefix, prefillPrefix, customers, vla
 
   // Load allocations into ref — no re-render on fetch complete
   const allocationsRef = useRef([]);
-  const [allocLoaded, setAllocLoaded] = useState(false);
   useEffect(()=>{
     if (blockId) authFetch(`/api/v1/blocks/${blockId}`)
       .then(r=>r.json())
       .then(d=>{
         allocationsRef.current = (d.allocations||[]).filter(a=>!alloc?.id||a.id!==alloc?.id);
-        setAllocLoaded(true);
       });
   },[blockId]);
   const allocations = allocationsRef.current;
@@ -740,6 +738,17 @@ function ConfirmModal({ message, onConfirm, onCancel }) {
 }
 
 // ── BLOCK EDIT MODAL ─────────────────────────────────────────────────────────
+function BlockEditField({label, k, placeholder, mono, form, set}) {
+  return (
+    <div>
+      <label style={{display:"block",fontSize:10,fontWeight:600,textTransform:"uppercase",
+        letterSpacing:"0.08em",color:"var(--text-muted)",marginBottom:6}}>{label}</label>
+      <input value={form[k]} onChange={e=>set(k)(e.target.value)} placeholder={placeholder}
+        className="input" style={{fontFamily:mono?"var(--font-mono)":"inherit"}}/>
+    </div>
+  );
+}
+
 function BlockEditModal({ block, sites, onClose, onSaved }) {
   const [form, setForm] = useState({
     prefix:      block.prefix||"",
@@ -762,14 +771,7 @@ function BlockEditModal({ block, sites, onClose, onSaved }) {
     setSaving(false);
   };
 
-  const Field = ({label,k,placeholder,mono}) => (
-    <div>
-      <label style={{display:"block",fontSize:10,fontWeight:600,textTransform:"uppercase",
-        letterSpacing:"0.08em",color:"var(--text-muted)",marginBottom:6}}>{label}</label>
-      <input value={form[k]} onChange={e=>set(k)(e.target.value)} placeholder={placeholder}
-        className="input" style={{fontFamily:mono?"var(--font-mono)":"inherit"}}/>
-    </div>
-  );
+
 
   return (
     <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
@@ -782,11 +784,11 @@ function BlockEditModal({ block, sites, onClose, onSaved }) {
           {err&&<div style={{background:"var(--danger-surface)",border:"1px solid var(--danger-border)",
             borderRadius:"var(--radius-sm)",padding:"10px 14px",color:"var(--danger)",fontSize:13}}>{err}</div>}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-            <Field label="Prefix" k="prefix" placeholder="114.198.242.0/24" mono/>
-            <Field label="Name"   k="name"   placeholder="Block name"/>
-            <Field label="ASN"    k="asn"    placeholder="56246" mono/>
-            <Field label="Router" k="router" placeholder="mx204-kediri" mono/>
-            <div style={{gridColumn:"1/-1"}}><Field label="Operator" k="operator" placeholder="PT Sumber Data Indonesia"/></div>
+            <BlockEditField label="Prefix" k="prefix" placeholder="114.198.242.0/24" mono form={form} set={set}/>
+            <BlockEditField label="Name" k="name" placeholder="Block name" form={form} set={set}/>
+            <BlockEditField label="ASN" k="asn" placeholder="56246" mono form={form} set={set}/>
+            <BlockEditField label="Router" k="router" placeholder="mx204-kediri" mono form={form} set={set}/>
+            <div style={{gridColumn:"1/-1"}}><BlockEditField label="Operator" k="operator" placeholder="PT Sumber Data Indonesia" form={form} set={set}/></div>
             <div>
               <label style={{display:"block",fontSize:10,fontWeight:600,textTransform:"uppercase",
                 letterSpacing:"0.08em",color:"var(--text-muted)",marginBottom:6}}>Site</label>

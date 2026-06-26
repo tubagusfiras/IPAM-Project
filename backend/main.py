@@ -1458,3 +1458,91 @@ async def global_search(q: str = Query(..., min_length=2), db=Depends(get_db)):
     results["allocations"] = [dict(r) for r in await db.fetch("SELECT id, prefix::text AS label, customer_name, status FROM v_allocation_detail WHERE prefix::text ILIKE $1 OR customer_name ILIKE $1 LIMIT 10", f"%{q}%")]
     results["customers"]   = [dict(r) for r in await db.fetch("SELECT id, name AS label, code FROM customers WHERE name ILIKE $1 OR code ILIKE $1 LIMIT 5", f"%{q}%")]
     return results
+
+# ------------------------------------------------------------------
+# CSV IMPORT — temporary endpoints
+# ------------------------------------------------------------------
+import io, csv
+from fastapi import UploadFile, File, Form
+
+@app.post("/api/v1/import/preview", summary="Preview CSV import", tags=["Import"])
+async def preview_import(file: UploadFile = File(...), db=Depends(get_db)):
+    if not file.filename.endswith(".csv"):
+        raise HTTPException(400, "Only CSV files are supported")
+    content = await file.read()
+    if len(content) > 10_000_000:
+        raise HTTPException(413, "File too large (max 10MB)")
+    text = content.decode("utf-8", errors="replace").replace("\r\n", "\n").replace("\r", "\n")
+
+    # Auto detect format
+    first_lines = text.split("\n")[:10]
+    is_ipv6 = any("::" in line and "/" in line for line in first_lines)
+    meta, allocs = parse_ipv6_csv(text) if is_ipv6 else parse_ipv4_csv(text)
+
+    return {"meta": meta, "allocations": allocs, "total_count": len(allocs), "format": "ipv6" if is_ipv6 else "ipv4"}
+
+@app.post("/api/v1/import/confirm", summary="Confirm CSV import", tags=["Import"])
+async def confirm_import(body: dict, db=Depends(get_db)):
+    meta = body.get("meta", {})
+    allocs = body.get("allocations", [])
+    site_id = body.get("site_id")
+
+    if not meta.get("prefix"):
+        raise HTTPException(400, "Block prefix is required")
+    if not allocs:
+        raise HTTPException(400, "No allocations to import")
+
+    imported = 0
+    skipped = 0
+    block_id = None
+
+    async with db.transaction():
+        # Create or find block
+        existing = await db.fetchrow("SELECT id FROM ip_blocks WHERE prefix >>= $1::inet LIMIT 1", meta["prefix"])
+        if existing:
+            block_id = existing["id"]
+        else:
+            block = await db.fetchrow(
+                "INSERT INTO ip_blocks (prefix, name, asn, router, operator, site_id, status) VALUES ($1::cidr, $2, $3, $4, $5, $6::uuid, $7) RETURNING id",
+                meta["prefix"], meta.get("name") or meta["prefix"], meta.get("asn"), meta.get("router"), meta.get("operator"), site_id, "active"
+            )
+            block_id = block["id"]
+
+        for alloc in allocs:
+            if not alloc.get("prefix"):
+                skipped += 1
+                continue
+            # Auto-correct prefix ke network address (fix host bits set)
+            try:
+                prefix = str(ipaddress.ip_network(alloc["prefix"], strict=False))
+            except ValueError:
+                skipped += 1
+                continue
+            alloc["prefix"] = prefix
+            # Skip if already exists
+            exists = await db.fetchrow("SELECT id FROM allocations WHERE prefix = $1::cidr AND block_id = $2::uuid", prefix, block_id)
+            if exists:
+                skipped += 1
+                continue
+
+            # Find or create customer
+            customer_id = None
+            if alloc.get("customer") and alloc["customer"].strip():
+                cust = await db.fetchrow("SELECT id FROM customers WHERE name ILIKE $1 LIMIT 1", alloc["customer"])
+                if cust:
+                    customer_id = cust["id"]
+                else:
+                    cust = await db.fetchrow("INSERT INTO customers (name) VALUES ($1) RETURNING id", alloc["customer"].strip())
+                    customer_id = cust["id"]
+
+            await db.fetchrow(
+                "INSERT INTO allocations (prefix, block_id, customer_id, status, description, notes) VALUES ($1::cidr, $2::uuid, $3::uuid, $4::alloc_status_t, $5, $6) RETURNING id",
+                alloc["prefix"], block_id, customer_id, alloc.get("status", "active"), alloc.get("description", ""), alloc.get("notes", "")
+            )
+            imported += 1
+
+    # Log
+    await db.execute("INSERT INTO audit_log (table_name, record_id, action, new_data, changed_by) VALUES ('ip_blocks', $1::uuid, 'import', $2::jsonb, 'csv_import')",
+                     block_id, json.dumps({"imported": imported, "skipped": skipped}))
+
+    return {"block_id": str(block_id), "imported": imported, "skipped": skipped}
