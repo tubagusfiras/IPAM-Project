@@ -1,96 +1,62 @@
 {
-  "__inputs": [],
-  "__requires": [],
   "title": "IPAM SDI - API Overview",
-  "version": 1,
   "uid": "ipam-overview",
+  "version": 2,
+  "timezone": "browser",
+  "schemaVersion": 30,
   "panels": [
     {
-      "title": "Request Rate",
-      "type": "stat",
+      "id": 1,
+      "title": "API Requests",
+      "type": "timeseries",
       "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
-      "targets": [
-        { "expr": "rate(ipam_requests_total[1m])", "legendFormat": "req/s" }
-      ],
-      "description": "Total request rate per second"
+      "targets": [{ "expr": "rate(ipam_requests_total[1m])", "legendFormat": "{{status}} {{method}} {{endpoint}}" }],
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "showPoints": "never", "lineInterpolation": "smooth" } } },
+      "options": { "legend": { "showLegend": false } }
     },
     {
-      "title": "Response Time p95",
-      "type": "stat",
-      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 0 },
-      "targets": [
-        { "expr": "histogram_quantile(0.95, rate(ipam_request_duration_seconds_bucket[5m]))", "legendFormat": "p95" }
-      ],
-      "description": "95th percentile response time"
-    },
-    {
-      "title": "Error Rate",
-      "type": "stat",
-      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 0 },
-      "targets": [
-        { "expr": "sum(rate(ipam_requests_total{status=~'5..'}[5m])) / sum(rate(ipam_requests_total[5m])) * 100", "legendFormat": "%" }
-      ],
-      "description": "Percentage of 5xx errors"
-    },
-    {
-      "title": "Active DB Connections",
-      "type": "stat",
-      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 0 },
-      "targets": [
-        { "expr": "avg by (job) (process_open_fds{job='ipam-api'})", "legendFormat": "open fds" }
-      ],
-      "description": "Current open file descriptors"
-    },
-    {
-      "title": "Request Rate by Endpoint",
-      "type": "bargauge",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
-      "targets": [
-        { "expr": "rate(ipam_requests_total[5m])", "legendFormat": "{{ endpoint }}" }
-      ],
-      "description": "Most requested endpoints last 5 minutes"
-    },
-    {
-      "title": "Response Time by Endpoint",
-      "type": "table",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
-      "targets": [
-        { "expr": "histogram_quantile(0.95, rate(ipam_request_duration_seconds_bucket{endpoint=~'/api/v1/.+'}[5m]))", "legendFormat": "{{ endpoint }} p95" }
-      ],
-      "description": "Response time per endpoint (p95)"
-    },
-    {
-      "title": "Request Rate (5m)",
-      "type": "graph",
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 14 },
+      "id": 6,
+      "title": "Request Rate (Last Hour)",
+      "type": "timeseries",
+      "gridPos": { "h": 14, "w": 12, "x": 0, "y": 6 },
       "targets": [
         { "expr": "rate(ipam_requests_total[1m])", "legendFormat": "Total" },
         { "expr": "rate(ipam_requests_total{status=~'2..'}[1m])", "legendFormat": "2xx" },
         { "expr": "rate(ipam_requests_total{status=~'4..'}[1m])", "legendFormat": "4xx" },
         { "expr": "rate(ipam_requests_total{status=~'5..'}[1m])", "legendFormat": "5xx" }
       ],
-      "description": "Request rate by HTTP status code"
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "showPoints": "never", "lineInterpolation": "smooth" },
+          "min": 0
+        }
+      },
+      "options": {
+        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
     },
     {
+      "id": 7,
       "title": "Memory Usage",
-      "type": "graph",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 22 },
-      "targets": [
-        { "expr": "process_resident_memory_bytes{job='ipam-api'}", "legendFormat": "RSS" }
-      ],
-      "description": "Process resident memory"
+      "type": "timeseries",
+      "gridPos": { "h": 7, "w": 6, "x": 12, "y": 6 },
+      "targets": [{ "expr": "process_resident_memory_bytes", "legendFormat": "RSS" }],
+      "fieldConfig": { "defaults": { "unit": "bytes", "custom": { "showPoints": "never", "lineInterpolation": "smooth" } } },
+      "options": { "legend": { "showLegend": false } }
     },
     {
+      "id": 8,
       "title": "CPU Usage",
-      "type": "graph",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 22 },
-      "targets": [
-        { "expr": "rate(process_cpu_seconds_total{job='ipam-api'}[1m])", "legendFormat": "CPU" }
-      ],
-      "description": "CPU usage per second"
+      "type": "timeseries",
+      "gridPos": { "h": 7, "w": 6, "x": 12, "y": 13 },
+      "targets": [{ "expr": "rate(process_cpu_seconds_total[1m])", "legendFormat": "CPU" }],
+      "fieldConfig": { "defaults": { "unit": "cps", "custom": { "showPoints": "never", "lineInterpolation": "smooth" } } },
+      "options": { "legend": { "showLegend": false } }
     }
   ],
-  "tags": ["ipam", "sdi", "api"],
-  "timezone": "browser",
-  "schemaVersion": 30
+  "tags": ["ipam", "sdi"],
+  "time": { "from": "now-1h", "to": "now" },
+  "refresh": "30s"
 }

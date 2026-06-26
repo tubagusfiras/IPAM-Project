@@ -71,6 +71,8 @@ export default function Dashboard({ onNavigate }) {
   const [stats, setStats] = useState(null);
   const [err, setErr] = useState(null);
   const [health, setHealth] = useState(null);
+  const [showGrafana, setShowGrafana] = useState(true);
+  const gTheme = document.documentElement.classList.contains("dark") ? "dark" : "light";
 
   useEffect(() => { getDashboardStats().then(setStats).catch(e => setErr(e.message)); }, []);
   useEffect(() => {
@@ -116,7 +118,7 @@ export default function Dashboard({ onNavigate }) {
       {/* ── HEADER ── */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
         <div>
-          <div style={{fontSize:"18px",fontWeight:600,color:TEXT}}>Dashboard</div>
+          <div style={{fontSize:"16px",fontWeight:700,color:TEXT,letterSpacing:"-0.02em"}}>Dashboard</div>
           <div style={{fontSize:"12px",color:MUTED,marginTop:2}}>IP Address Management — {total_blocks} networks, {total_allocations} allocations</div>
         </div>
         <div style={{display:"flex",gap:8}}>
@@ -307,6 +309,25 @@ export default function Dashboard({ onNavigate }) {
           </button>
         ))}
       </div>
+
+      {/* ── GRAFANA EMBED ── */}
+      {showGrafana && (
+        <div className="card" style={{overflow:"hidden",animation:"fadeUp 0.3s ease"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",borderBottom:`1px solid ${BORDER}`}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <svg viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="1.8" width="16" height="16"><path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+              <span style={{fontSize:"13px",fontWeight:600,color:TEXT}}>Grafana</span>
+              <span style={{fontSize:"10px",color:MUTED}}>API metrics · 1h</span>
+            </div>
+            <div style={{display:"flex",gap:6}}>
+              <a href="http://103.10.120.11:3100" target="_blank" rel="noreferrer" style={{fontSize:"10px",color:ACCENT,textDecoration:"none",borderBottom:"1px dashed",padding:"2px 4px"}}>Open Grafana →</a>
+              <button onClick={()=>setShowGrafana(false)} style={{fontSize:"14px",cursor:"pointer",background:"none",border:"none",color:DIM,lineHeight:1}}>✕</button>
+            </div>
+          </div>
+          <iframe src={"http://103.10.120.11:3100/d-solo/ipam-overview?orgId=1&from=now-1h&to=now&panelId=6&theme=" + gTheme}
+            width="100%" height="260" frameborder="0" style={{display:"block"}}/>
+        </div>
+      )}
     </div>
   );
 }
