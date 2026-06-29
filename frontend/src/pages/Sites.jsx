@@ -24,11 +24,11 @@ function SiteModal({ site, onClose, onSaved }) {
     setSaving(false);
   };
 
-  const Field = ({ label, k, placeholder }) => (
-    <div>
+  const renderField = (label, k, placeholder) => (
+    <div key={k}>
       <label style={{display:"block",fontSize:10,fontWeight:700,textTransform:"uppercase",
         letterSpacing:"0.08em",color:"var(--text-dim)",marginBottom:6}}>{label}</label>
-      <input value={form[k]} onChange={e=>set(k)(e.target.value)}
+      <input value={form[k]} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))}
         placeholder={placeholder} className="input"/>
     </div>
   );
@@ -54,10 +54,10 @@ function SiteModal({ site, onClose, onSaved }) {
               borderRadius:"var(--radius-sm)",padding:"10px 14px",color:"var(--danger)",fontSize:13}}>{err}</div>
           )}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-            <div style={{gridColumn:"1/-1"}}><Field label="Site Name *" k="name" placeholder="e.g. Kediri DC"/></div>
-            <Field label="City"   k="city"   placeholder="e.g. Kediri"/>
-            <Field label="Region" k="region" placeholder="e.g. East Java"/>
-            <div style={{gridColumn:"1/-1"}}><Field label="Description" k="description" placeholder="Optional description"/></div>
+            <div style={{gridColumn:"1/-1"}}>{renderField("Site Name *","name","e.g. Kediri DC")}</div>
+            {renderField("City","city","e.g. Kediri")}
+            {renderField("Region","region","e.g. East Java")}
+            <div style={{gridColumn:"1/-1"}}>{renderField("Description","description","Optional description")}</div>
           </div>
         </div>
         <div className="modal-footer">
@@ -159,10 +159,22 @@ export default function Sites() {
       <div className="card" style={{padding:"10px 14px",display:"flex",alignItems:"center",gap:10}}>
         <div style={{position:"relative",flex:1,maxWidth:300}}>
           <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",
-            color:"var(--text-dim)",pointerEvents:"none",fontSize:14}}>S</span>
+            color:"var(--text-dim)",pointerEvents:"none",zIndex:1,display:"flex"}}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+          </span>
           <input value={search} onChange={e=>setSearch(e.target.value)}
             placeholder="Search site name or city..."
-            className="input" style={{paddingLeft:32,height:34,fontSize:13}}/>
+            className="input" style={{paddingLeft:32,height:36,fontSize:13,background:"var(--input-bg)",borderColor:"var(--border-medium)"}}
+            onFocus={e=>e.currentTarget.style.borderColor="var(--accent)"}
+            onBlur={e=>e.currentTarget.style.borderColor="var(--input-border)"}/>
+          {search && (
+            <button onClick={()=>setSearch("")} style={{
+              position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",
+              background:"none",border:"none",color:"var(--text-dim)",cursor:"pointer",padding:"2px"
+            }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="12" height="12"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          )}
         </div>
         <div style={{marginLeft:"auto"}}>
           <div style={{display:"flex",alignItems:"center",gap:6,
