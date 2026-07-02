@@ -1482,19 +1482,44 @@ from fastapi import UploadFile, File, Form
 
 @app.post("/api/v1/import/preview", summary="Preview CSV import", tags=["Import"])
 async def preview_import(file: UploadFile = File(...), db=Depends(get_db)):
-    if not file.filename.endswith(".csv"):
-        raise HTTPException(400, "Only CSV files are supported")
+    if not file.filename.lower().endswith((".csv", ".xls", ".xlsx", ".txt")):
+        raise HTTPException(400, "Hanya file CSV yang didukung")
     content = await file.read()
     if len(content) > 10_000_000:
-        raise HTTPException(413, "File too large (max 10MB)")
+        raise HTTPException(413, "File terlalu besar (max 10MB)")
     text = content.decode("utf-8", errors="replace").replace("\r\n", "\n").replace("\r", "\n")
 
     # Auto detect format
     first_lines = text.split("\n")[:10]
     is_ipv6 = any("::" in line and "/" in line for line in first_lines)
-    meta, allocs = parse_ipv6_csv(text) if is_ipv6 else parse_ipv4_csv(text)
+    # Pass filename untuk fallback prefix extraction dari filename
+    meta, allocs = parse_ipv6_csv(text, filename=file.filename) if is_ipv6 else parse_ipv4_csv(text, filename=file.filename)
 
-    return {"meta": meta, "allocations": allocs, "total_count": len(allocs), "format": "ipv6" if is_ipv6 else "ipv4"}
+    # Validasi overlap
+    import ipaddress as ip_mod
+    overlaps = []
+    sorted_a = sorted(allocs, key=lambda a: ip_mod.ip_network(a["prefix"], strict=False))
+    for i in range(len(sorted_a)):
+        for j in range(i + 1, len(sorted_a)):
+            n1 = ip_mod.ip_network(sorted_a[i]["prefix"], strict=False)
+            n2 = ip_mod.ip_network(sorted_a[j]["prefix"], strict=False)
+            if n1.overlaps(n2):
+                overlaps.append({
+                    "a": sorted_a[i]["prefix"],
+                    "b": sorted_a[j]["prefix"],
+                    "a_customer": sorted_a[i].get("customer"),
+                    "b_customer": sorted_a[j].get("customer"),
+                })
+                break
+
+    return {
+        "meta": meta,
+        "allocations": allocs,
+        "total_count": len(allocs),
+        "format": "ipv6" if is_ipv6 else "ipv4",
+        "overlaps": overlaps,
+        "has_overlaps": len(overlaps) > 0,
+    }
 
 @app.post("/api/v1/import/confirm", summary="Confirm CSV import", tags=["Import"])
 async def confirm_import(body: dict, db=Depends(get_db)):
