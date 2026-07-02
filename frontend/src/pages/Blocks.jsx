@@ -213,6 +213,11 @@ export default function Blocks({ ipVersion="", onSelectBlock }) {
       return n;
     });
   };
+  const toggleSelectAll = (e) => {
+    const checked = e.target.checked;
+    setSelectAll(checked);
+    setSelected(new Set(checked ? items.map(b => b.id) : []));
+  };
 
   const bulkDelete = async () => {
     if (!confirm(`Delete ${selected.size} blocks?`)) return;
@@ -262,7 +267,7 @@ export default function Blocks({ ipVersion="", onSelectBlock }) {
           </h1>
           <p style={{margin:"4px 0 0",fontSize:13,color:"var(--text-muted)"}}>
             {total} block{total!==1?"s":""} total
-            {siteFilter || search ? ` · filtered` : ""}
+            {siteFilter ? ` · filtered` : ""}
           </p>
         </div>
         <button onClick={()=>setModal("add")} className="btn btn-primary">
@@ -271,64 +276,31 @@ export default function Blocks({ ipVersion="", onSelectBlock }) {
         </button>
       </div>
 
-      {/* Filters */}
-      <div style={{
-        display:"flex", alignItems:"center", gap:10,
-        padding:"12px 16px",
-        background:"var(--surface-1)",
-        border:"1px solid var(--border-subtle)",
-        borderRadius:"var(--radius)",
-      }}>
-        {/* Search */}
-        <div style={{position:"relative",flex:1,maxWidth:360}}>
-          <span style={{
-            position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",
-            color:"var(--text-dim)",pointerEvents:"none",zIndex:1,display:"flex",
-          }}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-          </span>
-          <input
-            value={search} onChange={e=>setSearch(e.target.value)}
-            placeholder="Search prefix, name, ASN, router..."
-            className="input"
-            style={{paddingLeft:32,height:36,fontSize:13,background:"var(--input-bg)",borderColor:"var(--border-medium)"}}
-            onFocus={e=>e.currentTarget.style.borderColor="var(--accent)"}
-            onBlur={e=>e.currentTarget.style.borderColor="var(--input-border)"}
-          />
-          {search && (
-            <button onClick={()=>setSearch("")} style={{
-              position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",
-              background:"none",border:"none",color:"var(--text-dim)",cursor:"pointer",
-              padding:"2px 4px",fontSize:12,lineHeight:1,zIndex:1
-            }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="12" height="12"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
-          )}
-        </div>
+      {/* Search & Filter */}
+      <div className="card" style={{padding:"12px 16px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+          {/* Search input */}
+          <div style={{position:"relative",flex:"1 1 300px",minWidth:280}}>
+            <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:"var(--text-dim)",pointerEvents:"none",display:"flex",zIndex:1}}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+            </span>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search prefix, name, ASN or router..."
+              className="input" style={{paddingLeft:32,height:38,fontSize:13,color:"var(--text)",background:"var(--input-bg)"}}/>
+            {search && <button onClick={()=>setSearch("")} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"var(--text-dim)",cursor:"pointer",fontSize:16,lineHeight:1}}>×</button>}
+          </div>
 
-        {/* Site filter */}
-        <select value={siteFilter} onChange={e=>setSiteFilter(e.target.value)}
-          className="select" style={{height:34,fontSize:13,minWidth:140}}>
-          <option value="">All Sites</option>
-          {sites.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
+          {/* Sites filter */}
+          <select value={siteFilter} onChange={e=>setSiteFilter(e.target.value)} className="select" style={{height:38,fontSize:12,minWidth:160,flex:"0 0 auto"}}>
+            <option value="">All Sites</option>
+            {sites.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
 
-        {/* Stats pills */}
-        <div style={{marginLeft:"auto",display:"flex",gap:8}}>
-          {[
-            ["Total",   total,                          "var(--text-muted)",  "var(--surface-3)"],
-            ["IPv4",    items.filter(i=>i.ip_version==="IPv4").length, "var(--info)",    "var(--info-surface)"],
-            ["IPv6",    items.filter(i=>i.ip_version==="IPv6").length, "var(--success)", "var(--success-surface)"],
-          ].map(([l,v,c,bg])=>(
-            <div key={l} style={{
-              display:"flex",alignItems:"center",gap:6,
-              padding:"4px 10px",borderRadius:99,
-              background:bg, fontSize:12, fontWeight:500,
-            }}>
-              <span style={{color:c,fontWeight:700,fontVariantNumeric:"tabular-nums"}}>{v}</span>
-              <span style={{color:"var(--text-muted)"}}>{l}</span>
-            </div>
-          ))}
+          {/* Stats badges */}
+          <div style={{display:"flex",gap:6,flex:"0 0 auto",marginLeft:"auto"}}>
+            <span style={{padding:"4px 10px",borderRadius:99,background:"var(--surface-3)",fontSize:11,fontWeight:600,color:"var(--text-muted)",whiteSpace:"nowrap",display:"flex",alignItems:"center",height:28}}>{total} blocks</span>
+            <span style={{padding:"4px 10px",borderRadius:99,background:"var(--accent-dim)",fontSize:11,fontWeight:600,color:"var(--accent)",whiteSpace:"nowrap",display:"flex",alignItems:"center",height:28}}>{items.filter(b=>b.ip_version==='IPv4').length} IPv4</span>
+            <span style={{padding:"4px 10px",borderRadius:99,background:"var(--success-surface)",fontSize:11,fontWeight:600,color:"var(--success)",whiteSpace:"nowrap",display:"flex",alignItems:"center",height:28}}>{items.filter(b=>b.ip_version==='IPv6').length} IPv6</span>
+          </div>
         </div>
       </div>
 
@@ -337,22 +309,15 @@ export default function Blocks({ ipVersion="", onSelectBlock }) {
         <table style={{width:"100%",borderCollapse:"collapse"}}>
           <thead>
             <tr>
-              {["","Prefix","Version","Name","ASN / Router","Site","Allocations","Status",""].map(h=>(
-                h === "" ? (
+              {["","Prefix","Version","Name","ASN / Router","Site","Allocations","Status",""].map(function(h) {
+                return h === "" ? (
                   <th key="checkbox" className="table-header" style={{width:32,textAlign:"center"}}>
-                    <input type="checkbox" checked={selectAll}
-                      onChange={(e)=>{
-                        const checked = e.target.checked;
-                        setSelectAll(checked);
-                        setSelected(new Set(checked ? items.map(b=>b.id) : []));
-                      }}
-                      style={{cursor:"pointer",accentColor:"var(--accent)",width:16,height:16}}
-                    />
+                    <input type="checkbox" checked={selectAll} onChange={toggleSelectAll} style={{cursor:"pointer",accentColor:"var(--accent)",width:16,height:16}}/>
                   </th>
                 ) : (
                   <th key={h} className="table-header">{h}</th>
-                )
-              ))}
+                );
+              })}
             </tr>
           </thead>
           <tbody>
