@@ -85,11 +85,28 @@ services:
     container_name: ipam-grafana
     restart: unless-stopped
     environment:
+      # Authentication - Auto-login as anonymous (Viewer role)
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
+      GF_AUTH_DISABLE_LOGIN_FORM: "false"
+      GF_USERS_AUTO_ASSIGN_ORG: "true"
+      GF_USERS_AUTO_ASSIGN_ORG_ID: "1"
+
+      # Admin credentials (for admin panel access if needed)
       GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ADMIN_USER: admin
+
+      # UI & Server
       GF_SERVER_ROOT_URL: http://103.10.120.11:3100
       GF_SERVER_SERVE_FROM_SUB_PATH: "true"
       GF_SECURITY_ALLOW_EMBEDDING: "true"
       GF_SERVER_X_FRAME_OPTIONS: ""
+
+      # Theme & UX
+      GF_USERS_DEFAULT_THEME: "dark"
+      GF_EXPLORE_ENABLED: "true"
+      GF_PANELS_PLUGIN_ADMINS: "true"
+      GF_FEATURE_TOGGLES_ENABLE: "enableNewVariables,disableAngular"
     volumes:
       - ../monitoring/dashboards:/etc/grafana/provisioning/dashboards:ro
       - ../monitoring/datasources:/etc/grafana/provisioning/datasources:ro
