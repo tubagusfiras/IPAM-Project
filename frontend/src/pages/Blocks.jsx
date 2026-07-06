@@ -276,15 +276,15 @@ export default function Blocks({ ipVersion="", onSelectBlock }) {
         </button>
       </div>
 
-      {/* Search & Filter Section */}
+      {/* Search & Filter Section - GRID LAYOUT */}
       <div className="card" style={{padding:"14px 20px"}}>
-        {/* Search + Sites Row */}
-        <div style={{display:"flex",gap:16,alignItems:"center",marginBottom:12}}>
-          {/* Search Input - Full responsive width */}
-          <div style={{flex:1,position:"relative",minWidth:0}}>
+        {/* Row 1: Search (full width) + Sites (inline) */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 220px",gap:16,alignItems:"center",marginBottom:12}}>
+          {/* Search Input */}
+          <div style={{position:"relative",width:"100%",overflow:"visible"}}>
             <span style={{
               position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",
-              color:"var(--text-muted)",pointerEvents:"none"
+              color:"var(--text-muted)",pointerEvents:"none",zIndex:1
             }}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
                 <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
@@ -296,34 +296,40 @@ export default function Blocks({ ipVersion="", onSelectBlock }) {
               placeholder="Search prefix, name, ASN, router..."
               className="input"
               style={{
-                width:"100%",paddingLeft:40,paddingRight:search?40:12,height:40,fontSize:14
+                width:"100%",
+                height:40,
+                paddingLeft:40,
+                paddingRight:search?40:12,
+                fontSize:14,
+                boxSizing:"border-box"
               }}
             />
             {search && (
               <button
                 onClick={()=>setSearch("")}
+                tabIndex={-1}
                 style={{
-                  position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",
+                  position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",
                   background:"none",border:"none",color:"var(--text-muted)",cursor:"pointer",
-                  fontSize:20,padding:0,width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center"
+                  fontSize:20,padding:0,width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",zIndex:2
                 }}
               >×</button>
             )}
           </div>
 
-          {/* Sites Filter - Fixed width */}
+          {/* Sites Filter */}
           <select
             value={siteFilter}
             onChange={e=>setSiteFilter(e.target.value)}
             className="select"
-            style={{minWidth:200,height:40,fontSize:14}}
+            style={{height:40,fontSize:14,width:"100%",boxSizing:"border-box"}}
           >
             <option value="">All Sites</option>
             {sites.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         </div>
 
-        {/* Stats Row */}
+        {/* Row 2: Stats */}
         <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",fontSize:12}}>
           <Badge label={`${total} blocks`} style={{background:"var(--surface-2)",color:"var(--text-muted)",border:"1px solid var(--border-soft)"}}/>
           <Badge label={`${items.filter(b=>b.ip_version==='IPv4').length} IPv4`} style={{background:"var(--accent-dim)",color:"var(--accent)",border:"1px solid var(--accent-border)"}}/>
