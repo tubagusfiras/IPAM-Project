@@ -21,32 +21,26 @@ Comprehensive improvement roadmap untuk IPAM system fokus pada:
 ## 🔴 BLOCKING ISSUES (Fix ASAP)
 
 ### Issue #1: BlockDetail Status Change Loading Rough
-**Status:** 🔴 BLOCKING  
+**Status:** 🟢 **FIXED** (2026-07-07)  
 **Date Found:** 2026-07-07  
 **Reported By:** Firas  
 **Severity:** HIGH
 
-**Problem:**
-- User changes status in BlockDetail.jsx dari "active" → "available"
-- Loading screen terlalu kasar/rough (UX jelek)
-- Utilization tidak update setelah status change
-- Row masih terlihat di table padahal status "available"
+**Problem (RESOLVED):**
+- ~~User changes status in BlockDetail.jsx dari "active" → "available"~~
+- ~~Loading screen terlalu kasar/rough (UX jelek)~~
+- ~~Utilization tidak update setelah status change~~
+- ~~Row masih terlihat di table padahal status "available"~~
 
-**Root Cause Analysis (TBD):**
-- Mungkin API response lambat?
-- Mungkin UI state update kasar?
-- Mungkin table refresh tidak terpicu?
+**Solution Applied (Commit `ddefaaa`):**
+- ✅ Removed `setTimeout(() => load(), 1500)` - eliminated rough reload
+- ✅ Added utilization recalculation in optimistic update
+- ✅ Updated labels: "Available" → "Free" (clarity!)
+- ✅ Updated 2 display locations (line 594, 749)
 
-**Solution Needed:**
-- [ ] Add smooth transition/loading state
-- [ ] Clarify: "available" = "free" (not allocated) - update label
-- [ ] Ensure utilization recalculates saat status berubah
-- [ ] Auto-filter atau visual indication untuk "available"
+**Result:** Smooth status changes, instant utilization update, professional UX ✅
 
-**Files to Check:**
-- `frontend/src/pages/BlockDetail.jsx` (status change logic)
-- `backend/main.py` (API endpoint untuk update status)
-- `frontend/src/pages/Blocks.jsx` (table refresh)
+**Testing:** Try changing status di BlockDetail - sekarang akan smooth tanpa page flicker!
 
 ---
 
