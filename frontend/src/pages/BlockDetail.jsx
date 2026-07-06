@@ -18,10 +18,10 @@ const OWNER_TYPES = [
 const STATUS_OPTS = ["active","available","reserved","deprecated"];
 
 const STATUS_STYLE = {
-  active:     { color:"var(--success)",  bg:"var(--success-surface)", border:"var(--success-border)" },
-  available:  { color:"var(--text-muted)", bg:"transparent",          border:"var(--border-soft)" },
-  reserved:   { color:"var(--text-dim)",   bg:"transparent",          border:"var(--border-soft)" },
-  deprecated: { color:"var(--warning)",  bg:"var(--warning-surface)", border:"var(--warning-border)" },
+  active:     { color:"var(--success)",  bg:"var(--success-surface)", border:"var(--success-border)", label:"Active" },
+  available:  { color:"var(--text-muted)", bg:"transparent",          border:"var(--border-soft)", label:"Free" },
+  reserved:   { color:"var(--text-dim)",   bg:"transparent",          border:"var(--border-soft)", label:"Reserved" },
+  deprecated: { color:"var(--warning)",  bg:"var(--warning-surface)", border:"var(--warning-border)", label:"Deprecated" },
 };
 
 const V4_MASKS = [24,25,26,27,28,29,30,31];
@@ -439,16 +439,38 @@ export default function BlockDetail({ blockId, onBack, dark }) {
     try {
       await updateAllocation(allocId,payload);
       setSaveMsg("Saved ✓"); setTimeout(()=>setSaveMsg(null),1500);
-      // optimistic update — jangan load() langsung agar fokus tidak hilang
+      // optimistic update dengan recalculate stats - NO rough reload!
       setData(prev => {
         if (!prev) return prev;
+        const updatedAllocations = prev.allocations.map(a =>
+          a.id === allocId ? {
+            ...a,
+            ...payload,
+            customer_name: field==="customer_name" ? value : a.customer_name,
+            vlan_vid: field==="vlan_vid" ? (value?parseInt(value):null) : a.vlan_vid
+          } : a
+        );
+
+        // Recalculate block stats dari allocations (fix utilization not updating)
+        const activeCount = updatedAllocations.filter(a => a.status === "active").length;
+        const usedIps = updatedAllocations
+          .filter(a => a.status === "active")
+          .reduce((sum, a) => {
+            try {
+              const [, plen] = a.prefix.split("/");
+              const size = Math.pow(2, 32 - parseInt(plen));
+              return sum + size;
+            } catch { return sum; }
+          }, 0);
+
         return {
           ...prev,
-          allocations: prev.allocations.map(a => a.id === allocId ? { ...a, ...payload, customer_name: field==="customer_name" ? value : a.customer_name, vlan_vid: field==="vlan_vid" ? (value?parseInt(value):null) : a.vlan_vid } : a)
+          allocations: updatedAllocations,
+          used_ips: String(usedIps), // update utilization
+          active_allocations: activeCount
         };
       });
-      // load di background setelah delay
-      setTimeout(() => load(), 1500);
+      // NO setTimeout load() - smooth UX! ✨
     } catch(e) {
       setSaveMsg("Error: "+e.message); setTimeout(()=>setSaveMsg(null),3000);
     }
@@ -569,7 +591,7 @@ export default function BlockDetail({ blockId, onBack, dark }) {
               color:       data.status==="active"?"var(--success)":"var(--warning)",
               border:`1px solid ${data.status==="active"?"var(--success-border)":"var(--warning-border)"}`,
               textTransform:"capitalize",
-            }}>{data.status}</span>
+            }}>{STATUS_STYLE[data.status]?.label || data.status}</span>
           </div>
           <div style={{display:"flex",gap:8}}>
             <button onClick={()=>setShowGrid(v=>!v)}
@@ -724,7 +746,7 @@ export default function BlockDetail({ blockId, onBack, dark }) {
                         background: isActive?"var(--success-surface)":"var(--surface-3)",
                         color: isActive?"var(--success)":"var(--text-dim)",
                         border:`1px solid ${isActive?"var(--success-border)":"var(--border-soft)"}`,
-                      }}>{a.status}</span>
+                      }}>{STATUS_STYLE[a.status]?.label || a.status}</span>
                       <span style={{fontSize:11,color:"var(--text-dim)",opacity:0.6}}>click to edit →</span>
                     </div>
                   );
