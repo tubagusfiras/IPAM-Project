@@ -276,155 +276,58 @@ export default function Blocks({ ipVersion="", onSelectBlock }) {
         </button>
       </div>
 
-      {/* Search & Filter - Clean Layout */}
-      <div style={{
-        display:"flex",
-        flexDirection:"column",
-        gap:12,
-        padding:"16px 20px",
-        background:"var(--surface-1)",
-        border:"1px solid var(--border-medium)",
-        borderRadius:"var(--radius)"
-      }}>
-        {/* Row 1: Search + Sites */}
-        <div style={{display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
-          {/* Search input */}
-          <div style={{position:"relative",flex:"1 1 300px",minWidth:280}}>
+      {/* Search & Filter Section */}
+      <div className="card" style={{padding:"14px 20px"}}>
+        {/* Search + Sites Row */}
+        <div style={{display:"flex",gap:16,alignItems:"center",marginBottom:12}}>
+          {/* Search Input - Full responsive width */}
+          <div style={{flex:1,position:"relative",minWidth:0}}>
             <span style={{
-              position:"absolute",
-              left:14,
-              top:"50%",
-              transform:"translateY(-50%)",
-              color:"var(--text-muted)",
-              pointerEvents:"none",
-              display:"flex",
-              alignItems:"center"
+              position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",
+              color:"var(--text-muted)",pointerEvents:"none"
             }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="16" height="16">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
                 <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
               </svg>
             </span>
             <input
               value={search}
               onChange={e=>setSearch(e.target.value)}
-              placeholder="Search by prefix, name, ASN, or router..."
-              type="text"
+              placeholder="Search prefix, name, ASN, router..."
+              className="input"
               style={{
-                width:"100%",
-                height:44,
-                paddingLeft:42,
-                paddingRight:search?36:14,
-                fontSize:14,
-                fontWeight:400,
-                color:"#1a1b1e",
-                background:"#ffffff",
-                border:"1px solid #d1d5db",
-                borderRadius:8,
-                outline:"none",
-                transition:"border-color 0.2s, box-shadow 0.2s"
-              }}
-              onFocus={e=>{
-                e.target.style.borderColor="var(--accent)";
-                e.target.style.boxShadow="0 0 0 3px var(--accent-dim)";
-              }}
-              onBlur={e=>{
-                e.target.style.borderColor="#d1d5db";
-                e.target.style.boxShadow="none";
+                width:"100%",paddingLeft:40,paddingRight:search?40:12,height:40,fontSize:14
               }}
             />
             {search && (
               <button
                 onClick={()=>setSearch("")}
-                tabIndex={-1}
                 style={{
-                  position:"absolute",
-                  right:10,
-                  top:"50%",
-                  transform:"translateY(-50%)",
-                  background:"#f3f4f6",
-                  border:"none",
-                  color:"#6b7280",
-                  cursor:"pointer",
-                  fontSize:16,
-                  lineHeight:1,
-                  width:24,
-                  height:24,
-                  borderRadius:"50%",
-                  display:"flex",
-                  alignItems:"center",
-                  justifyContent:"center"
+                  position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",
+                  background:"none",border:"none",color:"var(--text-muted)",cursor:"pointer",
+                  fontSize:20,padding:0,width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center"
                 }}
               >×</button>
             )}
           </div>
 
-          {/* Sites filter */}
-          <div style={{flex:"0 0 auto"}}>
-            <select
-              value={siteFilter}
-              onChange={e=>setSiteFilter(e.target.value)}
-              style={{
-                height:44,
-                minWidth:180,
-                padding:"0 40px 0 14px",
-                fontSize:14,
-                fontWeight:500,
-                color:siteFilter?"#228be6":"#374151",
-                background:"#ffffff",
-                border:"1px solid #d1d5db",
-                borderRadius:8,
-                cursor:"pointer",
-                outline:"none",
-                appearance:"none",
-                backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
-                backgroundRepeat:"no-repeat",
-                backgroundPosition:"right 12px center",
-                transition:"border-color 0.2s"
-              }}
-              onFocus={e=>{
-                e.target.style.borderColor="var(--accent)";
-                e.target.style.boxShadow="0 0 0 3px var(--accent-dim)";
-              }}
-              onBlur={e=>{
-                e.target.style.borderColor="#d1d5db";
-                e.target.style.boxShadow="none";
-              }}
-            >
-              <option value="">All Sites</option>
-              {sites.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          </div>
+          {/* Sites Filter - Fixed width */}
+          <select
+            value={siteFilter}
+            onChange={e=>setSiteFilter(e.target.value)}
+            className="select"
+            style={{minWidth:200,height:40,fontSize:14}}
+          >
+            <option value="">All Sites</option>
+            {sites.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
         </div>
 
-        {/* Row 2: Stats */}
-        <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
-          <span style={{
-            padding:"5px 12px",
-            borderRadius:6,
-            background:"#f3f4f6",
-            fontSize:13,
-            fontWeight:600,
-            color:"#6b7280",
-            whiteSpace:"nowrap"
-          }}>{total} blocks</span>
-          <span style={{
-            padding:"5px 12px",
-            borderRadius:6,
-            background:"rgba(34,139,230,0.08)",
-            fontSize:13,
-            fontWeight:600,
-            color:"#228be6",
-            whiteSpace:"nowrap"
-          }}>{items.filter(b=>b.ip_version==='IPv4').length} IPv4</span>
-          <span style={{
-            padding:"5px 12px",
-            borderRadius:6,
-            background:"rgba(64,192,87,0.08)",
-            fontSize:13,
-            fontWeight:600,
-            color:"#40c057",
-            whiteSpace:"nowrap"
-          }}>{items.filter(b=>b.ip_version==='IPv6').length} IPv6</span>
+        {/* Stats Row */}
+        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",fontSize:12}}>
+          <Badge label={`${total} blocks`} style={{background:"var(--surface-2)",color:"var(--text-muted)",border:"1px solid var(--border-soft)"}}/>
+          <Badge label={`${items.filter(b=>b.ip_version==='IPv4').length} IPv4`} style={{background:"var(--accent-dim)",color:"var(--accent)",border:"1px solid var(--accent-border)"}}/>
+          <Badge label={`${items.filter(b=>b.ip_version==='IPv6').length} IPv6`} style={{background:"var(--success-surface)",color:"var(--success)",border:"1px solid var(--success-border)"}}/>
         </div>
       </div>
 
