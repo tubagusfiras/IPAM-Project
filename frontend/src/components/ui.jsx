@@ -74,20 +74,52 @@ const BTN_VARIANTS = {
   outline: { bg:"transparent", text:C.blue, hoverBg:C.bg2, border:`1px solid ${C.blue}` },
 };
 
-export function Btn({ children, onClick, variant="primary", size="md", disabled, style={} }) {
+// ── ICONS ────────────────────────────────────────────────────
+const Icons = {
+  spinner: <svg className="animate-spin" viewBox="0 0 24 24" fill="none" width="14" height="14"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg>,
+  check: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>,
+  x: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+  plus: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+  edit: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
+  trash: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>,
+  search: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
+  filter: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>,
+  menu: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>,
+  arrowLeft: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>,
+  arrowRight: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>,
+};
+
+// ── BUTTON ───────────────────────────────────────────────────
+export function Btn({ children, onClick, variant="primary", size="md", disabled, loading, icon, iconPosition="left", style={} }) {
   const v = BTN_VARIANTS[variant] || BTN_VARIANTS.primary;
   const pad = size==="sm" ? "3px 10px" : size==="lg" ? "10px 24px" : "6px 16px";
   const fs  = size==="sm" ? 11 : size==="lg" ? 14 : 12;
+
+  const handleMouseEnter = (e) => {
+    if (!disabled && !loading && v.hoverBg) e.currentTarget.style.background = v.hoverBg;
+  };
+  const handleMouseLeave = (e) => {
+    if (!disabled && !loading) e.currentTarget.style.background = v.bg;
+  };
+
   return (
-    <button onClick={onClick} disabled={disabled} style={{
+    <button onClick={onClick} disabled={disabled || loading} style={{
       background:v.bg, color:v.text, border:v.border||"none",
       padding:pad, borderRadius:5, fontSize:fs, fontWeight:500,
-      cursor:disabled?"not-allowed":"pointer", opacity:disabled?0.45:1,
-      transition:"background 0.12s", whiteSpace:"nowrap", ...style,
+      cursor:disabled||loading?"not-allowed":"pointer", opacity:disabled||loading?0.5:1,
+      transition:"background 0.15s, transform 0.1s", whiteSpace:"nowrap",
+      display:"inline-flex", alignItems:"center", justifyContent:"center", gap:"6px", ...style,
     }}
-    onMouseEnter={e=>{ if(!disabled) e.currentTarget.style.background=v.hoverBg; }}
-    onMouseLeave={e=>{ e.currentTarget.style.background=v.bg; }}
-    >{children}</button>
+    onMouseEnter={handleMouseEnter}
+    onMouseLeave={handleMouseLeave}
+    onMouseDown={e=>{ if(!disabled && !loading) e.currentTarget.style.transform="scale(0.97)"; }}
+    onMouseUp={e=>{ if(!disabled && !loading) e.currentTarget.style.transform="scale(1)"; }}
+    >
+      {loading && Icons.spinner}
+      {!loading && icon && iconPosition==="left" && icon}
+      {children}
+      {!loading && icon && iconPosition==="right" && icon}
+    </button>
   );
 }
 
@@ -298,19 +330,76 @@ export function Divider() {
   return <div style={{ height:1, background:C.border, margin:"16px 0" }}/>;
 }
 
+// ── LOADING SKELETON ──────────────────────────────────────────
+export function Skeleton({ width="100%", height=14, borderRadius=4 }) {
+  return (
+    <div style={{
+      width, height, borderRadius,
+      background:`linear-gradient(90deg, ${C.bg1} 25%, ${C.bg2} 50%, ${C.bg1} 75%)`,
+      backgroundSize:"200% 100%",
+      animation:"shimmer 1.5s infinite",
+    }}/>
+  );
+}
+
+export function SkeletonTable({ rows=5, cols=4 }) {
+  return (
+    <div style={{ padding:"8px 12px" }}>
+      {Array.from({length:rows}).map((_, i) => (
+        <div key={i} style={{ display:"flex", gap:"12px", padding:"8px 0", borderBottom:`1px solid ${C.border}` }}>
+          {Array.from({length:cols}).map((_, j) => (
+            <Skeleton key={j} width={j===0 ? "40px" : `${100-cols*5}%`} height={12} />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── CARD ────────────────────────────────────────────────────
+export function Card({ children, title, icon, accent, padding=18, style={} }) {
+  return (
+    <div style={{
+      background:C.bg2,
+      border: accent ? `1px solid ${accent}30` : `1px solid ${C.border}`,
+      borderRadius:8,
+      padding,
+      position:"relative",
+      overflow:"hidden",
+      ...style,
+    }}>
+      {accent && <div style={{ position:"absolute", top:0, left:0, right:0, height:2, background:`linear-gradient(90deg,${accent},transparent)` }} />}
+      {title && (
+        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom: title ? 12 : 0 }}>
+          {icon && <span style={{ fontSize:16, opacity:0.6 }}>{icon}</span>}
+          <span style={{ color:C.text0, fontWeight:600, fontSize:13 }}>{title}</span>
+        </div>
+      )}
+      {children}
+    </div>
+  );
+}
+
 // ── EMPTY STATE ──────────────────────────────────────────────
-export function Empty({ icon="📭", message }) {
+export function EmptyState({ icon="📭", title, message, action, onAction }) {
   return (
     <div style={{ textAlign:"center", padding:"60px 20px", color:C.text2 }}>
-      <div style={{ fontSize:36, marginBottom:12, opacity:0.4 }}>{icon}</div>
-      <div style={{ fontSize:13 }}>{message}</div>
+      <div style={{ fontSize:48, marginBottom:16, opacity:0.3 }}>{icon}</div>
+      {title && <div style={{ fontSize:15, fontWeight:600, color:C.text0, marginBottom:8 }}>{title}</div>}
+      {message && <div style={{ fontSize:13, marginBottom: action ? 16 : 0 }}>{message}</div>}
+      {action && onAction && <Btn variant="ghost" onClick={onAction}>{action}</Btn>}
     </div>
   );
 }
 
 // ── LOADING ──────────────────────────────────────────────────
-export function Loading() {
-  return <div style={{ color:C.text2, padding:"48px 0", textAlign:"center", fontSize:13 }}>Loading…</div>;
+export function Loading({ message="Loading…" }) {
+  return (
+    <div style={{ color:C.text2, padding:"48px 0", textAlign:"center", fontSize:13, display:"flex", flexDirection:"column", alignItems:"center", gap:12 }}>
+      <div style={{ width:24, height:24, border:`2px solid ${C.border}`, borderTopColor:C.blue, borderRadius:"50%", animation:"spin 0.8s linear infinite" }} />
+      {message}
+    </div>
+  );
 }
 
 // ── ALERT ────────────────────────────────────────────────────
