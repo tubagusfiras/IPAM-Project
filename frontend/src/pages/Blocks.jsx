@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { getBlocks, createBlock, updateBlock, deleteBlock, getSites } from "../api.js";
+import { Btn, SearchBar, Loading, EmptyState, StatusBadge, VersionBadge, PageHeader, Icons } from "../components/ui.jsx";
 
 const VERSION_COLOR = {
   IPv4: { bg:"var(--surface-2)", color:"var(--text-muted)", border:"var(--border-soft)" },
@@ -260,62 +261,20 @@ export default function Blocks({ ipVersion="", onSelectBlock }) {
     <div style={{display:"flex",flexDirection:"column",gap:20}}>
 
       {/* Page header */}
-      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
-        <div>
-          <h1 style={{margin:0,fontSize:20,fontWeight:700,color:"var(--text)"}}>
-            {ipVersion ? `${ipVersion} Networks` : "IP Networks"}
-          </h1>
-          <p style={{margin:"4px 0 0",fontSize:13,color:"var(--text-muted)"}}>
-            {total} block{total!==1?"s":""} total
-            {siteFilter ? ` · filtered` : ""}
-          </p>
-        </div>
-        <button onClick={()=>setModal("add")} className="btn btn-primary">
-          <span style={{fontSize:16,lineHeight:1}}>+</span>
-          Add Network
-        </button>
-      </div>
+      <PageHeader title={ipVersion ? `${ipVersion} Networks` : "IP Networks"} count={total}>
+        <Btn icon={Icons.plus} onClick={()=>setModal("add")}>Add Network</Btn>
+      </PageHeader>
 
       {/* Search & Filter Section - GRID LAYOUT */}
       <div className="card" style={{padding:"14px 20px"}}>
         {/* Row 1: Search (full width) + Sites (inline) */}
         <div style={{display:"grid",gridTemplateColumns:"1fr 220px",gap:16,alignItems:"center",marginBottom:12}}>
-          {/* Search Input */}
-          <div style={{position:"relative",width:"100%",overflow:"visible"}}>
-            <span style={{
-              position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",
-              color:"var(--text-muted)",pointerEvents:"none",zIndex:1
-            }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
-                <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
-              </svg>
-            </span>
-            <input
-              value={search}
-              onChange={e=>setSearch(e.target.value)}
-              placeholder="Search prefix, name, ASN, router..."
-              className="input"
-              style={{
-                width:"100%",
-                height:40,
-                paddingLeft:40,
-                paddingRight:search?40:12,
-                fontSize:14,
-                boxSizing:"border-box"
-              }}
-            />
-            {search && (
-              <button
-                onClick={()=>setSearch("")}
-                tabIndex={-1}
-                style={{
-                  position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",
-                  background:"none",border:"none",color:"var(--text-muted)",cursor:"pointer",
-                  fontSize:20,padding:0,width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",zIndex:2
-                }}
-              >×</button>
-            )}
-          </div>
+          {/* Search Input - pakai SearchBar component */}
+          <SearchBar
+            value={search}
+            onChange={setSearch}
+            placeholder="Search prefix, name, ASN, router..."
+          />
 
           {/* Sites Filter */}
           <select
