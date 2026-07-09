@@ -550,6 +550,33 @@ export default function App() {
     return ()=>window.removeEventListener("hashchange", onHash);
   }, []);
 
+  // ── Keyboard Shortcuts ──
+  useEffect(() => {
+    const handleKey = (e) => {
+      const tag = document.activeElement?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      // Ctrl+K → Search focus
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        e.preventDefault();
+        const searchInput = document.querySelector("header input[type=text]");
+        searchInput?.focus();
+      }
+      // Ctrl+N → Add Network (if on ipv4/ipv6 page)
+      if ((e.ctrlKey || e.metaKey) && e.key === "n") {
+        e.preventDefault();
+        const addBtn = document.querySelector('[class*="btn-primary"]');
+        addBtn?.click();
+      }
+      // Escape → close modals
+      if (e.key === "Escape") {
+        const closeBtns = document.querySelectorAll('.modal-overlay');
+        closeBtns.forEach(b => b.click());
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, []);
+
   const allItems = NAV_GROUPS.flatMap(g=>g.items);
   const pageTitle = route?.page === "block-detail"
     ? (route.prefix || "Block Detail")
