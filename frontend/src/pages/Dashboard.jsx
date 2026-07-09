@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { getDashboardStats } from "../api.js";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { Btn, Loading, EmptyState, PageHeader, Icons, Card } from "../components/ui.jsx";
 
 // ── Tokens (CSS variables = auto dark/light) ────────────
 const ACCENT = "var(--accent)";
@@ -88,13 +89,8 @@ export default function Dashboard({ onNavigate }) {
     check(); const iv = setInterval(check, 30000); return () => clearInterval(iv);
   }, []);
 
-  if (err) return <div style={{padding:20,color:DANGER,background:"var(--danger-surface)",border:"1px solid #7f1d1d",borderRadius:10,fontSize:14}}>Cannot reach API: {err}</div>;
-  if (!stats) return (
-    <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:300}}>
-      <div style={{width:32,height:32,borderRadius:"50%",border:"2px solid transparent",borderTopColor:ACCENT,animation:"sp1n 0.8s linear infinite"}}/>
-      <style>{`@keyframes sp1n{to{transform:rotate(360deg)}}`}</style>
-    </div>
-  );
+  if (err) return <Alert type="error" message={`Cannot reach API: ${err}`} />;
+  if (!stats) return <Loading message="Loading dashboard..." />;
 
   const { total_blocks, total_allocations, total_customers, total_vlans, total_sites, ipv4_blocks, ipv6_blocks, alloc_by_status, recent_blocks } = stats;
   const totalAlloc = Object.values(alloc_by_status||{}).reduce((a,b)=>a+b,0);
@@ -116,21 +112,18 @@ export default function Dashboard({ onNavigate }) {
     <div style={{display:"flex",flexDirection:"column",gap:16,fontFamily:"Inter,system-ui,sans-serif"}}>
 
       {/* ── HEADER ── */}
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
-        <div>
-          <div style={{fontSize:"16px",fontWeight:700,color:TEXT,letterSpacing:"-0.02em"}}>Dashboard</div>
-          <div style={{fontSize:"12px",color:MUTED,marginTop:2}}>IP Address Management — {total_blocks} networks, {total_allocations} allocations</div>
-        </div>
-        <div style={{display:"flex",gap:8}}>
-          {health?.map(h => (
-            <div key={h.k} style={{display:"flex",alignItems:"center",gap:5,padding:"4px 10px",background:CARD,border:`1px solid ${BORDER}`,borderRadius:6,fontSize:"11px"}}>
-              <span style={{width:6,height:6,borderRadius:"50%",background:h.ok?SUCCESS:DANGER,animation:h.ok?"pulse 2s infinite":"none",flexShrink:0}}/>
-              <span style={{fontWeight:500,color:h.ok?SUCCESS:DANGER}}>{h.l}</span>
-              <span style={{color:MUTED}}>{h.d}</span>
-            </div>
-          ))}
-          <a href="http://103.10.120.11:3100" target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",gap:4,padding:"4px 10px",background:CARD,border:`1px solid ${BORDER}`,borderRadius:6,fontSize:"11px",color:ACCENT,textDecoration:"none"}}>Grafana ↗</a>
-        </div>
+      <PageHeader title="Dashboard" count={total_blocks} />
+
+      {/* Health + Grafana badges */}
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:-8,marginBottom:8}}>
+        {health?.map(h => (
+          <div key={h.k} style={{display:"flex",alignItems:"center",gap:5,padding:"4px 10px",background:CARD,border:`1px solid ${BORDER}`,borderRadius:6,fontSize:"11px"}}>
+            <span style={{width:6,height:6,borderRadius:"50%",background:h.ok?SUCCESS:DANGER,animation:h.ok?"pulse 2s infinite":"none",flexShrink:0}}/>
+            <span style={{fontWeight:500,color:h.ok?SUCCESS:DANGER}}>{h.l}</span>
+            <span style={{color:MUTED}}>{h.d}</span>
+          </div>
+        ))}
+        <a href="http://103.10.120.11:3100" target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",gap:4,padding:"4px 10px",background:CARD,border:`1px solid ${BORDER}`,borderRadius:6,fontSize:"11px",color:ACCENT,textDecoration:"none"}}>Grafana ↗</a>
       </div>
 
       <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}`}</style>
@@ -198,7 +191,7 @@ export default function Dashboard({ onNavigate }) {
               </div>
             </div>
           ) : (
-            <div style={{textAlign:"center",padding:40,color:MUTED,fontSize:13}}>No data</div>
+            <EmptyState icon="📊" title="No data" message="No allocation data yet" />
           )}
         </div>
 
@@ -219,7 +212,7 @@ export default function Dashboard({ onNavigate }) {
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <div style={{textAlign:"center",padding:40,color:MUTED,fontSize:13}}>No data</div>
+            <EmptyState icon="📈" title="No data" message="No network data yet" />
           )}
         </div>
       </div>
@@ -287,7 +280,7 @@ export default function Dashboard({ onNavigate }) {
               </tbody>
             </table>
           ) : (
-            <div style={{textAlign:"center",padding:40,color:MUTED,fontSize:13}}>No networks yet</div>
+            <EmptyState icon="🌐" title="No networks yet" message="Add your first IP block" />
           )}
         </div>
       </div>
@@ -295,18 +288,15 @@ export default function Dashboard({ onNavigate }) {
       {/* ── QUICK ACTIONS ── */}
       <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:4}}>
         {[
-          { id:"ipv4", label:"Add Network" },
-          { id:"customers", label:"Add Customer" },
-          { id:"sites", label:"Add Site" },
-          { id:"scan", label:"IP Scan" },
-          { id:"ping", label:"Ping & Trace" },
+          { id:"ipv4", label:"Add Network", icon:Icons.plus },
+          { id:"customers", label:"Add Customer", icon:Icons.plus },
+          { id:"sites", label:"Add Site", icon:Icons.plus },
+          { id:"scan", label:"IP Scan", icon:Icons.search },
+          { id:"ping", label:"Ping & Trace", icon:Icons.arrowRight },
         ].map(a => (
-          <button key={a.id} onClick={()=>onNavigate?.(a.id)}
-            style={{padding:"6px 14px",borderRadius:6,border:`1px solid ${BORDER}`,background:CARD,color:MUTED,fontSize:"11px",fontWeight:500,cursor:"pointer",transition:"all 0.12s"}}
-            onMouseEnter={e=>{e.currentTarget.style.borderColor=ACCENT;e.currentTarget.style.color=ACCENT}}
-            onMouseLeave={e=>{e.currentTarget.style.borderColor=BORDER;e.currentTarget.style.color=MUTED}}>
-            + {a.label}
-          </button>
+          <Btn key={a.id} variant="secondary" size="sm" icon={a.icon} onClick={()=>onNavigate?.(a.id)}>
+            {a.label}
+          </Btn>
         ))}
       </div>
 
