@@ -15,6 +15,7 @@ const AuditLogs  = lazy(()=>import("./pages/AuditLogs.jsx"));
 const ImportPage = lazy(()=>import("./pages/Import.jsx"));
 const PingTrace  = lazy(()=>import("./pages/PingTrace.jsx"));
 const SettingsPage = lazy(()=>import("./pages/Settings.jsx"));
+const SubnetCalc = lazy(()=>import("./pages/SubnetCalc.jsx"));
 
 const NAV_GROUPS = [
   {
@@ -34,13 +35,14 @@ const NAV_GROUPS = [
       { id:"export", label:"Export",       icon:"export" },
       { id:"scan",   label:"IP Scan",      icon:"scan" },
       { id:"ping",   label:"Ping & Trace", icon:"ping" },
+      { id:"import", label:"Import CSV",   icon:"import" },
+      { id:"subnet", label:"Subnet Calc",  icon:"calc" },
     ]
   },
   {
     label: "ADMIN",
     items: [
       { id:"audit",    label:"Audit Logs", icon:"audit" },
-      { id:"import",   label:"Import CSV", icon:"import" },
       { id:"settings", label:"Settings",   icon:"settings" },
     ]
   }
@@ -58,6 +60,7 @@ const IC = {
   scan:      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2"/><rect x="7" y="7" width="10" height="10" rx="1"/></svg>,
   ping:      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M1 6l4 6 4-4 4 8 4-6 2 3"/></svg>,
   audit:     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>,
+  calc:      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="8" y2="10.01"/><line x1="12" y1="10" x2="12" y2="10.01"/><line x1="16" y1="10" x2="16" y2="10.01"/><line x1="8" y1="14" x2="8" y2="14.01"/><line x1="12" y1="14" x2="12" y2="14.01"/><line x1="16" y1="14" x2="16" y2="14.01"/><line x1="8" y1="18" x2="16" y2="18"/></svg>,
   settings:  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>,
   sun:       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>,
   moon:      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>,
@@ -184,7 +187,7 @@ function Sidebar({ active, onNavigate, collapsed, onToggle, user }) {
   );
 }
 
-function Header({ title, subtitle, onBack, dark, onToggleDark, collapsed, user, onLogout, onNavigate }) {
+function Header({ title, subtitle, onBack, dark, onToggleDark, collapsed, user, onLogout, onNavigate, onToggle }) {
   const [search, setSearch] = useState("");
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
@@ -240,6 +243,14 @@ function Header({ title, subtitle, onBack, dark, onToggleDark, collapsed, user, 
       padding:"0 20px",
       transition:"left var(--transition)",
     }}>
+      {/* Hamburger menu for mobile */}
+      {!onBack && (
+        <button onClick={onToggle}
+          style={{display:"none",alignItems:"center",justifyContent:"center",padding:6,background:"none",border:"none",color:"var(--text-muted)",cursor:"pointer",borderRadius:6}}
+          className="mobile-menu-btn">
+          <Icon id="menu" size={18}/>
+        </button>
+      )}
       {onBack && (
         <button onClick={onBack} className="btn-ghost btn-sm"
           style={{display:"flex",alignItems:"center",gap:4}}>
@@ -560,6 +571,7 @@ export default function App() {
       case "audit":     return <AuditLogs/>;
       case "ping":      return <PingTrace/>;
       case "import":    return <ImportPage/>;
+      case "subnet":    return <SubnetCalc/>;
       case "settings":  return <SettingsPage dark={dark} onToggleDark={toggleDark}/>;
       default:          return <Dashboard onNavigate={navigate}/>;
     }
@@ -588,6 +600,10 @@ export default function App() {
   return (
     <ToastProvider>
       <div style={{minHeight:"100vh",background:"var(--bg)"}}>
+        {/* Mobile overlay when sidebar open */}
+        {!collapsed && (
+          <div onClick={()=>setCollapsed(true)} className="mobile-overlay" />
+        )}
         <Sidebar
           active={route ? "" : active}
           onNavigate={navigate}
@@ -605,6 +621,7 @@ export default function App() {
           user={user}
           onLogout={handleLogout}
           onNavigate={navigate}
+          onToggle={()=>setCollapsed(v=>!v)}
         />
         <main style={{
           paddingTop:"var(--topbar-h)",
@@ -612,7 +629,7 @@ export default function App() {
           transition:"margin-left var(--transition)",
           minHeight:"100vh",
         }}>
-          <div style={{padding:24}}>
+          <div style={{padding:24}} className="main-content">
             <Suspense fallback={<Loading/>}>
               {renderPage()}
             </Suspense>
