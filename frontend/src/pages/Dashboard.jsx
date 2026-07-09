@@ -204,10 +204,10 @@ export default function Dashboard({ onNavigate }) {
           {barData.length > 0 ? (
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={barData} barGap={3} barCategoryGap="20%">
-                <XAxis dataKey="name" tick={{fontSize:9,fill:MUTED}} axisLine={false} tickLine={false} interval={0}/>
-                <YAxis tick={{fontSize:9,fill:DIM}} axisLine={false} tickLine={false}/>
-                <Tooltip contentStyle={{background:CARD,border:`1px solid ${BORDER}`,borderRadius:6,fontSize:12}}/>
-                <Bar dataKey="total" name="Total" fill={BORDER} radius={[3,3,0,0]}/>
+                <XAxis dataKey="name" tick={{fontSize:9,fill:"var(--text-muted)"}} axisLine={{stroke:"var(--border-soft)"}} tickLine={false} interval={0}/>
+                <YAxis tick={{fontSize:9,fill:"var(--text-dim)"}} axisLine={false} tickLine={false}/>
+                <Tooltip contentStyle={{background:"var(--surface-1)",border:"1px solid var(--border-medium)",borderRadius:6,fontSize:12,boxShadow:"0 4px 12px rgba(0,0,0,0.3)"}}/>
+                <Bar dataKey="total" name="Total" fill="var(--surface-3)" radius={[3,3,0,0]}/>
                 <Bar dataKey="active" name="Active" fill={ACCENT} radius={[3,3,0,0]}/>
               </BarChart>
             </ResponsiveContainer>
