@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { getBlocks, authFetch} from "../api.js";
+import { Btn, SearchBar, Loading, PageHeader, Icons, Alert, Card } from "../components/ui.jsx";
 
 function ipToInt(ip) {
   const p = ip.split(".").map(Number);
@@ -155,17 +156,10 @@ export default function Export({ dark }) {
   return (
     <div style={{padding:24, maxWidth:1200, margin:"0 auto"}}>
       {/* Page header */}
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
-        <h1 style={{fontSize:20,fontWeight:700,color:"var(--text)",margin:0}}>Export</h1>
-        <div style={{display:"flex",gap:8}}>
-          <button onClick={()=>doExport("summary-pdf")} disabled={exporting}
-            className="btn btn-secondary btn-sm">📋 Summary PDF</button>
-          <button onClick={()=>doExport("multi-pdf")} disabled={!someSelected||exporting}
-            className="btn btn-primary btn-sm">
-            📄 Export Selected PDF ({selectedIds.length})
-          </button>
-        </div>
-      </div>
+      <PageHeader title="Export" count={blocks.length}>
+        <Btn variant="secondary" size="sm" icon={Icons.edit} onClick={()=>doExport("summary-pdf")} disabled={exporting}>Summary PDF</Btn>
+        <Btn icon={Icons.edit} size="sm" onClick={()=>doExport("multi-pdf")} disabled={!someSelected||exporting}>Export Selected PDF ({selectedIds.length})</Btn>
+      </PageHeader>
 
       <div style={{display:"grid",gridTemplateColumns:"320px 1fr",gap:16,alignItems:"start"}}>
 
@@ -224,20 +218,10 @@ export default function Export({ dark }) {
         {/* Preview panel */}
         <div>
           {!preview && !loading && (
-            <div style={{
-              background:"var(--surface-1)",border:"1px solid var(--border-soft)",
-              borderRadius:"var(--radius)",padding:60,textAlign:"center",
-            }}>
-              <div style={{fontSize:13,color:"var(--text-dim)"}}>Select a block to preview</div>
-            </div>
+            <EmptyState icon="📄" title="Select a block" message="Choose an IP block from the left to preview export data" />
           )}
           {loading && (
-            <div style={{
-              background:"var(--surface-1)",border:"1px solid var(--border-soft)",
-              borderRadius:"var(--radius)",padding:60,textAlign:"center",
-            }}>
-              <div style={{fontSize:13,color:"var(--text-dim)"}}>Loading...</div>
-            </div>
+            <Loading message="Loading block data..." />
           )}
           {preview && !loading && (
             <div style={{display:"flex",flexDirection:"column",gap:12}}>

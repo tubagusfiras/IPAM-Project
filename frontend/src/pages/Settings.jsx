@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { authFetch, getStoredUser } from "../api.js";
+import { Btn, Loading, PageHeader, Icons, Alert, Card, Badge, Toolbar } from "../components/ui.jsx";
 
 const ROLE_STYLE = {
   admin: { color:"var(--accent)", bg:"var(--accent-dim)", label:"Admin" },
@@ -228,7 +229,7 @@ export default function Settings({ dark, onToggleDark }) {
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:20}}>
-      <h1 style={{margin:0,fontSize:20,fontWeight:700,color:"var(--text)"}}>Settings</h1>
+      <PageHeader title="Settings" />
 
       {/* Tabs */}
       <div style={{display:"flex",gap:2,background:"var(--surface-2)",borderRadius:"var(--radius-sm)",padding:3,width:"fit-content"}}>

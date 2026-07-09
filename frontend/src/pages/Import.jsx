@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { getSites, authFetch } from "../api.js";
+import { Btn, SearchBar, Loading, PageHeader, Icons, Alert, ProgressBar } from "../components/ui.jsx";
 
 const ACCENT = "var(--accent)";
 const CARD = "var(--surface-1)";
@@ -80,9 +81,8 @@ export default function ImportPage() {
   const handleReset = () => { setFile(null); setPreview(null); setResult(null); setErr(null); setStep("upload"); };
 
   return (
-    <div style={{ fontFamily: "Inter,system-ui,sans-serif" }}>
-      <div style={{ fontSize: 18, fontWeight: 600, color: TEXT, marginBottom: 4 }}>Import CSV</div>
-      <div style={{ fontSize: 12, color: MUTED, marginBottom: 20 }}>Upload Google Sheets export to IPAM</div>
+    <div>
+      <PageHeader title="Import CSV" count={result?.imported || null} />
 
       {err && (
         <div style={{ padding: "10px 16px", borderRadius: 8, fontSize: 13, background: "var(--danger-surface)", color: DANGER, border: "1px solid var(--danger-border)", marginBottom: 16 }}>
@@ -99,8 +99,9 @@ export default function ImportPage() {
           <div style={{ fontSize: 13, fontWeight: 600, color: TEXT, marginBottom: 16 }}>Upload File</div>
           <div style={{ border: `2px dashed ${BORDER}`, borderRadius: 8, padding: 40, textAlign: "center", marginBottom: 16, background: "var(--surface-2)", cursor: "pointer" }}
             onClick={() => document.getElementById("csvInput").click()}
-            onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor = ACCENT; }}
-            onDragLeave={e => { e.currentTarget.style.borderColor = BORDER; }}>
+            onDragOver={e => { e.preventDefault(); e.stopPropagation(); e.currentTarget.style.borderColor = ACCENT; }}
+            onDragLeave={e => { e.currentTarget.style.borderColor = BORDER; }}
+            onDrop={e => { e.preventDefault(); e.stopPropagation(); e.currentTarget.style.borderColor = BORDER; const f = e.dataTransfer.files[0]; if (f) { setFile(f); setPreview(null); setResult(null); setErr(null); } }}>
             {file ? (
               <div>
                 <div style={{ fontSize: 32, marginBottom: 8 }}>

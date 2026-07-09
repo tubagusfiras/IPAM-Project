@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { getSites, createSite, updateSite, deleteSite, authFetch} from "../api.js";
+import { Btn, SearchBar, Loading, EmptyState, PageHeader, Toolbar, Icons } from "../components/ui.jsx";
 
 function SiteModal({ site, onClose, onSaved }) {
   const isEdit = !!site?.id;
@@ -143,77 +144,28 @@ export default function Sites() {
     <div style={{display:"flex",flexDirection:"column",gap:20}}>
 
       {/* Header */}
-      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
-        <div>
-          <h1 style={{margin:0,fontSize:20,fontWeight:700,color:"var(--text)"}}>Sites</h1>
-          <p style={{margin:"4px 0 0",fontSize:13,color:"var(--text-muted)"}}>
-            {items.length} site{items.length!==1?"s":""} registered
-          </p>
-        </div>
-        <button onClick={()=>setModal("add")} className="btn btn-primary">
-          + Add Site
-        </button>
-      </div>
+      <PageHeader title="Sites" count={items.length} icon="📍">
+        <Btn icon={Icons.plus} onClick={()=>setModal("add")}>Add Site</Btn>
+      </PageHeader>
 
       {/* Search */}
       <div className="card" style={{padding:"10px 14px",display:"flex",alignItems:"center",gap:10}}>
-        <div style={{position:"relative",flex:1,maxWidth:300}}>
-          <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",
-            color:"var(--text-dim)",pointerEvents:"none",zIndex:1,display:"flex"}}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-          </span>
-          <input value={search} onChange={e=>setSearch(e.target.value)}
-            placeholder="Search site name or city..."
-            className="input" style={{paddingLeft:32,height:36,fontSize:13,background:"var(--input-bg)",borderColor:"var(--border-medium)"}}
-            onFocus={e=>e.currentTarget.style.borderColor="var(--accent)"}
-            onBlur={e=>e.currentTarget.style.borderColor="var(--input-border)"}/>
-          {search && (
-            <button onClick={()=>setSearch("")} style={{
-              position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",
-              background:"none",border:"none",color:"var(--text-dim)",cursor:"pointer",padding:"2px"
-            }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="12" height="12"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
-          )}
-        </div>
-        <div style={{marginLeft:"auto"}}>
+        <SearchBar value={search} onChange={setSearch} placeholder="Search site name or city..." width={300} />
           <div style={{display:"flex",alignItems:"center",gap:6,
             padding:"4px 12px",borderRadius:99,
             background:"var(--surface-3)",border:"1px solid var(--border-soft)",
             fontSize:12,fontWeight:500}}>
             <span style={{color:"var(--text)",fontWeight:700}}>{items.length}</span>
             <span style={{color:"var(--text-muted)"}}>Total</span>
-          </div>
         </div>
       </div>
 
-      {/* Cards grid */}
       {loading ? (
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:16}}>
-          {Array.from({length:4}).map((_,i)=>(
-            <div key={i} className="card" style={{padding:20}}>
-              <div className="skeleton" style={{height:40,width:40,borderRadius:10,marginBottom:14}}/>
-              <div className="skeleton" style={{height:16,width:140,borderRadius:4,marginBottom:8}}/>
-              <div className="skeleton" style={{height:12,width:100,borderRadius:4,marginBottom:6}}/>
-              <div className="skeleton" style={{height:12,width:180,borderRadius:4}}/>
-            </div>
-          ))}
-        </div>
+        <Loading message="Loading sites..." />
       ) : items.length===0 ? (
-        <div className="card" style={{padding:60}}>
-          <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
-            <div style={{fontSize:20,fontWeight:700}}>S</div>
-            <div style={{fontSize:14,fontWeight:600,color:"var(--text)"}}>No sites found</div>
-            <div style={{fontSize:12,color:"var(--text-muted)"}}>
-              {search?"Try a different search":"Add your first site/location"}
-            </div>
-            {!search&&(
-              <button onClick={()=>setModal("add")} className="btn btn-primary btn-sm" style={{marginTop:4}}>
-                + Add Site
-              </button>
-            )}
-          </div>
-        </div>
+        <EmptyState icon="📍" title="No sites found"
+          message={search?"Try a different search":"Add your first site/location"}
+          action={!search?"Add Site":null} onAction={!search?()=>setModal("add"):null} />
       ) : (
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:16}}>
           {items.map(s=>{

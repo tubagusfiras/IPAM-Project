@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { getCustomers, createCustomer, updateCustomer, deleteCustomer, authFetch} from "../api.js";
+import { Btn, SearchBar, Loading, EmptyState, PageHeader, Icons, Badge } from "../components/ui.jsx";
 
 function CustomerModal({ customer, onClose, onSaved }) {
   const isEdit = !!customer?.id;
@@ -193,27 +194,13 @@ export default function Customers() {
     <div style={{display:"flex",flexDirection:"column",gap:20}}>
 
       {/* Header */}
-      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
-        <div>
-          <h1 style={{margin:0,fontSize:20,fontWeight:700,color:"var(--text)"}}>Customers</h1>
-          <p style={{margin:"4px 0 0",fontSize:13,color:"var(--text-muted)"}}>
-            {total} customer{total!==1?"s":""} registered
-          </p>
-        </div>
-        <button onClick={()=>setModal("add")} className="btn btn-primary">
-          + Add Customer
-        </button>
-      </div>
+      <PageHeader title="Customers" count={total}>
+        <Btn icon={Icons.plus} onClick={()=>setModal("add")}>Add Customer</Btn>
+      </PageHeader>
 
       {/* Toolbar */}
       <div className="card" style={{padding:"10px 14px",display:"flex",alignItems:"center",gap:10}}>
-        <div style={{position:"relative",flex:1,maxWidth:320}}>
-          <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",
-            color:"var(--text-dim)",pointerEvents:"none",fontSize:14}}>S</span>
-          <input value={search} onChange={e=>{setSearch(e.target.value);setPage(0);}}
-            placeholder="Search by name, code, email..."
-            className="input" style={{paddingLeft:32,height:34,fontSize:13}}/>
-        </div>
+        <SearchBar value={search} onChange={v=>{setSearch(v);setPage(0);}} placeholder="Search by name, code, email..." width={320} />
         <div style={{marginLeft:"auto",display:"flex",gap:8}}>
           {[
             ["Total",  total,       "var(--text-muted)","var(--surface-3)","var(--border-soft)"],
@@ -241,22 +228,12 @@ export default function Customers() {
           </thead>
           <tbody>
             {loading ? (
-              Array.from({length:8}).map((_,i)=><SkeletonRow key={i}/>)
+              <tr><td colSpan={7} style={{padding:0}}><Loading message="Loading customers..." /></td></tr>
             ) : items.length===0 ? (
               <tr><td colSpan={7}>
-                <div style={{display:"flex",flexDirection:"column",alignItems:"center",
-                  justifyContent:"center",padding:"60px 0",gap:10}}>
-                  <div style={{fontSize:20,fontWeight:700}}>C</div>
-                  <div style={{fontSize:14,fontWeight:600,color:"var(--text)"}}>No customers found</div>
-                  <div style={{fontSize:12,color:"var(--text-muted)"}}>
-                    {search?"Try a different search term":"Add your first customer"}
-                  </div>
-                  {!search&&(
-                    <button onClick={()=>setModal("add")} className="btn btn-primary btn-sm" style={{marginTop:4}}>
-                      + Add Customer
-                    </button>
-                  )}
-                </div>
+                <EmptyState icon="👥" title="No customers found"
+                  message={search?"Try a different search term":"Add your first customer"}
+                  action={!search?"Add Customer":null} onAction={!search?()=>setModal("add"):null} />
               </td></tr>
             ) : items.map((c,idx)=>(
               <tr key={c.id} className="table-row"
