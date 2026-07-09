@@ -219,8 +219,16 @@ export default function IPScan() {
                   : isRunning
                     ? "linear-gradient(90deg, #2563eb, #60a5fa)"
                     : "var(--text-dim)",
+                backgroundSize: isRunning ? "200% 100%" : undefined,
+                animation: isRunning ? "shimmer 2s linear infinite" : undefined,
               }}/>
             </div>
+            <style>{`
+              @keyframes shimmer {
+                0% { background-position: -200% 0; }
+                100% { background-position: 200% 0; }
+              }
+            `}</style>
 
             {/* Summary cards */}
             {(isDone || scanData.scanned > 0) && (

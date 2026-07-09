@@ -316,6 +316,14 @@ export default function Dashboard({ onNavigate }) {
           </div>
           <iframe src={"http://103.10.120.11:3100/d-solo/ipam-overview?orgId=1&from=now-1h&to=now&panelId=6&theme=" + gTheme}
             width="100%" height="260" frameborder="0" style={{display:"block"}}/>
+          {/* Explanation */}
+          <div style={{display:"flex",gap:12,padding:"10px 14px",borderTop:`1px solid ${BORDER}`,flexWrap:"wrap",fontSize:"11px",color:MUTED}}>
+            <span>📊 <b>Request Rate</b> — API requests per second</span>
+            <span>⏱ <b>Latency</b> — p95 response time</span>
+            <span>⚠ <b>Errors</b> — 4xx/5xx rate</span>
+            <span>💾 <b>DB Pool</b> — Database connection usage</span>
+            <span style={{fontSize:"10px",color:DIM}}>Data from Prometheus · 1h window</span>
+          </div>
         </div>
       )}
     </div>
