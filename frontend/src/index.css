@@ -61,6 +61,19 @@
   --topbar-h:      52px;
 }
 
+/* ── Spacing System ── */
+:root, :root.dark {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+}
+
 :root.dark {
   /* Dark theme — Bold blue accent, rich surfaces */
   --bg:            #0b1120;
