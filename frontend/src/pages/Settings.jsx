@@ -295,17 +295,27 @@ export default function Settings({ dark, onToggleDark }) {
 
             <div style={{display:"flex",flexDirection:"column",gap:12}}>
               <div>
-                <label style={{display:"block",fontSize:10,fontWeight:700,textTransform:"uppercase",
+                <label style={{display:"block",fontSize:10,fontWeight:600,textTransform:"uppercase",
                   letterSpacing:"0.08em",color:"var(--text-dim)",marginBottom:6}}>Current Password</label>
-                <input type="password" value={oldPw} onChange={e=>setOldPw(e.target.value)} className="input"/>
+                <input type="password" value={oldPw} onChange={e=>setOldPw(e.target.value)}
+                  placeholder="Enter current password" className="input"
+                  style={{borderColor: pwMsg?.type==="error" && !oldPw ? "var(--danger)" : ""}}/>
+                {pwMsg?.type==="error" && !oldPw && (
+                  <div style={{fontSize:10,color:"var(--danger)",marginTop:3}}>Current password required</div>
+                )}
               </div>
               <div>
-                <label style={{display:"block",fontSize:10,fontWeight:700,textTransform:"uppercase",
+                <label style={{display:"block",fontSize:10,fontWeight:600,textTransform:"uppercase",
                   letterSpacing:"0.08em",color:"var(--text-dim)",marginBottom:6}}>New Password</label>
-                <input type="password" value={newPw} onChange={e=>setNewPw(e.target.value)} className="input"/>
+                <input type="password" value={newPw} onChange={e=>setNewPw(e.target.value)}
+                  placeholder="Min 4 characters" className="input"
+                  style={{borderColor: pwMsg?.type==="error" && newPw && newPw.length < 4 ? "var(--danger)" : ""}}/>
+                {pwMsg?.type==="error" && newPw && newPw.length < 4 && (
+                  <div style={{fontSize:10,color:"var(--danger)",marginTop:3}}>Minimum 4 characters</div>
+                )}
               </div>
               <button onClick={handleChangePassword} disabled={pwSaving}
-                className="btn btn-primary" style={{alignSelf:"flex-start"}}>
+                className="btn btn-primary" style={{alignSelf:"flex-start",marginTop:4}}>
                 {pwSaving ? "Updating…" : "Update Password"}
               </button>
             </div>

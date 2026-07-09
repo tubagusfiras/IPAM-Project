@@ -1,6 +1,7 @@
 import { useState, useEffect, Suspense, lazy } from "react";
 import { getToken, getStoredUser, clearToken } from "./api.js";
 import { ToastProvider, useToast } from "./components/Toast.jsx";
+import { ErrorBoundary } from "./components/ui/ErrorBoundary.jsx";
 import Login from "./pages/Login.jsx";
 
 const Dashboard  = lazy(()=>import("./pages/Dashboard.jsx"));
@@ -657,9 +658,11 @@ export default function App() {
           minHeight:"100vh",
         }}>
           <div style={{padding:24}} className="main-content">
-            <Suspense fallback={<Loading/>}>
-              {renderPage()}
-            </Suspense>
+            <ErrorBoundary>
+              <Suspense fallback={<Loading/>}>
+                {renderPage()}
+              </Suspense>
+            </ErrorBoundary>
           </div>
         </main>
       </div>

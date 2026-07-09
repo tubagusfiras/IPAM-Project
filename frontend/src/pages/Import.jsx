@@ -133,9 +133,16 @@ export default function ImportPage() {
             </div>
           </div>
 
-          <button onClick={doPreview} disabled={!file || loading} className="btn btn-primary" style={{ fontSize: 12 }}>
-            {loading ? "Parsing..." : "Preview CSV"}
-          </button>
+          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+            <button onClick={doPreview} disabled={!file || loading} className="btn btn-primary" style={{ fontSize: 12 }}>
+              {loading ? "Parsing..." : "Preview CSV"}
+            </button>
+            {loading && (
+              <div style={{ flex:1, height:4, background:"var(--surface-3)", borderRadius:99, overflow:"hidden" }}>
+                <div style={{ width:"60%", height:"100%", background:"var(--accent)", borderRadius:99, animation:"shimmer 1.5s infinite" }}/>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
