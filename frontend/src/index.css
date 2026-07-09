@@ -6,15 +6,15 @@
 
 /* ── CSS Variables — sync dengan SDI Monitoring v2 ── */
 :root {
-  /* Light theme — Rich & vibrant, warm professional */
-  --bg:            #f7f9fc;
+  /* Light theme — Rich contrast, warm professional */
+  --bg:            #f5f7fa;
   --bg-secondary:  #ffffff;
-  --bg-tertiary:   #eef1f6;
+  --bg-tertiary:   #e8ecf3;
   --border:        rgba(0,0,0,0.08);
   --border-hover:  #2563eb;
-  --border-subtle: rgba(0,0,0,0.04);
-  --border-soft:   rgba(0,0,0,0.08);
-  --border-medium: rgba(0,0,0,0.12);
+  --border-subtle: rgba(0,0,0,0.05);
+  --border-soft:   rgba(0,0,0,0.09);
+  --border-medium: rgba(0,0,0,0.15);
   --accent:        #2563eb;
   --accent-dim:    rgba(37,99,235,0.10);
   --accent2:       #0891b2;
@@ -25,31 +25,31 @@
   --info:          #2563eb;
   --text:          #0f172a;
   --text-muted:    #475569;
-  --text-dim:      #94a3b8;
+  --text-dim:      #64748b;
   --surface-1:     #ffffff;
-  --surface-2:     #f0f4fa;
-  --surface-3:     #dce3ed;
-  --surface-4:     rgba(37,99,235,0.07);
-  --surface-5:     rgba(37,99,235,0.13);
+  --surface-2:     #e8edf5;
+  --surface-3:     #d1d9e6;
+  --surface-4:     rgba(37,99,235,0.08);
+  --surface-5:     rgba(37,99,235,0.14);
   --modal-bg:      #ffffff;
-  --modal-border:  rgba(0,0,0,0.10);
+  --modal-border:  rgba(0,0,0,0.12);
   --input-bg:      #ffffff;
   --input-border:  #cbd5e1;
-  --scrollbar-bg:  #dce3ed;
+  --scrollbar-bg:  #d1d9e6;
   --scrollbar-thumb: #94a3b8;
-  --skeleton-base: #dce3ed;
+  --skeleton-base: #d1d9e6;
   --skeleton-shine:#ffffff;
   --overlay-bg:    rgba(0,0,0,0.40);
   --success-surface: rgba(5,150,105,0.10);
   --warning-surface: rgba(217,119,6,0.10);
   --danger-surface:  rgba(220,38,38,0.10);
   --info-surface:    rgba(37,99,235,0.10);
-  --success-border:  rgba(5,150,105,0.25);
-  --warning-border:  rgba(217,119,6,0.25);
-  --danger-border:   rgba(220,38,38,0.25);
-  --info-border:     rgba(37,99,235,0.25);
-  --shadow:        0 1px 3px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.04);
-  --shadow-lg:     0 4px 16px rgba(0,0,0,0.10), 0 8px 28px rgba(0,0,0,0.06);
+  --success-border:  rgba(5,150,105,0.30);
+  --warning-border:  rgba(217,119,6,0.30);
+  --danger-border:   rgba(220,38,38,0.30);
+  --info-border:     rgba(37,99,235,0.30);
+  --shadow:        0 1px 3px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.06);
+  --shadow-lg:     0 4px 16px rgba(0,0,0,0.10), 0 8px 28px rgba(0,0,0,0.08);
   --radius:        10px;
   --radius-sm:     6px;
   --radius-lg:     14px;

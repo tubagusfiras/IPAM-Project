@@ -1,30 +1,30 @@
-// ── TOKENS ───────────────────────────────────────────────────
+// ── TOKENS — CSS variables (auto-adapt ke light/dark) ────────
 export const C = {
-  bg0:     "#010d18",
-  bg1:     "#061422",
-  bg2:     "#0d1f33",
-  bg3:     "#142840",
-  border:  "#1a3350",
-  border2: "#234060",
-  text0:   "#f0f6ff",
-  text1:   "#94a3b8",
-  text2:   "#4a6080",
-  blue:    "#3b82f6",
-  green:   "#22c55e",
-  amber:   "#f59e0b",
-  red:     "#ef4444",
+  bg0:     "var(--bg)",
+  bg1:     "var(--bg-secondary)",
+  bg2:     "var(--surface-1)",
+  bg3:     "var(--surface-2)",
+  border:  "var(--border-soft)",
+  border2: "var(--border-medium)",
+  text0:   "var(--text)",
+  text1:   "var(--text-muted)",
+  text2:   "var(--text-dim)",
+  blue:    "var(--accent)",
+  green:   "var(--success)",
+  amber:   "var(--warning)",
+  red:     "var(--danger)",
   purple:  "#a855f7",
   cyan:    "#06b6d4",
   mono:    "'JetBrains Mono', 'Fira Code', 'Consolas', monospace",
 };
 
 export const STATUS = {
-  active:        { bg:"#052010", text:"#22c55e", border:"#16a34a" },
-  reserved:      { bg:"#0d0d2e", text:"#818cf8", border:"#4f46e5" },
-  available:     { bg:"#051520", text:"#38bdf8", border:"#0284c7" },
-  deprecated:    { bg:"#1a0800", text:"#fb923c", border:"#c2410c" },
-  planned:       { bg:"#0d0d2e", text:"#a78bfa", border:"#7c3aed" },
-  decommissioned:{ bg:"#1a0505", text:"#f87171", border:"#dc2626" },
+  active:        { bg:"var(--success-surface)", text:"var(--success)", border:"var(--success-border)" },
+  reserved:      { bg:"var(--info-surface)", text:"#818cf8", border:"#4f46e5" },
+  available:     { bg:"var(--info-surface)", text:"var(--accent)", border:"var(--info-border)" },
+  deprecated:    { bg:"var(--warning-surface)", text:"var(--warning)", border:"var(--warning-border)" },
+  planned:       { bg:"var(--info-surface)", text:"#a78bfa", border:"#7c3aed" },
+  decommissioned:{ bg:"var(--danger-surface)", text:"var(--danger)", border:"var(--danger-border)" },
 };
 
 // ── BADGE ────────────────────────────────────────────────────
