@@ -191,7 +191,7 @@ export default function Dashboard({ onNavigate }) {
               </div>
             </div>
           ) : (
-            <EmptyState icon="📊" title="No data" message="No allocation data yet" />
+            <EmptyState icon={<Icons.chart/>} title="No data" message="No allocation data yet" />
           )}
         </div>
 
@@ -212,7 +212,7 @@ export default function Dashboard({ onNavigate }) {
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <EmptyState icon="📈" title="No data" message="No network data yet" />
+            <EmptyState icon={<Icons.chart/>} title="No data" message="No network data yet" />
           )}
         </div>
       </div>
@@ -280,7 +280,7 @@ export default function Dashboard({ onNavigate }) {
               </tbody>
             </table>
           ) : (
-            <EmptyState icon="🌐" title="No networks yet" message="Add your first IP block" />
+            <EmptyState icon={<Icons.globe/>} title="No networks yet" message="Add your first IP block" />
           )}
         </div>
       </div>

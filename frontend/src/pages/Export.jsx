@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { getBlocks, authFetch} from "../api.js";
-import { Btn, SearchBar, Loading, PageHeader, Icons, Alert, Card } from "../components/ui.jsx";
+import { Btn, SearchBar, Loading, EmptyState, PageHeader, Icons, Alert, Card } from "../components/ui.jsx";
 
 function ipToInt(ip) {
   const p = ip.split(".").map(Number);
@@ -218,7 +218,7 @@ export default function Export({ dark }) {
         {/* Preview panel */}
         <div>
           {!preview && !loading && (
-            <EmptyState icon="📄" title="Select a block" message="Choose an IP block from the left to preview export data" />
+            <EmptyState icon={<Icons.file/>} title="Select a block" message="Choose an IP block from the left to preview export data" />
           )}
           {loading && (
             <Loading message="Loading block data..." />

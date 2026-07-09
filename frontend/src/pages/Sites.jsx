@@ -144,7 +144,7 @@ export default function Sites() {
     <div style={{display:"flex",flexDirection:"column",gap:20}}>
 
       {/* Header */}
-      <PageHeader title="Sites" count={items.length} icon="📍">
+      <PageHeader title="Sites" count={items.length}>
         <Btn icon={Icons.plus} onClick={()=>setModal("add")}>Add Site</Btn>
       </PageHeader>
 
@@ -163,7 +163,7 @@ export default function Sites() {
       {loading ? (
         <Loading message="Loading sites..." />
       ) : items.length===0 ? (
-        <EmptyState icon="📍" title="No sites found"
+        <EmptyState icon={<Icons.location/>} title="No sites found"
           message={search?"Try a different search":"Add your first site/location"}
           action={!search?"Add Site":null} onAction={!search?()=>setModal("add"):null} />
       ) : (

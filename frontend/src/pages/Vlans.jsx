@@ -204,27 +204,13 @@ export default function Vlans() {
     <div style={{display:"flex",flexDirection:"column",gap:20}}>
 
       {/* Header */}
-      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
-        <div>
-          <h1 style={{margin:0,fontSize:20,fontWeight:700,color:"var(--text)"}}>VLANs</h1>
-          <p style={{margin:"4px 0 0",fontSize:13,color:"var(--text-muted)"}}>
-            {total} VLAN{total!==1?"s":""} registered
-          </p>
-        </div>
-        <button onClick={()=>setModal("add")} className="btn btn-primary">
-          + Add VLAN
-        </button>
-      </div>
+      <PageHeader title="VLANs" count={total}>
+        <Btn icon={Icons.plus} onClick={()=>setModal("add")}>Add VLAN</Btn>
+      </PageHeader>
 
       {/* Toolbar */}
       <div className="card" style={{padding:"10px 14px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-        <div style={{position:"relative",flex:1,minWidth:200,maxWidth:320}}>
-          <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",
-            color:"var(--text-dim)",pointerEvents:"none",fontSize:14}}>S</span>
-          <input value={search} onChange={e=>{setSearch(e.target.value);}}
-            placeholder="Search VLAN ID or name..."
-            className="input" style={{paddingLeft:32,height:34,fontSize:13}}/>
-        </div>
+        <SearchBar value={search} onChange={setSearch} placeholder="Search VLAN ID or name..." width={320} />
         <select value={siteFilter} onChange={e=>setSiteFilter(e.target.value)}
           className="select" style={{height:34,fontSize:13,minWidth:140}}>
           <option value="">All Sites</option>
@@ -257,25 +243,11 @@ export default function Vlans() {
           </thead>
           <tbody>
             {loading ? (
-              Array.from({length:6}).map((_,i)=>(
-                <tr key={i}>
-                  {[60,120,100,80,160,160,60].map((w,j)=>(
-                    <td key={j} className="table-cell">
-                      <div className="skeleton" style={{height:13,width:w,borderRadius:4}}/>
-                    </td>
-                  ))}
-                </tr>
-              ))
+              <tr><td colSpan={7} style={{padding:0}}><Loading message="Loading VLANs..." /></td></tr>
             ) : items.length===0 ? (
               <tr><td colSpan={7}>
-                <div style={{display:"flex",flexDirection:"column",alignItems:"center",
-                  justifyContent:"center",padding:"60px 0",gap:10}}>
-                  <div style={{fontSize:20,fontWeight:700}}>V</div>
-                  <div style={{fontSize:14,fontWeight:600,color:"var(--text)"}}>No VLANs found</div>
-                  <div style={{fontSize:12,color:"var(--text-muted)"}}>
-                    {search?"Try a different search":"Add your first VLAN"}
-                  </div>
-                </div>
+                <EmptyState icon={<Icons.network/>} title="No VLANs found"
+                  message={search?"Try a different search":"Add your first VLAN"} />
               </td></tr>
             ) : items.map((v,idx)=>{
               const sc = STATUS_STYLE[v.status]||STATUS_STYLE.active;
