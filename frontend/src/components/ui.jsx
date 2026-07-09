@@ -149,6 +149,39 @@ export function Input({ label, value, onChange, placeholder, type="text", requir
   );
 }
 
+// ── FORM FIELD (with validation) ────────────────────────────
+export function FormField({ label, value, onChange, placeholder, error, type="text", required, mono, small, maxLength }) {
+  const hasError = !!error;
+  return (
+    <div style={{ marginBottom:small?8:14 }}>
+      {label && (
+        <div style={{ color:hasError?C.red:C.text2, fontSize:10, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:5 }}>
+          {label}{required&&<span style={{color:C.red}}> *</span>}
+        </div>
+      )}
+      <input type={type} value={value||""} onChange={e=>onChange(e.target.value)}
+        placeholder={placeholder} maxLength={maxLength}
+        style={{
+          width:"100%", boxSizing:"border-box",
+          background:C.bg1, border:`1px solid ${hasError?C.red:C.border}`, color:C.text0,
+          padding:small?"5px 9px":"7px 11px", borderRadius:5,
+          fontSize:small?12:13, outline:"none",
+          fontFamily: mono?C.mono:"inherit",
+          transition:"border-color 0.15s",
+        }}
+        onFocus={e=>e.target.style.borderColor=hasError?C.red:C.blue}
+        onBlur={e=>e.target.style.borderColor=hasError?C.red:C.border}
+      />
+      {hasError && (
+        <div style={{ color:C.red, fontSize:10, marginTop:3, display:"flex", alignItems:"center", gap:3 }}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="10" height="10"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          {error}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Select({ label, value, onChange, options, required, small }) {
   return (
     <div style={{ marginBottom:small?8:14 }}>
