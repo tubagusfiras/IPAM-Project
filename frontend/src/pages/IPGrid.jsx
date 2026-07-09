@@ -3,23 +3,22 @@ import { useState } from "react";
 // Theme-aware colors — dark=true: redup gelap, light: redup soft
 function getOwnerColors(dark) {
   if (dark) return {
-    customer:       { bg:"rgba(71,85,105,0.35)",  border:"#475569", dot:"#94a3b8", label:"Customer"       },
-    infrastructure: { bg:"rgba(71,85,105,0.35)",  border:"#475569", dot:"#94a3b8", label:"Infrastructure" },
-    ptp:            { bg:"rgba(71,85,105,0.35)",  border:"#475569", dot:"#94a3b8", label:"PTP"            },
-    peering:        { bg:"rgba(71,85,105,0.35)",  border:"#475569", dot:"#94a3b8", label:"Peering"        },
-    management:     { bg:"rgba(71,85,105,0.35)",  border:"#475569", dot:"#94a3b8", label:"Mgmt"           },
-    reserved:       { bg:"rgba(51,65,85,0.50)",   border:"#334155", dot:"#64748b", label:"Reserved"       },
-    free:           { bg:"rgba(37,99,235,0.15)",  border:"#3b82f6", dot:"#60a5fa", label:"Free"           },
+    customer:       { bg:"rgba(59,130,246,0.20)",  border:"#3b82f6", dot:"#60a5fa", label:"Customer"       },
+    infrastructure: { bg:"rgba(99,102,241,0.20)",  border:"#6366f1", dot:"#818cf8", label:"Infrastructure" },
+    ptp:            { bg:"rgba(20,184,166,0.20)",  border:"#14b8a6", dot:"#2dd4bf", label:"PTP"            },
+    peering:        { bg:"rgba(168,85,247,0.20)",  border:"#a855f7", dot:"#c084fc", label:"Peering"        },
+    management:     { bg:"rgba(234,179,8,0.20)",   border:"#eab308", dot:"#facc15", label:"Mgmt"           },
+    reserved:       { bg:"rgba(100,116,139,0.25)", border:"#64748b", dot:"#94a3b8", label:"Reserved"       },
+    free:           { bg:"rgba(37,99,235,0.25)",   border:"#3b82f6", dot:"#60a5fa", label:"Free"           },
   };
-  // Light theme: used=abu muda, free=biru soft tapi tetap visible
   return {
-    customer:       { bg:"rgba(100,116,139,0.12)", border:"#94a3b8", dot:"#64748b", label:"Customer"       },
-    infrastructure: { bg:"rgba(100,116,139,0.12)", border:"#94a3b8", dot:"#64748b", label:"Infrastructure" },
-    ptp:            { bg:"rgba(100,116,139,0.12)", border:"#94a3b8", dot:"#64748b", label:"PTP"            },
-    peering:        { bg:"rgba(100,116,139,0.12)", border:"#94a3b8", dot:"#64748b", label:"Peering"        },
-    management:     { bg:"rgba(100,116,139,0.12)", border:"#94a3b8", dot:"#64748b", label:"Mgmt"           },
-    reserved:       { bg:"rgba(148,163,184,0.20)", border:"#cbd5e1", dot:"#94a3b8", label:"Reserved"       },
-    free:           { bg:"rgba(59,130,246,0.10)",  border:"#3b82f6", dot:"#2563eb", label:"Free"           },
+    customer:       { bg:"rgba(37,99,235,0.10)", border:"#3b82f6", dot:"#2563eb", label:"Customer"       },
+    infrastructure: { bg:"rgba(99,102,241,0.10)",border:"#6366f1", dot:"#4f46e5", label:"Infrastructure" },
+    ptp:            { bg:"rgba(13,148,136,0.10)", border:"#0d9488", dot:"#0f766e", label:"PTP"            },
+    peering:        { bg:"rgba(147,51,234,0.10)", border:"#9333ea", dot:"#7c3aed", label:"Peering"        },
+    management:     { bg:"rgba(202,138,4,0.10)",  border:"#ca8a04", dot:"#a16207", label:"Mgmt"           },
+    reserved:       { bg:"rgba(148,163,184,0.20)",border:"#cbd5e1", dot:"#94a3b8", label:"Reserved"       },
+    free:           { bg:"rgba(59,130,246,0.12)", border:"#3b82f6", dot:"#2563eb", label:"Free"           },
   };
 }
 
