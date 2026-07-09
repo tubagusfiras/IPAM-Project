@@ -218,7 +218,7 @@ export default function Export({ dark }) {
         {/* Preview panel */}
         <div>
           {!preview && !loading && (
-            <EmptyState icon={<Icons.file/>} title="Select a block" message="Choose an IP block from the left to preview export data" />
+            <EmptyState icon={Icons.file} title="Select a block" message="Choose an IP block from the left to preview export data" />
           )}
           {loading && (
             <Loading message="Loading block data..." />

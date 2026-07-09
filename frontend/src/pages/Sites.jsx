@@ -163,7 +163,7 @@ export default function Sites() {
       {loading ? (
         <Loading message="Loading sites..." />
       ) : items.length===0 ? (
-        <EmptyState icon={<Icons.location/>} title="No sites found"
+        <EmptyState icon={Icons.location} title="No sites found"
           message={search?"Try a different search":"Add your first site/location"}
           action={!search?"Add Site":null} onAction={!search?()=>setModal("add"):null} />
       ) : (

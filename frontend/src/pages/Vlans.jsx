@@ -246,7 +246,7 @@ export default function Vlans() {
               <tr><td colSpan={7} style={{padding:0}}><Loading message="Loading VLANs..." /></td></tr>
             ) : items.length===0 ? (
               <tr><td colSpan={7}>
-                <EmptyState icon={<Icons.network/>} title="No VLANs found"
+                <EmptyState icon={Icons.network} title="No VLANs found"
                   message={search?"Try a different search":"Add your first VLAN"} />
               </td></tr>
             ) : items.map((v,idx)=>{

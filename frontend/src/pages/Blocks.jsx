@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { getBlocks, createBlock, updateBlock, deleteBlock, getSites } from "../api.js";
-import { Btn, SearchBar, Loading, EmptyState, StatusBadge, VersionBadge, PageHeader, Icons } from "../components/ui.jsx";
+import { Btn, SearchBar, Loading, PageHeader, Icons } from "../components/ui.jsx";
 
 const VERSION_COLOR = {
   IPv4: { bg:"var(--surface-2)", color:"var(--text-muted)", border:"var(--border-soft)" },

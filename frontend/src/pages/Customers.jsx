@@ -231,7 +231,7 @@ export default function Customers() {
               <tr><td colSpan={7} style={{padding:0}}><Loading message="Loading customers..." /></td></tr>
             ) : items.length===0 ? (
               <tr><td colSpan={7}>
-                <EmptyState icon={<Icons.wireless/>} title="No customers found"
+                <EmptyState icon={Icons.wireless} title="No customers found"
                   message={search?"Try a different search term":"Add your first customer"}
                   action={!search?"Add Customer":null} onAction={!search?()=>setModal("add"):null} />
               </td></tr>
