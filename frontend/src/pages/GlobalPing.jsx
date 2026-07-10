@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { authFetch } from "../api.js";
 import { Btn, Loading, EmptyState, PageHeader, Icons, Card, Badge } from "../components/ui.jsx";
 
@@ -13,27 +13,90 @@ function formatRtt(rtt) {
   return `${rtt.toFixed(1)}ms`;
 }
 
+function formatEta(sec) {
+  if (!sec || sec <= 0) return "";
+  if (sec < 60) return `~${sec}s remaining`;
+  return `~${Math.ceil(sec / 60)}m ${sec % 60}s`;
+}
+
+function HistorySparkline({ data }) {
+  if (!data?.length) return <span style={{ fontSize: 10, color: "var(--text-dim)" }}>No data</span>;
+  const max = Math.max(...data.map(d => d.online), 1);
+  const h = 24;
+  return (
+    <div style={{ display: "flex", gap: 2, alignItems: "flex-end", height: h }}>
+      {data.slice(-14).map((d, i) => {
+        const pct = d.online / max;
+        const barH = Math.max(3, pct * h);
+        const isOnline = d.online > 0;
+        return (
+          <div key={i} style={{
+            width: 6, height: barH,
+            borderRadius: "2px 2px 0 0",
+            background: isOnline ? "var(--success)" : "var(--danger)",
+            opacity: isOnline ? 0.8 : 0.5,
+            transition: "height 0.3s",
+          }} title={`${d.online}/${d.total} online`} />
+        );
+      })}
+    </div>
+  );
+}
+
+const STORAGE_KEY = "ipam_globalping_data";
+const POLL_INTERVAL = 2000;
+
 export default function GlobalPing() {
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
+  const [scanProgress, setScanProgress] = useState(null); // {scanned, total, eta}
+  const [autoLoad, setAutoLoad] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [lastScan, setLastScan] = useState(null);
+  const pollRef = useRef(null);
+
+  // ── Load from sessionStorage on mount ──
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const data = JSON.parse(saved);
+        setItems(data.items || []);
+        setTotal(data.total || 0);
+        setLastScan(data.last_scan);
+        setScanProgress(data.scanProgress || null);
+        if (data.scanProgress) setScanning(true);
+      }
+    } catch {}
+  }, []);
+
+  // ── Save to sessionStorage ──
+  useEffect(() => {
+    if (items.length > 0 || scanProgress) {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
+        items, total, lastScan, scanProgress,
+      }));
+    }
+  }, [items, total, lastScan, scanProgress]);
 
   const loadResults = useCallback(async () => {
     try {
       const params = new URLSearchParams({ limit: "200", offset: "0" });
       if (statusFilter !== "all") params.set("status", statusFilter);
       if (search) params.set("search", search);
-
       const res = await authFetch(`/api/v1/ping/status?${params}`);
       const data = await res.json();
       setItems(data.items || []);
       setTotal(data.total || 0);
       setLastScan(data.last_scan);
+      setScanning(data.running || false);
+      if (data.running && data.scan_progress) {
+        setScanProgress(data.scan_progress);
+      }
     } catch (e) { console.error(e); }
     setLoading(false);
   }, [search, statusFilter]);
@@ -45,36 +108,48 @@ export default function GlobalPing() {
     } catch {}
   }, []);
 
-  useEffect(() => { loadResults(); loadSummary(); }, []);
+  useEffect(() => {
+    if (autoLoad) { loadResults(); loadSummary(); }
+  }, [autoLoad]);
+
+  // ── Polling background ──
+  useEffect(() => {
+    if (scanning) {
+      pollRef.current = setInterval(() => {
+        loadResults();
+        loadSummary();
+      }, POLL_INTERVAL);
+    }
+    return () => {
+      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    };
+  }, [scanning]);
 
   const handleRunScan = async () => {
     setScanning(true);
+    setScanProgress({ scanned: 0, total: 100, eta: null });
     try {
-      await authFetch("/api/v1/ping/run", { method: "POST" });
-      // Poll for completion
-      const poll = setInterval(async () => {
-        const res = await authFetch("/api/v1/ping/status?limit=1");
-        const data = await res.json();
-        if (!data.running) {
-          clearInterval(poll);
-          loadResults();
-          loadSummary();
-          setScanning(false);
-        }
-      }, 2000);
+      const res = await authFetch("/api/v1/ping/run", { method: "POST" });
+      const data = await res.json();
+      setScanProgress({ scanned: 0, total: data.total || 100, eta: data.eta || null });
+      // First load after trigger
+      setTimeout(() => { loadResults(); loadSummary(); }, 1000);
     } catch (e) {
       console.error(e);
       setScanning(false);
+      setScanProgress(null);
     }
   };
 
-  const running = scanning || items.length === 0;
+  const pct = scanProgress && scanProgress.total > 0
+    ? Math.min(100, Math.round((scanProgress.scanned / scanProgress.total) * 100))
+    : 0;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <PageHeader title="Global Ping Visibility">
         <Btn
-          icon={scanning ? Icons.spinner : Icons.check}
+          icon={scanning ? Icons.spinner : Icons.globe}
           onClick={handleRunScan}
           disabled={scanning}
         >
@@ -82,35 +157,65 @@ export default function GlobalPing() {
         </Btn>
       </PageHeader>
 
-      {/* Summary Cards */}
-      {summary && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
-          <Card accent="#3b82f6" padding={16}>
-            <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Total Active IPs</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: "var(--text)" }}>{summary.total_active_ips}</div>
-          </Card>
-          <Card accent="#22c55e" padding={16}>
-            <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Online</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: "var(--success)" }}>{summary.online}</div>
-          </Card>
-          <Card accent="#ef4444" padding={16}>
-            <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Offline</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: "var(--danger)" }}>{summary.offline}</div>
-          </Card>
-          <Card accent="#f59e0b" padding={16}>
-            <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Pending</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: "var(--warning)" }}>{summary.pending}</div>
-          </Card>
+      {/* ── Summary Cards ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+        <Card accent="#3b82f6" padding={16}>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Total Active IPs</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: "var(--text)" }}>
+            {summary?.total_active_ips ?? 0}
+          </div>
+        </Card>
+        <Card accent="#22c55e" padding={16}>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Online</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: "var(--success)" }}>
+            {summary?.online ?? "—"}
+          </div>
+        </Card>
+        <Card accent="#ef4444" padding={16}>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Offline</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: "var(--danger)" }}>
+            {summary?.offline ?? "—"}
+          </div>
+        </Card>
+        <Card accent="#f59e0b" padding={16}>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Pending</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: "var(--warning)" }}>
+            {summary?.pending ?? "—"}
+          </div>
+        </Card>
+      </div>
+
+      {/* ── Progress Bar ── */}
+      {scanning && scanProgress && (
+        <div className="card" style={{ padding: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>
+              Scanning {scanProgress.scanned}/{scanProgress.total} IPs
+            </span>
+            <span style={{ fontSize: 12, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
+              {pct}% {scanProgress.eta ? formatEta(scanProgress.eta) : ""}
+            </span>
+          </div>
+          <div style={{ height: 8, background: "var(--surface-3)", borderRadius: 99, overflow: "hidden" }}>
+            <div style={{
+              height: "100%", borderRadius: 99, width: `${pct}%`,
+              transition: "width 0.5s ease",
+              background: "linear-gradient(90deg, #2563eb, #60a5fa)",
+              backgroundSize: "200% 100%",
+              animation: "shimmer 2s linear infinite",
+            }} />
+          </div>
         </div>
       )}
 
-      {lastScan && (
+      {/* ── Last Scan Info ── */}
+      {lastScan && !scanning && (
         <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: -8 }}>
-          Last scan: {formatTime(lastScan)}
+          Last scan: {formatTime(lastScan)} · {total} IPs checked
         </div>
       )}
 
-      {/* Search + Filter */}
+      {/* ── Search + Filter ── */}
       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <div style={{ position: "relative", flex: 1, minWidth: 200, maxWidth: 320 }}>
           <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--text-dim)", pointerEvents: "none" }}>
@@ -128,29 +233,33 @@ export default function GlobalPing() {
           <option value="error">Error</option>
           <option value="pending">Pending</option>
         </select>
+        <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
+          {total} result{total !== 1 ? "s" : ""}
+        </span>
       </div>
 
-      {/* Table */}
+      {/* ── Table ── */}
       <div className="card" style={{ overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
-              {["Status", "IP Address", "ICMP (Server)", "HTTP (Global)", "RTT", "Last Seen"].map(h => (
+              {["Status", "IP Address", "Block / Site", "ICMP", "HTTP Global", "History (7d)", "Last Seen"].map(h => (
                 <th key={h} className="table-header">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={6}><Loading message="Loading ping results..." /></td></tr>
+              <tr><td colSpan={7} style={{ padding: 0 }}><Loading message="Loading ping results..." /></td></tr>
             ) : items.length === 0 ? (
-              <tr><td colSpan={6}>
-                <EmptyState icon={<Icons.globe />} title="No results yet"
+              <tr><td colSpan={7}>
+                <EmptyState icon={Icons.globe} title="No results yet"
                   message="Run a scan to check IP visibility from global internet" />
               </td></tr>
             ) : items.map((row, i) => {
-              const isOnline = row.icmp_status === "online";
-              const isOffline = row.icmp_status === "offline";
+              const status = row.icmp_status || "pending";
+              const isOnline = status === "online";
+              const isOffline = status === "offline";
               const statusColor = isOnline ? "var(--success)" : isOffline ? "var(--danger)" : "var(--text-dim)";
               const statusDot = isOnline ? "🟢" : isOffline ? "🔴" : "⚪";
 
@@ -160,7 +269,7 @@ export default function GlobalPing() {
                   <td className="table-cell">
                     <span style={{ fontSize: 13 }}>{statusDot}</span>
                     <span style={{ fontSize: 11, fontWeight: 600, color: statusColor, marginLeft: 4, textTransform: "capitalize" }}>
-                      {row.icmp_status || "pending"}
+                      {status}
                     </span>
                   </td>
                   <td className="table-cell">
@@ -169,11 +278,16 @@ export default function GlobalPing() {
                     </span>
                   </td>
                   <td className="table-cell">
+                    <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                      {row.prefix || "—"}
+                    </div>
+                  </td>
+                  <td className="table-cell">
                     <span style={{
                       fontSize: 11, fontWeight: 600,
-                      color: row.icmp_status === "online" ? "var(--success)" : "var(--text-dim)",
+                      color: isOnline ? "var(--success)" : "var(--text-dim)",
                     }}>
-                      {row.icmp_status === "online" ? "✅ Online" : row.icmp_status === "offline" ? "❌ Offline" : "—"}
+                      {isOnline ? "✅ Online" : isOffline ? "❌ Offline" : "—"}
                     </span>
                     {row.icmp_rtt != null && (
                       <span style={{ fontSize: 10, color: "var(--text-dim)", marginLeft: 4 }}>
@@ -186,13 +300,11 @@ export default function GlobalPing() {
                       fontSize: 11, fontWeight: 600,
                       color: row.http_status === "online" ? "var(--success)" : row.http_status === "offline" ? "var(--danger)" : "var(--text-dim)",
                     }}>
-                      {row.http_status === "online" ? "🌍 Online" : row.http_status === "offline" ? "🌍 Offline" : "—"}
+                      {row.http_status === "online" ? "🌍 Online" : row.http_status === "offline" ? "❌ Offline" : "—"}
                     </span>
                   </td>
-                  <td className="table-cell">
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-muted)" }}>
-                      {row.icmp_rtt ? `${row.icmp_rtt.toFixed(1)}ms` : "—"}
-                    </span>
+                  <td className="table-cell" style={{ minWidth: 100 }}>
+                    <HistorySparkline data={row.history} />
                   </td>
                   <td className="table-cell">
                     <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
