@@ -1597,6 +1597,7 @@ import uuid
 PING_SCHEDULER_LOCK = asyncio.Lock()
 PING_IS_RUNNING = False
 PING_LAST_SCAN = None
+PING_PROGRESS = {"scanned": 0, "total": 0, "eta": None}
 PING_SOURCE = platform.node() or "ipam-server"
 
 @app.get("/api/v1/ping/status", summary="Global Ping — latest scan results", tags=["Global Ping"])
@@ -1632,6 +1633,7 @@ async def get_ping_status(
         "total": total,
         "running": PING_IS_RUNNING,
         "last_scan": PING_LAST_SCAN,
+        "scan_progress": PING_PROGRESS if PING_IS_RUNNING else None,
         "limit": limit,
         "offset": offset,
     }
@@ -1650,25 +1652,23 @@ async def run_ping_scan(
 
     PING_IS_RUNNING = True
 
-    # Ambil semua IP active dari DB
+    # Ambil semua prefix active dari DB
     if target_ip:
-        rows = await db.fetch("""
-            SELECT a.ip::text, a.prefix::text, a.block_id
-            FROM ping_results a WHERE a.ip::text = $1
-        """, target_ip)
+        rows = await db.fetch("SELECT prefix::text, block_id FROM allocations WHERE prefix::text LIKE $1 AND status = 'active' LIMIT 1", f"{target_ip}%")
     else:
-        rows = await db.fetch("""
-            SELECT DISTINCT a.prefix::text, a.block_id, NULL::inet as ip
-            FROM allocations a
-            WHERE a.status = 'active'
-        """)
+        rows = await db.fetch("SELECT DISTINCT prefix::text, block_id FROM allocations WHERE status = 'active' AND prefix::text NOT LIKE '%:%'")
 
-    # Parse unique /32 IPs dari prefix
+    # Parse IP host (first usable host per prefix)
+    import ipaddress
     ips = []
     for r in rows:
-        prefix = r.get("prefix") or r.get("ip")
-        if prefix and "/" in prefix:
-            ip = prefix.split("/")[0]
+        try:
+            net = ipaddress.ip_network(r["prefix"], strict=False)
+            first_host = str(net.network_address + 1)
+            if first_host not in ips:
+                ips.append(first_host)
+        except:
+            ip = r["prefix"].split("/")[0]
             if ip not in ips:
                 ips.append(ip)
 
@@ -1676,8 +1676,12 @@ async def run_ping_scan(
         PING_IS_RUNNING = False
         return {"status": "no_active_ips", "total": 0}
 
-    # Jalankan scan di background
-    background_tasks.add_task(_run_scan_and_save, ips, db)
+    # Set progress awal segera
+    PING_PROGRESS = {"scanned": 0, "total": len(ips), "eta": None}
+
+    # Jalankan scan di background — pakai connection pool baru
+    pool_copy = pool  # Ambil pool dari module scope
+    background_tasks.add_task(_run_scan_and_save_with_pool, ips, pool_copy)
 
     return {"status": "started", "total": len(ips), "message": f"Scanning {len(ips)} IPs in background"}
 
@@ -1691,50 +1695,55 @@ async def get_ping_history(ip: str, days: int = Query(7, ge=1, le=90), db=Depend
     """, ip, days)
     return {"items": [dict(r) for r in rows]}
 
-async def _run_scan_and_save(ips: list[str], db):
-    """Background task: scan + save + update history"""
-    global PING_IS_RUNNING, PING_LAST_SCAN
+async def _run_scan_and_save_with_pool(ips: list[str], pool):
+    """Background task: scan + save + update history — pakai pool sendiri"""
+    global PING_IS_RUNNING, PING_LAST_SCAN, PING_PROGRESS
     import time
     from datetime import datetime, timezone
 
-    try:
-        # Split jadi batch kecil
-        batch_size = 20
-        results = []
-        for i in range(0, len(ips), batch_size):
-            batch = ips[i:i + batch_size]
-            icmp = await icmp_ping_batch(batch)
+    PING_PROGRESS = {"scanned": 0, "total": len(ips), "eta": None}
+    start_time = time.monotonic()
 
-            # Simpan per IP
-            for r in icmp:
-                ip = r["ip"]
-                status = r["status"]
-                rtt = r.get("rtt_ms")
+    async with pool.acquire() as db:
+        try:
+            batch_size = 20
+            results = []
+            for i in range(0, len(ips), batch_size):
+                batch = ips[i:i + batch_size]
+                icmp = await icmp_ping_batch(batch)
 
-                # Upsert ke ping_results
-                await db.execute("""
-                    INSERT INTO ping_results (ip, prefix, icmp_status, icmp_rtt, icmp_at, scanned_at)
-                    VALUES ($1::inet, ($1 || '/32')::cidr, $2, $3, NOW(), NOW())
-                    ON CONFLICT DO NOTHING
-                """, ip, status, rtt)
+                for r in icmp:
+                    ip = r["ip"]
+                    status = r["status"]
+                    rtt = r.get("rtt_ms")
 
-                # Insert history
-                await db.execute("""
-                    INSERT INTO ping_history (ip, status, rtt_ms, source, checked_at)
-                    VALUES ($1::inet, $2, $3, 'icmp_local', NOW())
-                """, ip, status, rtt)
+                    await db.execute("""
+                        INSERT INTO ping_results (ip, prefix, icmp_status, icmp_rtt, icmp_at, scanned_at)
+                        VALUES ($1::inet, ($1 || '/32')::cidr, $2, $3, NOW(), NOW())
+                        ON CONFLICT (ip) DO UPDATE SET icmp_status=$2, icmp_rtt=$3, icmp_at=NOW(), scanned_at=NOW()
+                    """, ip, status, rtt)
 
-                results.append(r)
+                    await db.execute("""
+                        INSERT INTO ping_history (ip, status, rtt_ms, source, checked_at)
+                        VALUES ($1::inet, $2, $3, 'icmp_local', NOW())
+                    """, ip, status, rtt)
 
-        PING_LAST_SCAN = datetime.now(timezone.utc).isoformat()
-    except Exception as e:
-        print(f"[PingScan] Error: {e}")
-        await db.execute("""
-            INSERT INTO audit_log (table_name, action, description, new_data, changed_by)
-            VALUES ('ping_results', 'error', 'Ping scan failed', $1::jsonb, 'system')
-        """, json.dumps({"error": str(e), "ips_count": len(ips)}))
-    finally:
-        PING_IS_RUNNING = False
+                    results.append(r)
+
+                scanned = min(i + batch_size, len(ips))
+                elapsed = time.monotonic() - start_time
+                rate = scanned / elapsed if elapsed > 0 else 0
+                eta = int((len(ips) - scanned) / rate) if rate > 0 else None
+                PING_PROGRESS = {"scanned": scanned, "total": len(ips), "eta": eta}
+
+            PING_LAST_SCAN = datetime.now(timezone.utc).isoformat()
+        except Exception as e:
+            print(f"[PingScan] Error: {e}")
+            import traceback
+            traceback.print_exc()
+        finally:
+            PING_IS_RUNNING = False
+            PING_PROGRESS = {"scanned": 0, "total": 0, "eta": None}
 
 @app.get("/api/v1/ping/summary", summary="Global Ping — summary dashboard", tags=["Global Ping"])
 async def get_ping_summary(db=Depends(get_db)):

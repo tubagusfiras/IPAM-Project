@@ -58,6 +58,7 @@ export default function GlobalPing() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [lastScan, setLastScan] = useState(null);
   const pollRef = useRef(null);
+  const scanStartRef = useRef(null); // timestamp trigger scan
 
   // ── Load from sessionStorage on mount ──
   useEffect(() => {
@@ -68,8 +69,14 @@ export default function GlobalPing() {
         setItems(data.items || []);
         setTotal(data.total || 0);
         setLastScan(data.last_scan);
-        setScanProgress(data.scanProgress || null);
-        if (data.scanProgress) setScanning(true);
+        // Jangan restore scanProgress kalo udah lebih dari 5 menit
+        if (data.scanProgress && data.scanProgress.since) {
+          const age = Date.now() - data.scanProgress.since;
+          if (age < 300000) { // 5 menit
+            setScanProgress(data.scanProgress);
+            setScanning(true);
+          }
+        }
       }
     } catch {}
   }, []);
@@ -78,10 +85,11 @@ export default function GlobalPing() {
   useEffect(() => {
     if (items.length > 0 || scanProgress) {
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
-        items, total, lastScan, scanProgress,
+        items, total, lastScan,
+        scanProgress: scanProgress ? { ...scanProgress, since: Date.now() } : null,
       }));
     }
-  }, [items, total, lastScan, scanProgress]);
+  }, [items, total, lastScan, scanProgress, scanning]);
 
   const loadResults = useCallback(async () => {
     try {
@@ -93,9 +101,16 @@ export default function GlobalPing() {
       setItems(data.items || []);
       setTotal(data.total || 0);
       setLastScan(data.last_scan);
-      setScanning(data.running || false);
-      if (data.running && data.scan_progress) {
+      // Only stop scanning if scan_progress says done OR timeout >30s
+      if (data.scan_progress && data.scan_progress.scanned >= data.scan_progress.total) {
+        setScanning(false);
+        setScanProgress(null);
+      } else if (data.scan_progress) {
         setScanProgress(data.scan_progress);
+      } else if (scanStartRef.current && Date.now() - scanStartRef.current > 60000) {
+        // Safety: stop after 60s if backend never reports progress
+        setScanning(false);
+        setScanProgress(null);
       }
     } catch (e) { console.error(e); }
     setLoading(false);
@@ -115,6 +130,10 @@ export default function GlobalPing() {
   // ── Polling background ──
   useEffect(() => {
     if (scanning) {
+      // Langsung load sekali
+      loadResults();
+      loadSummary();
+      // Lalu polling
       pollRef.current = setInterval(() => {
         loadResults();
         loadSummary();
@@ -126,14 +145,14 @@ export default function GlobalPing() {
   }, [scanning]);
 
   const handleRunScan = async () => {
+    scanStartRef.current = Date.now();
     setScanning(true);
     setScanProgress({ scanned: 0, total: 100, eta: null });
     try {
       const res = await authFetch("/api/v1/ping/run", { method: "POST" });
       const data = await res.json();
-      setScanProgress({ scanned: 0, total: data.total || 100, eta: data.eta || null });
-      // First load after trigger
-      setTimeout(() => { loadResults(); loadSummary(); }, 1000);
+      const totalIps = data.total || 100;
+      setScanProgress({ scanned: 0, total: totalIps, eta: totalIps * 3 });
     } catch (e) {
       console.error(e);
       setScanning(false);
@@ -148,13 +167,16 @@ export default function GlobalPing() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <PageHeader title="Global Ping Visibility">
-        <Btn
-          icon={scanning ? Icons.spinner : Icons.globe}
-          onClick={handleRunScan}
-          disabled={scanning}
-        >
-          {scanning ? "Scanning..." : "Run Scan"}
-        </Btn>
+        {scanning ? (
+          <Btn variant="danger" icon={Icons.x} onClick={() => {
+            setScanning(false);
+            setScanProgress(null);
+            if (pollRef.current) clearInterval(pollRef.current);
+            sessionStorage.removeItem(STORAGE_KEY);
+          }}>Cancel</Btn>
+        ) : (
+          <Btn icon={Icons.globe} onClick={handleRunScan}>Run Scan</Btn>
+        )}
       </PageHeader>
 
       {/* ── Summary Cards ── */}
