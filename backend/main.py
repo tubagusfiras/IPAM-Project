@@ -6,7 +6,7 @@ from typing import Optional, List
 import uuid
 
 import asyncpg
-from fastapi import FastAPI, HTTPException, Query, Depends, UploadFile, File, Request, Header
+from fastapi import FastAPI, HTTPException, Query, Depends, UploadFile, File, Request, Header, BackgroundTasks
 from fastapi.responses import StreamingResponse, JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -1586,3 +1586,170 @@ async def confirm_import(body: dict, db=Depends(get_db)):
                      block_id, json.dumps({"imported": imported, "skipped": skipped}))
 
     return {"block_id": str(block_id), "imported": imported, "skipped": skipped}
+
+# ============================================================
+# GLOBAL PING VISIBILITY
+# ============================================================
+from services.ping_service import icmp_ping_batch, http_ping_batch, full_scan
+import platform
+import uuid
+
+PING_SCHEDULER_LOCK = asyncio.Lock()
+PING_IS_RUNNING = False
+PING_LAST_SCAN = None
+PING_SOURCE = platform.node() or "ipam-server"
+
+@app.get("/api/v1/ping/status", summary="Global Ping — latest scan results", tags=["Global Ping"])
+async def get_ping_status(
+    status: Optional[str] = Query(None, regex="^(online|offline|error|all)$"),
+    search: Optional[str] = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    db=Depends(get_db)
+):
+    """Get latest ping results, filter by status and search IP"""
+    global PING_IS_RUNNING, PING_LAST_SCAN
+
+    params = []
+    conditions = ["1=1"]
+    if status and status != "all":
+        params.append(status)
+        conditions.append(f"icmp_status = '${len(params)}'")
+
+    if search:
+        params.append(f"%{search}%")
+        conditions.append(f"ip::text ILIKE '${len(params)}'")
+
+    where = " AND ".join(conditions)
+    rows = await db.fetch(
+        f"SELECT * FROM ping_results WHERE {where} ORDER BY scanned_at DESC LIMIT ${len(params)+1} OFFSET ${len(params)+2}",
+        *params, limit, offset
+    )
+    total = await db.fetchval(f"SELECT COUNT(*) FROM ping_results WHERE {where}", *params)
+
+    return {
+        "items": [dict(r) for r in rows],
+        "total": total,
+        "running": PING_IS_RUNNING,
+        "last_scan": PING_LAST_SCAN,
+        "limit": limit,
+        "offset": offset,
+    }
+
+@app.post("/api/v1/ping/run", summary="Global Ping — trigger scan semua active IP", tags=["Global Ping"])
+async def run_ping_scan(
+    background_tasks: BackgroundTasks,
+    target_ip: Optional[str] = Query(None, description="Scan specific IP only (optional)"),
+    db=Depends(get_db)
+):
+    """Trigger ping scan untuk semua active allocations"""
+    global PING_IS_RUNNING
+
+    if PING_IS_RUNNING:
+        raise HTTPException(429, "Scan already in progress")
+
+    PING_IS_RUNNING = True
+
+    # Ambil semua IP active dari DB
+    if target_ip:
+        rows = await db.fetch("""
+            SELECT a.ip::text, a.prefix::text, a.block_id
+            FROM ping_results a WHERE a.ip::text = $1
+        """, target_ip)
+    else:
+        rows = await db.fetch("""
+            SELECT DISTINCT a.prefix::text, a.block_id, NULL::inet as ip
+            FROM allocations a
+            WHERE a.status = 'active'
+        """)
+
+    # Parse unique /32 IPs dari prefix
+    ips = []
+    for r in rows:
+        prefix = r.get("prefix") or r.get("ip")
+        if prefix and "/" in prefix:
+            ip = prefix.split("/")[0]
+            if ip not in ips:
+                ips.append(ip)
+
+    if not ips:
+        PING_IS_RUNNING = False
+        return {"status": "no_active_ips", "total": 0}
+
+    # Jalankan scan di background
+    background_tasks.add_task(_run_scan_and_save, ips, db)
+
+    return {"status": "started", "total": len(ips), "message": f"Scanning {len(ips)} IPs in background"}
+
+@app.get("/api/v1/ping/history/{ip}", summary="Global Ping — history IP", tags=["Global Ping"])
+async def get_ping_history(ip: str, days: int = Query(7, ge=1, le=90), db=Depends(get_db)):
+    """Get ping history untuk specific IP"""
+    rows = await db.fetch("""
+        SELECT * FROM ping_history
+        WHERE ip::text = $1 AND checked_at > NOW() - INTERVAL '1 day' * $2
+        ORDER BY checked_at DESC LIMIT 500
+    """, ip, days)
+    return {"items": [dict(r) for r in rows]}
+
+async def _run_scan_and_save(ips: list[str], db):
+    """Background task: scan + save + update history"""
+    global PING_IS_RUNNING, PING_LAST_SCAN
+    import time
+    from datetime import datetime, timezone
+
+    try:
+        # Split jadi batch kecil
+        batch_size = 20
+        results = []
+        for i in range(0, len(ips), batch_size):
+            batch = ips[i:i + batch_size]
+            icmp = await icmp_ping_batch(batch)
+
+            # Simpan per IP
+            for r in icmp:
+                ip = r["ip"]
+                status = r["status"]
+                rtt = r.get("rtt_ms")
+
+                # Upsert ke ping_results
+                await db.execute("""
+                    INSERT INTO ping_results (ip, prefix, icmp_status, icmp_rtt, icmp_at, scanned_at)
+                    VALUES ($1::inet, ($1 || '/32')::cidr, $2, $3, NOW(), NOW())
+                    ON CONFLICT DO NOTHING
+                """, ip, status, rtt)
+
+                # Insert history
+                await db.execute("""
+                    INSERT INTO ping_history (ip, status, rtt_ms, source, checked_at)
+                    VALUES ($1::inet, $2, $3, 'icmp_local', NOW())
+                """, ip, status, rtt)
+
+                results.append(r)
+
+        PING_LAST_SCAN = datetime.now(timezone.utc).isoformat()
+    except Exception as e:
+        print(f"[PingScan] Error: {e}")
+        await db.execute("""
+            INSERT INTO audit_log (table_name, action, description, new_data, changed_by)
+            VALUES ('ping_results', 'error', 'Ping scan failed', $1::jsonb, 'system')
+        """, json.dumps({"error": str(e), "ips_count": len(ips)}))
+    finally:
+        PING_IS_RUNNING = False
+
+@app.get("/api/v1/ping/summary", summary="Global Ping — summary dashboard", tags=["Global Ping"])
+async def get_ping_summary(db=Depends(get_db)):
+    """Quick summary counts for dashboard widget"""
+    total = await db.fetchval("SELECT COUNT(*) FROM allocations WHERE status = 'active'")
+    # Latest scan counts
+    latest = await db.fetch("""
+        SELECT icmp_status, COUNT(*) as cnt FROM ping_results
+        WHERE scanned_at > NOW() - INTERVAL '1 day'
+        GROUP BY icmp_status
+    """)
+    counts = {r["icmp_status"]: r["cnt"] for r in latest}
+    return {
+        "total_active_ips": total,
+        "online": counts.get("online", 0),
+        "offline": counts.get("offline", 0),
+        "pending": counts.get("pending", 0) or total - sum(counts.values()),
+    }

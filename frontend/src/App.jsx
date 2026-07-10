@@ -17,6 +17,7 @@ const ImportPage = lazy(()=>import("./pages/Import.jsx"));
 const PingTrace  = lazy(()=>import("./pages/PingTrace.jsx"));
 const SettingsPage = lazy(()=>import("./pages/Settings.jsx"));
 const SubnetCalc = lazy(()=>import("./pages/SubnetCalc.jsx"));
+const GlobalPing = lazy(()=>import("./pages/GlobalPing.jsx"));
 
 const NAV_GROUPS = [
   {
@@ -38,6 +39,7 @@ const NAV_GROUPS = [
       { id:"ping",   label:"Ping & Trace", icon:"ping" },
       { id:"import", label:"Import CSV",   icon:"import" },
       { id:"subnet", label:"Subnet Calc",  icon:"calc" },
+      { id:"global-ping", label:"Global Ping", icon:"ping" },
     ]
   },
   {
@@ -600,6 +602,7 @@ export default function App() {
       case "ping":      return <PingTrace/>;
       case "import":    return <ImportPage/>;
       case "subnet":    return <SubnetCalc/>;
+      case "global-ping": return <GlobalPing/>;
       case "settings":  return <SettingsPage dark={dark} onToggleDark={toggleDark}/>;
       default:          return <Dashboard onNavigate={navigate}/>;
     }
