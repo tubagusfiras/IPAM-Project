@@ -113,7 +113,7 @@ REQUEST_LATENCY = Histogram("ipam_request_duration_seconds", "Request latency in
 # AUTH MIDDLEWARE
 # ------------------------------------------------------------------
 PUBLIC_PATHS = {"/api/v1/auth/login", "/api/v1/health/detailed", "/metrics", "/docs", "/openapi.json", "/redoc", "/api/v1/ping-trace/ping", "/api/v1/ping-trace/traceroute", "/api/v1/ping-trace/lookup", "/api/v1/ping-trace/mtr"}
-PUBLIC_PREFIXES = {"/api/v1/export/block", "/api/v1/export/summary", "/api/v1/export/blocks"}
+PUBLIC_PREFIXES = {"/api/v1/export/block", "/api/v1/export/summary", "/api/v1/export/blocks", "/api/v1/ping/"}
 
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
@@ -1681,7 +1681,7 @@ async def run_ping_scan(
 
     # Jalankan scan di background — pakai connection pool baru
     pool_copy = pool  # Ambil pool dari module scope
-    background_tasks.add_task(_run_scan_and_save_with_pool, ips, pool_copy)
+    background_tasks.add_task(_run_scan_and_save_with_pool, ips)
 
     return {"status": "started", "total": len(ips), "message": f"Scanning {len(ips)} IPs in background"}
 
@@ -1695,7 +1695,8 @@ async def get_ping_history(ip: str, days: int = Query(7, ge=1, le=90), db=Depend
     """, ip, days)
     return {"items": [dict(r) for r in rows]}
 
-async def _run_scan_and_save_with_pool(ips: list[str], pool):
+async def _run_scan_and_save_with_pool(ips: list[str]):
+    global pool
     """Background task: scan + save + update history — pakai pool sendiri"""
     global PING_IS_RUNNING, PING_LAST_SCAN, PING_PROGRESS
     import time
@@ -1719,7 +1720,7 @@ async def _run_scan_and_save_with_pool(ips: list[str], pool):
 
                     await db.execute("""
                         INSERT INTO ping_results (ip, prefix, icmp_status, icmp_rtt, icmp_at, scanned_at)
-                        VALUES ($1::inet, ($1 || '/32')::cidr, $2, $3, NOW(), NOW())
+                        VALUES ($1::inet, (split_part($1::text, '/', 1) || '/32')::cidr, $2, $3, NOW(), NOW())
                         ON CONFLICT (ip) DO UPDATE SET icmp_status=$2, icmp_rtt=$3, icmp_at=NOW(), scanned_at=NOW()
                     """, ip, status, rtt)
 
