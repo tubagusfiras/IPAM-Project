@@ -265,16 +265,16 @@ export default function GlobalPing() {
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
-              {["Status", "IP Address", "Block / Site", "ICMP", "HTTP Global", "History (7d)", "Last Seen"].map(h => (
+              {["Status", "IP", "Customer / Desc", "Block / Site", "ICMP", "HTTP", "History", "Last Seen"].map(h => (
                 <th key={h} className="table-header">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={7} style={{ padding: 0 }}><Loading message="Loading ping results..." /></td></tr>
+              <tr><td colSpan={8} style={{ padding: 0 }}><Loading message="Loading ping results..." /></td></tr>
             ) : items.length === 0 ? (
-              <tr><td colSpan={7}>
+              <tr><td colSpan={8}>
                 <EmptyState icon={Icons.globe} title="No results yet"
                   message="Run a scan to check IP visibility from global internet" />
               </td></tr>
@@ -300,9 +300,15 @@ export default function GlobalPing() {
                     </span>
                   </td>
                   <td className="table-cell">
-                    <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                      {row.prefix || "—"}
+                    <div style={{ fontSize: 11, fontWeight: 500, color: "var(--text)", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {row.customer_name || row.alloc_desc || "—"}
                     </div>
+                  </td>
+                  <td className="table-cell">
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-dim)" }}>
+                      {row.block_name || row.prefix || "—"}
+                    </span>
+                    {row.site_name && <span style={{ fontSize: 10, color: "var(--text-dim)", marginLeft: 4 }}>· {row.site_name}</span>}
                   </td>
                   <td className="table-cell">
                     <span style={{

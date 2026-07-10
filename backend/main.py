@@ -1622,11 +1622,18 @@ async def get_ping_status(
         conditions.append(f"ip::text ILIKE '${len(params)}'")
 
     where = " AND ".join(conditions)
-    rows = await db.fetch(
-        f"SELECT * FROM ping_results WHERE {where} ORDER BY scanned_at DESC LIMIT ${len(params)+1} OFFSET ${len(params)+2}",
-        *params, limit, offset
-    )
-    total = await db.fetchval(f"SELECT COUNT(*) FROM ping_results WHERE {where}", *params)
+    query = f"""
+        SELECT pr.*, a.customer_name, a.description as alloc_desc,
+               b.name as block_name, s.name as site_name
+        FROM ping_results pr
+        LEFT JOIN allocations a ON pr.ip::text = split_part(a.prefix::text, '/', 1) AND a.status = 'active'
+        LEFT JOIN ip_blocks b ON a.block_id = b.id
+        LEFT JOIN sites s ON b.site_id = s.id
+        WHERE {where}
+        ORDER BY pr.scanned_at DESC LIMIT ${len(params)+1} OFFSET ${len(params)+2}
+    """
+    rows = await db.fetch(query, *params, limit, offset)
+    total = await db.fetchval(f"SELECT COUNT(*) FROM ping_results pr WHERE {where}", *params)
 
     return {
         "items": [dict(r) for r in rows],
