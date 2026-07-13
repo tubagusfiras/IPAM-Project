@@ -93,7 +93,10 @@ async def lifespan(app: FastAPI):
     pool = await asyncpg.create_pool(DATABASE_URL, min_size=2, max_size=10)
     import core.database
     core.database.pool = pool
+    # Start ping scheduler
+    scheduler_task = asyncio.create_task(_ping_scheduler())
     yield
+    scheduler_task.cancel()
     await pool.close()
 
 app = FastAPI(title="IPAM API", version="2.0.0", lifespan=lifespan)
@@ -1591,6 +1594,33 @@ async def confirm_import(body: dict, db=Depends(get_db)):
 # GLOBAL PING VISIBILITY
 # ============================================================
 from services.ping_service import icmp_ping_batch, http_ping_via_worker, full_scan
+import asyncio
+
+# ── Global Ping Scheduler ──
+async def _ping_scheduler():
+    """Auto-scan every 6 hours"""
+    global PING_IS_RUNNING, pool
+    while True:
+        await asyncio.sleep(21600)  # 6 jam
+        if PING_IS_RUNNING:
+            continue
+        try:
+            rows = await pool.fetch("SELECT DISTINCT prefix::text FROM allocations WHERE status='active' AND prefix::text NOT LIKE '%:%'")
+            import ipaddress
+            ips = []
+            for r in rows:
+                try:
+                    net = ipaddress.ip_network(r['prefix'], strict=False)
+                    host = str(net.network_address + 1)
+                    if host not in ips: ips.append(host)
+                except:
+                    pass
+            if ips:
+                PING_IS_RUNNING = True
+                PING_PROGRESS = {"scanned": 0, "total": len(ips), "eta": None}
+                asyncio.create_task(_run_scan_and_save_with_pool(ips))
+        except:
+            pass
 import platform
 import uuid
 
