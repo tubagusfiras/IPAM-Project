@@ -1634,6 +1634,8 @@ PING_SOURCE = platform.node() or "ipam-server"
 async def get_ping_status(
     status: Optional[str] = Query(None, regex="^(online|offline|error|all)$"),
     search: Optional[str] = Query(None),
+    sort_by: str = Query("scanned_at", regex="^(ip|icmp_status|http_status|customer_name|scanned_at|icmp_rtt)$"),
+    sort_dir: str = Query("DESC", regex="^(ASC|DESC)$"),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db=Depends(get_db)
@@ -1652,11 +1654,12 @@ async def get_ping_status(
         conditions.append(f"pr.ip::text ILIKE CAST(${len(params)} AS text)")
 
     where = " AND ".join(conditions)
+    order_col = f"pr.{sort_by}" if sort_by != "scanned_at" else "pr.scanned_at"
     query = f"""
         SELECT pr.*
         FROM ping_results pr
         WHERE {where}
-        ORDER BY pr.scanned_at DESC LIMIT ${len(params)+1} OFFSET ${len(params)+2}
+        ORDER BY {order_col} {sort_dir} LIMIT ${len(params)+1} OFFSET ${len(params)+2}
     """
     rows = await db.fetch(query, *params, limit, offset)
     total = await db.fetchval(f"SELECT COUNT(*) FROM ping_results pr WHERE {where}", *params)

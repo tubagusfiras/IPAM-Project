@@ -72,10 +72,22 @@ export default function Dashboard({ onNavigate }) {
   const [stats, setStats] = useState(null);
   const [err, setErr] = useState(null);
   const [health, setHealth] = useState(null);
+  const [pingSummary, setPingSummary] = useState(null);
   const [showGrafana, setShowGrafana] = useState(true);
   const gTheme = document.documentElement.classList.contains("dark") ? "dark" : "light";
 
   useEffect(() => { getDashboardStats().then(setStats).catch(e => setErr(e.message)); }, []);
+  useEffect(() => {
+    const loadPing = async () => {
+      try {
+        const res = await fetch("/api/v1/ping/summary");
+        if (res.ok) setPingSummary(await res.json());
+      } catch {}
+    };
+    loadPing();
+    const iv = setInterval(loadPing, 15000);
+    return () => clearInterval(iv);
+  }, []);
   useEffect(() => {
     const check = async () => {
       try {
@@ -284,6 +296,21 @@ export default function Dashboard({ onNavigate }) {
           )}
         </div>
       </div>
+
+      {/* ── GLOBAL PING STATUS ── */}
+      {pingSummary && (
+        <div style={{display:"flex",gap:16,alignItems:"center",padding:"14px 18px",background:CARD,border:`1px solid ${BORDER}`,borderRadius:10}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,flex:1}}>
+            <svg viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="1.8" width="20" height="20"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <span style={{fontSize:13,fontWeight:600,color:TEXT}}>Global Ping</span>
+          </div>
+          <div onClick={()=>window.location.hash="global-ping"} style={{cursor:"pointer",display:"flex",gap:16}}>
+            <span style={{fontSize:12,color:MUTED}}>Total: <b style={{color:TEXT}}>{pingSummary.total_active_ips||0}</b></span>
+            <span style={{fontSize:12,color:MUTED}}>Online: <b style={{color:"var(--success)"}}>{pingSummary.online||0}</b></span>
+            <span style={{fontSize:12,color:MUTED}}>Offline: <b style={{color:"var(--danger)"}}>{pingSummary.offline||0}</b></span>
+          </div>
+        </div>
+      )}
 
       {/* ── QUICK ACTIONS ── */}
       <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:4}}>

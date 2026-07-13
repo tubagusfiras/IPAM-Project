@@ -57,6 +57,8 @@ export default function GlobalPing() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [lastScan, setLastScan] = useState(null);
+  const [sortBy, setSortBy] = useState("scanned_at");
+  const [sortDir, setSortDir] = useState("DESC");
   const pollRef = useRef(null);
   const scanStartRef = useRef(null); // timestamp trigger scan
 
@@ -93,7 +95,7 @@ export default function GlobalPing() {
 
   const loadResults = useCallback(async () => {
     try {
-      const params = new URLSearchParams({ limit: "200", offset: "0" });
+      const params = new URLSearchParams({ limit: "200", offset: "0", sort_by: sortBy, sort_dir: sortDir });
       if (statusFilter !== "all") params.set("status", statusFilter);
       if (search) params.set("search", search);
       const res = await authFetch(`/api/v1/ping/status?${params}`);
@@ -189,24 +191,24 @@ export default function GlobalPing() {
             {summary?.total_active_ips ?? 0}
           </div>
         </Card>
-        <Card accent="#22c55e" padding={16}>
+        <div onClick={()=>setStatusFilter("online")} style={{cursor:"pointer"}}><Card accent="#22c55e" padding={16}>
           <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Online</div>
           <div style={{ fontSize: 22, fontWeight: 700, color: "var(--success)" }}>
             {summary?.online ?? "—"}
           </div>
-        </Card>
-        <Card accent="#ef4444" padding={16}>
+        </Card></div>
+        <div onClick={()=>setStatusFilter("offline")} style={{cursor:"pointer"}}><Card accent="#ef4444" padding={16}>
           <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Offline</div>
           <div style={{ fontSize: 22, fontWeight: 700, color: "var(--danger)" }}>
             {summary?.offline ?? "—"}
           </div>
-        </Card>
-        <Card accent="#f59e0b" padding={16}>
+        </Card></div>
+        <div onClick={()=>setStatusFilter("pending")} style={{cursor:"pointer"}}><Card accent="#f59e0b" padding={16}>
           <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Pending</div>
           <div style={{ fontSize: 22, fontWeight: 700, color: "var(--warning)" }}>
             {summary?.pending ?? "—"}
           </div>
-        </Card>
+        </Card></div>
       </div>
 
       {/* ── Progress Bar ── */}
