@@ -1727,11 +1727,24 @@ async def _run_scan_and_save_with_pool(ips: list[str]):
                     status = r["status"]
                     rtt = r.get("rtt_ms")
 
+                    alloc = await db.fetchrow("""
+                        SELECT c.name AS c_name, b.name AS b_name, s.name AS s_name
+                        FROM allocations a
+                        LEFT JOIN customers c ON a.customer_id = c.id
+                        LEFT JOIN ip_blocks b ON a.block_id = b.id
+                        LEFT JOIN sites s ON b.site_id = s.id
+                        WHERE a.status = 'active' AND $1::inet <<= a.prefix::cidr
+                        LIMIT 1
+                    """, ip)
+                    cust_name = alloc["c_name"] if alloc else None
+                    blk_name = alloc["b_name"] if alloc else None
+                    sit_name = alloc["s_name"] if alloc else None
+
                     await db.execute("""
-                        INSERT INTO ping_results (ip, prefix, icmp_status, icmp_rtt, icmp_at, scanned_at)
-                        VALUES ($1::inet, (split_part($1::text, '/', 1) || '/32')::cidr, $2, $3, NOW(), NOW())
-                        ON CONFLICT (ip) DO UPDATE SET icmp_status=$2, icmp_rtt=$3, icmp_at=NOW(), scanned_at=NOW()
-                    """, ip, status, rtt)
+                        INSERT INTO ping_results (ip, prefix, icmp_status, icmp_rtt, icmp_at, scanned_at, customer_name, block_name, site_name)
+                        VALUES ($1::inet, (split_part($1::text, '/', 1) || '/32')::cidr, $2, $3, NOW(), NOW(), $4, $5, $6)
+                        ON CONFLICT (ip) DO UPDATE SET icmp_status=$2, icmp_rtt=$3, icmp_at=NOW(), scanned_at=NOW(), customer_name=$4, block_name=$5, site_name=$6
+                    """, ip, status, rtt, cust_name, blk_name, sit_name)
 
                     await db.execute("""
                         INSERT INTO ping_history (ip, status, rtt_ms, source, checked_at)
