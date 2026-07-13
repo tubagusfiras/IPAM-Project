@@ -1645,7 +1645,7 @@ async def get_ping_status(
     conditions = ["1=1"]
     if status and status != "all":
         params.append(status)
-        conditions.append(f"icmp_status = '${len(params)}'")
+        conditions.append(f"pr.icmp_status = CAST(${len(params)} AS text)")
 
     if search:
         params.append(f"%{search}%")
@@ -1740,7 +1740,7 @@ async def _run_scan_and_save_with_pool(ips: list[str]):
 
     async with pool.acquire() as db:
         try:
-            batch_size = 20
+            batch_size = 50
             results = []
             for i in range(0, len(ips), batch_size):
                 batch = ips[i:i + batch_size]
@@ -1800,6 +1800,27 @@ async def _run_scan_and_save_with_pool(ips: list[str]):
         finally:
             PING_IS_RUNNING = False
             PING_PROGRESS = {"scanned": 0, "total": 0, "eta": None}
+
+@app.post("/api/v1/ping/report", summary="Global Ping — receive agent report", tags=["Global Ping"])
+async def receive_ping_report(body: dict, db=Depends(get_db)):
+    """Receive ping results from Oracle Cloud agents"""
+    results = body.get("results", [])
+    source = body.get("source", "unknown")
+    for r in results:
+        ip = r.get("ip")
+        status = r.get("status")
+        rtt = r.get("rtt_ms")
+        if ip and status:
+            await db.execute("""
+                INSERT INTO ping_results (ip, prefix, icmp_status, icmp_rtt, icmp_at, scanned_at)
+                VALUES ($1::inet, ($1 || '/32')::cidr, $2, $3, NOW(), NOW())
+                ON CONFLICT (ip) DO UPDATE SET icmp_status=$2, icmp_rtt=$3, icmp_at=NOW(), scanned_at=NOW()
+            """, ip, status, rtt)
+            await db.execute("""
+                INSERT INTO ping_history (ip, status, rtt_ms, source, checked_at)
+                VALUES ($1::inet, $2, $3, $4, NOW())
+            """, ip, status, rtt, f"icmp_{source}")
+    return {"received": len(results), "source": source}
 
 @app.get("/api/v1/ping/summary", summary="Global Ping — summary dashboard", tags=["Global Ping"])
 async def get_ping_summary(db=Depends(get_db)):
