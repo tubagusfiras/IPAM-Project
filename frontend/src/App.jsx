@@ -18,6 +18,7 @@ const PingTrace  = lazy(()=>import("./pages/PingTrace.jsx"));
 const SettingsPage = lazy(()=>import("./pages/Settings.jsx"));
 const SubnetCalc = lazy(()=>import("./pages/SubnetCalc.jsx"));
 const GlobalPing = lazy(()=>import("./pages/GlobalPing.jsx"));
+const GlobalPingDetail = lazy(()=>import("./pages/GlobalPingDetail.jsx"));
 
 const NAV_GROUPS = [
   {
@@ -479,6 +480,7 @@ export default function App() {
   const parseHash = () => {
     const h = window.location.hash.replace("#","");
     if (h.startsWith("block-detail/")) return { page:"block-detail", id:h.split("/")[1] };
+    if (h.startsWith("global-ping-detail/")) return { active:"global-ping-detail", page:"global-ping-detail", id:h.split("/")[1] };
     if (h) return { active: h };
     return null;
   };
@@ -603,6 +605,7 @@ export default function App() {
       case "import":    return <ImportPage/>;
       case "subnet":    return <SubnetCalc/>;
       case "global-ping": return <GlobalPing/>;
+      case "global-ping-detail": return <GlobalPingDetail/>;
       case "settings":  return <SettingsPage dark={dark} onToggleDark={toggleDark}/>;
       default:          return <Dashboard onNavigate={navigate}/>;
     }

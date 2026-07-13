@@ -297,7 +297,8 @@ export default function GlobalPing() {
                     </span>
                   </td>
                   <td className="table-cell">
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "var(--text)" }}>
+                    <span onClick={() => window.location.hash = "global-ping-detail/" + (row.ip || row.prefix?.split("/")?.[0])}
+                      style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "var(--accent)", cursor: "pointer", textDecoration: "underline", textDecorationColor: "var(--accent-dim)" }}>
                       {row.ip || row.prefix?.split("/")?.[0] || "—"}
                     </span>
                   </td>
