@@ -14,7 +14,7 @@ from typing import Optional
 # ── Config ──
 PING_TIMEOUT = 3          # detik per ping
 MAX_CONCURRENT = 20        # max parallel ping
-CF_WORKER_URL = "https://ipam-global-ping.your-worker.workers.dev/ping"
+CF_WORKER_URL = "https://ipam-global-ping.intermerda900.workers.dev/ping"
 
 # ── ICMP Ping (dari server lokal) ──
 async def icmp_ping(ip: str, timeout: int = PING_TIMEOUT) -> dict:

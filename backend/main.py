@@ -1590,7 +1590,7 @@ async def confirm_import(body: dict, db=Depends(get_db)):
 # ============================================================
 # GLOBAL PING VISIBILITY
 # ============================================================
-from services.ping_service import icmp_ping_batch, http_ping_batch, full_scan
+from services.ping_service import icmp_ping_batch, http_ping_via_worker, full_scan
 import platform
 import uuid
 
@@ -1726,6 +1726,9 @@ async def _run_scan_and_save_with_pool(ips: list[str]):
                     ip = r["ip"]
                     status = r["status"]
                     rtt = r.get("rtt_ms")
+                    http_result = await http_ping_via_worker(ip)
+                    http_status = http_result.get("status", "error")
+                    http_rtt = http_result.get("rtt_ms")
 
                     alloc = await db.fetchrow("""
                         SELECT c.name AS c_name, b.name AS b_name, s.name AS s_name
@@ -1741,15 +1744,21 @@ async def _run_scan_and_save_with_pool(ips: list[str]):
                     sit_name = alloc["s_name"] if alloc else None
 
                     await db.execute("""
-                        INSERT INTO ping_results (ip, prefix, icmp_status, icmp_rtt, icmp_at, scanned_at, customer_name, block_name, site_name)
-                        VALUES ($1::inet, (split_part($1::text, '/', 1) || '/32')::cidr, $2, $3, NOW(), NOW(), $4, $5, $6)
-                        ON CONFLICT (ip) DO UPDATE SET icmp_status=$2, icmp_rtt=$3, icmp_at=NOW(), scanned_at=NOW(), customer_name=$4, block_name=$5, site_name=$6
-                    """, ip, status, rtt, cust_name, blk_name, sit_name)
+                        INSERT INTO ping_results (ip, prefix, icmp_status, icmp_rtt, icmp_at, http_status, http_rtt, http_at, scanned_at, customer_name, block_name, site_name)
+                        VALUES ($1::inet, (split_part($1::text, '/', 1) || '/32')::cidr, $2, $3, NOW(), $4, $5, NOW(), NOW(), $6, $7, $8)
+                        ON CONFLICT (ip) DO UPDATE SET icmp_status=$2, icmp_rtt=$3, icmp_at=NOW(), http_status=$4, http_rtt=$5, http_at=NOW(), scanned_at=NOW(), customer_name=$6, block_name=$7, site_name=$8
+                    """, ip, status, rtt, http_status, http_rtt, cust_name, blk_name, sit_name)
 
                     await db.execute("""
                         INSERT INTO ping_history (ip, status, rtt_ms, source, checked_at)
                         VALUES ($1::inet, $2, $3, 'icmp_local', NOW())
                     """, ip, status, rtt)
+
+                    if http_status == "online":
+                        await db.execute("""
+                            INSERT INTO ping_history (ip, status, rtt_ms, source, checked_at)
+                            VALUES ($1::inet, 'online', $2, 'http_global', NOW())
+                        """, ip, http_rtt)
 
                     results.append(r)
 
