@@ -1649,7 +1649,7 @@ async def get_ping_status(
 
     if search:
         params.append(f"%{search}%")
-        conditions.append(f"ip::text ILIKE '${len(params)}'")
+        conditions.append(f"pr.ip::text ILIKE CAST(${len(params)} AS text)")
 
     where = " AND ".join(conditions)
     query = f"""
