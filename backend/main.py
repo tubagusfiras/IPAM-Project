@@ -1623,10 +1623,12 @@ async def get_ping_status(
 
     where = " AND ".join(conditions)
     query = f"""
-        SELECT pr.*, a.customer_name, a.description as alloc_desc,
-               b.name as block_name, s.name as site_name
+        SELECT pr.*,
+               c.name AS customer_name, a.description AS alloc_desc,
+               b.name AS block_name, s.name AS site_name
         FROM ping_results pr
         LEFT JOIN allocations a ON pr.ip::text = split_part(a.prefix::text, '/', 1) AND a.status = 'active'
+        LEFT JOIN customers c ON a.customer_id = c.id
         LEFT JOIN ip_blocks b ON a.block_id = b.id
         LEFT JOIN sites s ON b.site_id = s.id
         WHERE {where}
