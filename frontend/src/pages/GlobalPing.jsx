@@ -101,14 +101,16 @@ export default function GlobalPing() {
       setItems(data.items || []);
       setTotal(data.total || 0);
       setLastScan(data.last_scan);
-      // Only stop scanning if scan_progress says done OR timeout >30s
-      if (data.scan_progress && data.scan_progress.scanned >= data.scan_progress.total) {
+      // Check if scan completed via results
+      if (data.total > 0 && !data.running && !data.scan_progress) {
+        setScanning(false);
+        setScanProgress(null);
+      } else if (data.scan_progress && data.scan_progress.scanned >= data.scan_progress.total) {
         setScanning(false);
         setScanProgress(null);
       } else if (data.scan_progress) {
         setScanProgress(data.scan_progress);
-      } else if (scanStartRef.current && Date.now() - scanStartRef.current > 60000) {
-        // Safety: stop after 60s if backend never reports progress
+      } else if (data.total > 0 && scanStartRef.current && Date.now() - scanStartRef.current > 10000) {
         setScanning(false);
         setScanProgress(null);
       }
