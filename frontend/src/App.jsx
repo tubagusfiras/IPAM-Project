@@ -3,6 +3,8 @@ import { getToken, getStoredUser, clearToken } from "./api.js";
 import { ToastProvider, useToast } from "./components/Toast.jsx";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary.jsx";
 import Login from "./pages/Login.jsx";
+import { Sidebar } from "./components/Sidebar.jsx";
+import { Header } from "./components/Header.jsx";
 
 const Dashboard  = lazy(()=>import("./pages/Dashboard.jsx"));
 const Blocks     = lazy(()=>import("./pages/Blocks.jsx"));
@@ -78,9 +80,9 @@ function Icon({ id, size=16 }) {
   return <span style={{width:size,height:size,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{IC[id]}</span>;
 }
 
-export { Sidebar } from "./components/Sidebar.jsx";
 
-export { Header } from "./components/Header.jsx";
+
+
 function Loading() {
   return (
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:240,gap:12}}>

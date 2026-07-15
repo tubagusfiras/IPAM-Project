@@ -30,6 +30,26 @@ export function Header({ title, subtitle, onBack, dark, onToggleDark, collapsed,
     return () => clearTimeout(timer);
   }, [search]);
 
+  // Periodic notification check (every 30s)
+  useEffect(() => {
+    const checkOffline = async () => {
+      try {
+        const res = await fetch("/api/v1/ping/summary");
+        const d = await res.json();
+        if (d.offline > 0) {
+          const existing = notifs.find(n => n.type === "ping" && n.offline === d.offline);
+          if (!existing) {
+            setNotifs(prev => [{ type:"ping", text:`${d.offline} IPs offline from global`, ts:new Date(), offline:d.offline }, ...prev].slice(0,10));
+            setNotifUnread(prev => prev + 1);
+          }
+        }
+      } catch {}
+    };
+    checkOffline();
+    const iv = setInterval(checkOffline, 30000);
+    return () => clearInterval(iv);
+  }, []);
+
   // Close on outside click
   useEffect(() => {
     const close = () => { setSearchResults(null); setSearching(false); };
@@ -143,7 +163,7 @@ export function Header({ title, subtitle, onBack, dark, onToggleDark, collapsed,
           onMouseEnter={e=>e.currentTarget.style.background="var(--surface-3)"}
           onMouseLeave={e=>e.currentTarget.style.background="var(--surface-2)"}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" width="16" height="16"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/></svg>
-          {notifUnread > 0 && <span style={{position:"absolute",top:4,right:4,width:7,height:7,borderRadius:"50%",background:"var(--danger)"}}/>}
+          {notifUnread > 0 && <span className="notif-badge">{notifUnread > 9 ? '9+' : notifUnread}</span>}
         </button>
         {showNotif && (
           <div style={{position:"absolute",top:"calc(100% + 4px)",right:0,width:280,background:"var(--surface-1)",border:"1px solid var(--border-soft)",borderRadius:"var(--radius)",boxShadow:"var(--shadow-lg)",zIndex:100,overflow:"hidden"}}>
