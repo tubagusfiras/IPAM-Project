@@ -837,6 +837,15 @@ export default function BlockDetail({ blockId, onBack, dark }) {
           <span style={{fontSize:10,color:"var(--text-dim)",fontStyle:"italic"}}>✎ click cell to edit</span>
         </div>
 
+        {/* Bulk actions */}
+        {selected.size > 0 && (
+          <div style={{display:"flex",alignItems:"center",gap:8,padding:"6px 12px",background:"var(--danger-surface)",border:"1px solid var(--danger-border)",borderRadius:"var(--radius-sm)",marginBottom:8}}>
+            <span style={{fontSize:12,color:"var(--danger)",fontWeight:600}}>{selected.size} selected</span>
+            <button onClick={()=>setSelected(new Set())} style={{padding:"3px 8px",fontSize:11,background:"transparent",border:"1px solid var(--danger-border)",color:"var(--text-muted)",borderRadius:4,cursor:"pointer"}}>Clear</button>
+            <button onClick={bulkDelete} style={{padding:"3px 8px",fontSize:11,background:"var(--danger)",border:"none",color:"#fff",borderRadius:4,cursor:"pointer",fontWeight:600}}>Delete Selected</button>
+          </div>
+        )}
+
         {/* Table */}
         <div style={{overflowX:"auto",overflowY:"auto",maxHeight:"calc(100vh - 420px)"}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
