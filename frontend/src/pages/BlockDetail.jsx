@@ -365,7 +365,26 @@ export default function BlockDetail({ blockId, onBack, dark }) {
   const [showCalc,  setShowCalc]  = useState(false);
   const [showGrid,  setShowGrid]  = useState(true);
   const [showFullTable, setShowFullTable] = useState(false);
+  const [selected, setSelected] = useState(new Set());
   const [saveMsg,   setSaveMsg]   = useState(null);
+
+  const toggleSelect = (id) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const toggleSelectAll = () => {
+    const allocs = data?.allocations?.filter(a => (!statusFilter || a.status===statusFilter) && (!ownerFilter || a.owner_type===ownerFilter)) || [];
+    if (selected.size === allocs.length && allocs.length > 0) setSelected(new Set());
+    else setSelected(new Set(allocs.map(a => a.id)));
+  };
+  const bulkDelete = async () => {
+    if (selected.size === 0) return;
+    const msg = `Delete ${selected.size} allocation${selected.size>1?'s':''}?`;
+    setConfirm({bulk: true, message: msg, ids: [...selected]});
+  };
 
   const load = useCallback(()=>{
     setLoading(true);
@@ -823,7 +842,7 @@ export default function BlockDetail({ blockId, onBack, dark }) {
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
             <thead style={{position:"sticky",top:0,zIndex:10}}>
               <tr style={{background:"var(--surface-2)",borderBottom:"2px solid var(--border-medium)"}}>
-                {["#","Type","Prefix","Usable Range","Owner / Customer","VLAN","End Device XC","Status",""].map((h,i)=>(
+                {["","#","Type","Prefix","Usable Range","Owner / Customer","VLAN","End Device XC","Status",""].map((h,i)=>(
                   <th key={i} style={{
                     textAlign:"left",padding:"8px 10px",whiteSpace:"nowrap",
                     fontSize:10,fontWeight:600,textTransform:"uppercase",
@@ -1043,7 +1062,7 @@ export default function BlockDetail({ blockId, onBack, dark }) {
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
               <thead style={{position:"sticky",top:0,zIndex:10}}>
                 <tr style={{background:"var(--surface-2)",borderBottom:"2px solid var(--border-medium)"}}>
-                  {["#","Type","Prefix","Usable Range","Owner / Customer","VLAN","End Device XC","Status",""].map((h,i)=>(
+                  {["","#","Type","Prefix","Usable Range","Owner / Customer","VLAN","End Device XC","Status",""].map((h,i)=>(
                     <th key={i} style={{textAlign:"left",padding:"8px 10px",whiteSpace:"nowrap",
                       fontSize:10,fontWeight:600,textTransform:"uppercase",
                       letterSpacing:"0.07em",color:"var(--text-muted)",
@@ -1091,7 +1110,11 @@ export default function BlockDetail({ blockId, onBack, dark }) {
                       <tr key={"fs-"+row.id} style={{borderBottom:"1px solid var(--border-soft)",background:rowBg,transition:"background var(--transition)"}}
                         onMouseEnter={e=>e.currentTarget.style.background="var(--surface-3)"}
                         onMouseLeave={e=>e.currentTarget.style.background=rowBg}>
-                        <td style={{padding:"6px 10px",color:"var(--text-dim)",fontFamily:"var(--font-mono)",fontSize:10,borderRight:"1px solid var(--border-soft)"}}>{i+1}</td>
+                        <td style={{padding:"6px 4px",width:28}}>
+                      <input type="checkbox" checked={selected.has(row.id)} onChange={()=>toggleSelect(row.id)}
+                        style={{cursor:"pointer",accentColor:"var(--accent)",width:14,height:14}}/>
+                    </td>
+                    <td style={{padding:"6px 10px",color:"var(--text-dim)",fontFamily:"var(--font-mono)",fontSize:10,borderRight:"1px solid var(--border-soft)"}}>{i+1}</td>
                         <td style={{padding:"6px 8px",borderRight:"1px solid var(--border-soft)"}}>
                           <select value={row.owner_type||"customer"} onChange={e=>saveField(row.id,"owner_type",e.target.value)} onClick={e=>e.stopPropagation()}
                             style={{background:"transparent",border:"none",color:oi.color,fontSize:11,fontWeight:600,cursor:"pointer",outline:"none"}}>
@@ -1164,8 +1187,16 @@ export default function BlockDetail({ blockId, onBack, dark }) {
       )}
       {confirm && (
         <ConfirmModal
-          message={`Delete allocation ${confirm.prefix}?`}
-          onConfirm={async()=>{ await deleteAllocation(confirm.id); setConfirm(null); load(); }}
+          message={confirm.bulk ? confirm.message : `Delete allocation ${confirm.prefix}?`}
+          onConfirm={async()=>{
+            if (confirm.bulk) {
+              for (const id of confirm.ids) { try { await deleteAllocation(id); } catch(e) {} }
+              setSelected(new Set());
+            } else {
+              await deleteAllocation(confirm.id);
+            }
+            setConfirm(null); load();
+          }}
           onCancel={()=>setConfirm(null)}/>
       )}
     </div>
