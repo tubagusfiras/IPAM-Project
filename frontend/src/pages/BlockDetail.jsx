@@ -333,14 +333,14 @@ function InlineCell({ value, onSave, mono, placeholder, suggestions=[], onCreate
     <AutoInput value={val} onChange={v=>setVal(v)}
       suggestions={suggestions} mono={mono}
       placeholder={placeholder} onCreate={onCreate}
-      onBlur={()=>commit()}
+      onBlur={()=>commit(undefined)}
     />
   );
 
   return (
     <input ref={ref} value={val} autoFocus type={type}
       onChange={e=>setVal(e.target.value)}
-      onBlur={()=>commit()}
+      onBlur={()=>commit(undefined)}
       onKeyDown={e=>{ if(e.key==="Enter") commit(); if(e.key==="Escape"){ setEditing(false); setVal(value||""); }}}
       className="input"
       style={{fontSize:12,padding:"3px 8px",fontFamily:mono?"var(--font-mono)":"inherit",minWidth:80}}
@@ -1183,7 +1183,7 @@ export default function BlockDetail({ blockId, onBack, dark }) {
                         <td style={{padding:"6px 10px",borderRight:"1px solid var(--border-soft)"}}><span style={{fontFamily:"var(--font-mono)",fontSize:11,color:"var(--text-muted)"}}>{calcUsableRange(row.prefix)}</span></td>
                         <td style={{padding:"4px 8px",borderRight:"1px solid var(--border-soft)",minWidth:160}}>
                           {row.owner_type==="customer"?(
-                            <InlineCell value={row.customer_name} placeholder="assign customer" suggestions={custNames} onCreate={v=>saveField(row.id,"customer_name",v)} onSave={v=>saveField(row.id,"customer_name",v)}/>
+                            <InlineCell value={row.customer_name} placeholder="assign customer" suggestions={custNames} onCreate={v=>saveFieldOptimisticOnCreate(row.id,"customer_name",v)} onSave={v=>saveFieldOptimistic(row.id,"customer_name",v)}/>
                           ):(
                             <InlineCell value={row.description} placeholder="description" onSave={v=>saveFieldOptimistic(row.id,"description",v)}/>
                           )}
