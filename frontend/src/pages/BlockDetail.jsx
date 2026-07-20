@@ -262,7 +262,7 @@ function AutoInput({ value, onChange, suggestions=[], placeholder, mono, onCreat
           if(e.key==="Enter") {
             if(filtered.length===1) select(filtered[0]);
             else if(query && onCreate) { onCreate(query); setOpen(false); }
-            else if(query) onChange(query);
+            else if(query) { onChange(query); if(onCommit) setTimeout(()=>onCommit(),10); }
           }
           if(e.key==="Escape") setOpen(false);
         }}
