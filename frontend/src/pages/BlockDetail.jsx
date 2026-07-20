@@ -437,7 +437,7 @@ export default function BlockDetail({ blockId, onBack, dark }) {
         if (!vlan) {
           const r=await authFetch("/api/v1/vlans",{method:"POST",
             headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({vid,name:"",status:"active"})});
+            body:JSON.stringify({vid,name:`VLAN ${vid}`,status:"active"})});
           if(r.ok){vlan=await r.json();setVlans(prev=>[...prev,vlan]);}
         }
         payload.vlan_id=vlan?.id||null;

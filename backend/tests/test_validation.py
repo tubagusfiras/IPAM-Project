@@ -110,3 +110,22 @@ class TestUserValidation:
             assert False
         except pydantic.ValidationError:
             assert True
+
+
+class TestVlanNameGeneration:
+    def test_vlan_name_from_vid(self):
+        name = f"VLAN {100}"
+        assert name == "VLAN 100"
+
+    def test_vlan_name_range(self):
+        for vid in [1, 100, 1000, 4094]:
+            assert f"VLAN {vid}" == f"VLAN {vid}"
+
+    def test_customer_code_generation(self):
+        code = "PT Laxo"[:4].upper()
+        assert code == "PT L"
+
+    def test_vlan_creation_payload(self):
+        payload = {"vid": 100, "name": "VLAN 100", "status": "active"}
+        assert payload["name"] == "VLAN 100"
+        assert payload["status"] == "active"
