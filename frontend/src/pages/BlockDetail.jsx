@@ -884,6 +884,7 @@ export default function BlockDetail({ blockId, onBack, dark }) {
                 return rows.map((row,i)=>{
                   if (row._type==="gap") return (
                     <tr key={"gap-"+i} style={{borderBottom:"1px solid var(--border-soft)",opacity:0.6}}>
+                      <td style={{padding:"5px 10px",width:28}}/>
                       <td style={{padding:"5px 10px",color:"var(--text-dim)",fontFamily:"var(--font-mono)",fontSize:10,borderRight:"1px solid var(--border-soft)"}}>—</td>
                       <td style={{padding:"5px 8px",borderRight:"1px solid var(--border-soft)"}}><span style={{fontSize:10,color:"var(--text-dim)",fontStyle:"italic"}}>free</span></td>
                       <td style={{padding:"5px 10px",borderRight:"1px solid var(--border-soft)"}}>
@@ -917,6 +918,11 @@ export default function BlockDetail({ blockId, onBack, dark }) {
                   onMouseEnter={e=>e.currentTarget.style.background="var(--surface-3)"}
                   onMouseLeave={e=>e.currentTarget.style.background=rowBg}>
 
+                    {/* Checkbox */}
+                    <td style={{padding:"6px 8px",width:28}}>
+                      <input type="checkbox" checked={selected.has(row.id)} onChange={()=>toggleSelect(row.id)}
+                        style={{cursor:"pointer",accentColor:"var(--accent)",width:14,height:14}}/>
+                    </td>
                     {/* # */}
                     <td style={{padding:"6px 10px",color:"var(--text-dim)",
                       fontFamily:"var(--font-mono)",fontSize:10,borderRight:"1px solid var(--border-soft)"}}>
@@ -1198,13 +1204,21 @@ export default function BlockDetail({ blockId, onBack, dark }) {
         <ConfirmModal
           message={confirm.bulk ? confirm.message : `Delete allocation ${confirm.prefix}?`}
           onConfirm={async()=>{
+            // Optimistic delete: remove from local state first, no page refresh
+            setConfirm(null);
             if (confirm.bulk) {
-              for (const id of confirm.ids) { try { await deleteAllocation(id); } catch(e) {} }
+              const ids = new Set(confirm.ids);
+              setData(prev => prev ? {...prev, allocations: prev.allocations.filter(a => !ids.has(a.id))} : prev);
               setSelected(new Set());
+              // Background: delete from API
+              for (const id of confirm.ids) {
+                try { await deleteAllocation(id); } catch(e) { console.error(e); }
+              }
             } else {
-              await deleteAllocation(confirm.id);
+              setData(prev => prev ? {...prev, allocations: prev.allocations.filter(a => a.id !== confirm.id)} : prev);
+              // Background: delete from API
+              try { await deleteAllocation(confirm.id); } catch(e) { console.error(e); }
             }
-            setConfirm(null); load();
           }}
           onCancel={()=>setConfirm(null)}/>
       )}
