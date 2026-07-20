@@ -261,6 +261,16 @@ export default function Customers() {
                   </div>
                 </td>
 
+                {/* Source */}
+                <td className="table-cell">
+                  <span style={{
+                    fontSize:10,fontWeight:600,padding:"2px 7px",borderRadius:99,
+                    background: c.source === "static" ? "var(--warning-surface)" : "var(--info-surface)",
+                    color: c.source === "static" ? "var(--warning)" : "var(--accent)",
+                    border: `1px solid ${c.source === "static" ? "var(--warning-border)" : "var(--info-border)"}`,
+                  }}>{c.source === "static" ? "S" : "D"}</span>
+                </td>
+
                 {/* Code */}
                 <td className="table-cell">
                   <span style={{fontFamily:"var(--font-mono)",fontSize:12,
