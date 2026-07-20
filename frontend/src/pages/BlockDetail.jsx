@@ -239,7 +239,7 @@ function ownerInfo(type) {
 }
 
 // ── AUTOCOMPLETE INPUT ───────────────────────────────────────────────────────
-function AutoInput({ value, onChange, suggestions=[], placeholder, mono, onCreate }) {
+function AutoInput({ value, onChange, suggestions=[], placeholder, mono, onCreate, onCommit }) {
   const [open, setOpen]   = useState(false);
   const [query, setQuery] = useState(value||"");
   const ref = useRef();
@@ -250,7 +250,7 @@ function AutoInput({ value, onChange, suggestions=[], placeholder, mono, onCreat
     ? suggestions.filter(s=>s.toLowerCase().includes(query.toLowerCase())).slice(0,8)
     : suggestions.slice(0,8);
 
-  const select = v => { setQuery(v); onChange(v); setOpen(false); };
+  const select = v => { setQuery(v); onChange(v); setOpen(false); if(onCommit) setTimeout(()=>onCommit(),50); };
 
   return (
     <div ref={ref} style={{position:"relative",width:"100%"}}>
