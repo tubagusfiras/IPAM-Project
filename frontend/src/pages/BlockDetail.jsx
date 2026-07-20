@@ -511,6 +511,24 @@ export default function BlockDetail({ blockId, onBack, dark }) {
     }
   };
 
+  // Optimistic update untuk description - langsung update state, API di background
+  const saveFieldOptimistic = async (allocId, field, value) => {
+    setData(prev => {
+      if (!prev) return prev;
+      const updatedAllocs = prev.allocations.map(a =>
+        a.id === allocId ? { ...a, [field]: value } : a
+      );
+      return { ...prev, allocations: updatedAllocs };
+    });
+    setSaveMsg("Saved ✓"); setTimeout(()=>setSaveMsg(null),1500);
+    try {
+      await saveField(allocId, field, value);
+    } catch(e) {
+      setSaveMsg("Error: "+e.message); setTimeout(()=>setSaveMsg(null),3000);
+      load();
+    }
+  };
+
   // Filter allocations
   const allocs = (data?.allocations||[]).filter(a=>{
     const ms = !search ||
@@ -1005,7 +1023,7 @@ export default function BlockDetail({ blockId, onBack, dark }) {
                           onSave={v=>saveField(row.id,"customer_name",v)}/>
                       ) : (
                         <InlineCell value={row.description} placeholder="description"
-                          onSave={v=>saveField(row.id,"description",v)}/>
+                          onSave={v=>saveFieldOptimistic(row.id,"description",v)}/>
                       )}
                     </td>
 
@@ -1019,7 +1037,7 @@ export default function BlockDetail({ blockId, onBack, dark }) {
                     {/* End Device XC */}
                     <td style={{padding:"4px 8px",borderRight:"1px solid var(--border-soft)",maxWidth:160}}>
                       <InlineCell value={row.description} placeholder="—"
-                        onSave={v=>saveField(row.id,"description",v)}/>
+                        onSave={v=>saveFieldOptimistic(row.id,"description",v)}/>
                     </td>
 
                     {/* Status */}
@@ -1167,11 +1185,11 @@ export default function BlockDetail({ blockId, onBack, dark }) {
                           {row.owner_type==="customer"?(
                             <InlineCell value={row.customer_name} placeholder="assign customer" suggestions={custNames} onCreate={v=>saveField(row.id,"customer_name",v)} onSave={v=>saveField(row.id,"customer_name",v)}/>
                           ):(
-                            <InlineCell value={row.description} placeholder="description" onSave={v=>saveField(row.id,"description",v)}/>
+                            <InlineCell value={row.description} placeholder="description" onSave={v=>saveFieldOptimistic(row.id,"description",v)}/>
                           )}
                         </td>
                         <td style={{padding:"4px 8px",borderRight:"1px solid var(--border-soft)"}}><InlineCell value={row.vlan_vid?String(row.vlan_vid):""} placeholder="—" suggestions={vlanVids} mono onSave={v=>saveField(row.id,"vlan_vid",v)}/></td>
-                        <td style={{padding:"4px 8px",borderRight:"1px solid var(--border-soft)",maxWidth:160}}><InlineCell value={row.description} placeholder="—" onSave={v=>saveField(row.id,"description",v)}/></td>
+                        <td style={{padding:"4px 8px",borderRight:"1px solid var(--border-soft)",maxWidth:160}}><InlineCell value={row.description} placeholder="—" onSave={v=>saveFieldOptimistic(row.id,"description",v)}/></td>
                         <td style={{padding:"6px 8px",borderRight:"1px solid var(--border-soft)"}}>
                           <select value={row.status} onChange={e=>saveField(row.id,"status",e.target.value)} onClick={e=>e.stopPropagation()}
                             style={{background:"transparent",border:"none",color:ss.color,fontSize:11,fontFamily:"var(--font-mono)",cursor:"pointer",outline:"none",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.04em"}}>
