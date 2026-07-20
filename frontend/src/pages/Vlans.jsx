@@ -236,7 +236,7 @@ export default function Vlans() {
         <table style={{width:"100%",borderCollapse:"collapse"}}>
           <thead>
             <tr>
-              {["VLAN ID","Name","Site","Status","Router Placements","End Device XC",""].map(h=>(
+              {["VLAN ID","Name","Src","Site","Status","Router Placements","End Device XC",""].map(h=>(
                 <th key={h} className="table-header">{h}</th>
               ))}
             </tr>
@@ -270,6 +270,16 @@ export default function Vlans() {
                       fontStyle:v.name?"normal":"italic"}}>
                       {v.name||"—"}
                     </span>
+                  </td>
+
+                  {/* Source */}
+                  <td className="table-cell">
+                    <span style={{
+                      fontSize:10,fontWeight:600,padding:"2px 7px",borderRadius:99,
+                      background: v.source === "static" ? "var(--warning-surface)" : "var(--info-surface)",
+                      color: v.source === "static" ? "var(--warning)" : "var(--accent)",
+                      border: `1px solid ${v.source === "static" ? "var(--warning-border)" : "var(--info-border)"}`,
+                    }}>{v.source === "static" ? "S" : "D"}</span>
                   </td>
 
                   {/* Site */}

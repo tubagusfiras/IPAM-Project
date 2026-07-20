@@ -221,7 +221,7 @@ export default function Customers() {
         <table style={{width:"100%",borderCollapse:"collapse"}}>
           <thead>
             <tr>
-              {["Customer","Src","Customer ID","Contact","Allocations","Router Placements","Status",""].map(h=>(
+              {["Customer","Customer ID","Contact","Allocations","Router Placements","Status",""].map(h=>(
                 <th key={h} className="table-header">{h}</th>
               ))}
             </tr>
@@ -243,14 +243,14 @@ export default function Customers() {
                 <td className="table-cell">
                   <div style={{display:"flex",alignItems:"center",gap:10}}>
                     <div style={{width:34,height:34,borderRadius:8,flexShrink:0,
-                      background:"var(--accent-dim)",border:"1px solid var(--border-soft)",
+                      background: c.source === "static" ? "var(--warning-surface)" : "var(--info-surface)",border: `1px solid ${c.source === "static" ? "var(--warning-border)" : "var(--info-border)"}`,
                       display:"flex",alignItems:"center",justifyContent:"center"}}>
-                      <span style={{color:"var(--accent)",fontSize:12,fontWeight:700}}>
-                        {c.name?.slice(0,2).toUpperCase()||"??"}
-                      </span>
+                      <span style={{color:"var(--accent)",fontSize:12,fontWeight:700}}>{c.source === "static" ? "S" : "D"}</span>
                     </div>
                     <div>
-                      <div style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>{c.name}</div>
+                      <div style={{fontSize:13,fontWeight:600,color:"var(--text)",display:"flex",alignItems:"center",gap:6}}>
+{c.name}
+                      </div>
                       {c.description && (
                         <div style={{fontSize:11,color:"var(--text-dim)",marginTop:1,
                           maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
@@ -259,16 +259,6 @@ export default function Customers() {
                       )}
                     </div>
                   </div>
-                </td>
-
-                {/* Source */}
-                <td className="table-cell">
-                  <span style={{
-                    fontSize:10,fontWeight:600,padding:"2px 7px",borderRadius:99,
-                    background: c.source === "static" ? "var(--warning-surface)" : "var(--info-surface)",
-                    color: c.source === "static" ? "var(--warning)" : "var(--accent)",
-                    border: `1px solid ${c.source === "static" ? "var(--warning-border)" : "var(--info-border)"}`,
-                  }}>{c.source === "static" ? "S" : "D"}</span>
                 </td>
 
                 {/* Code */}
