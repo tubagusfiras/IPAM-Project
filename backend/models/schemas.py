@@ -15,6 +15,7 @@ class SiteIn(BaseModel):
     city: Optional[constr(max_length=100, strip_whitespace=True)] = None
     region: Optional[constr(max_length=100, strip_whitespace=True)] = None
     description: Optional[constr(max_length=1000, strip_whitespace=True)] = None
+    source: Optional[str] = "dynamic"
 
     @validator("name")
     def sanitize_name(cls, v):
@@ -28,7 +29,9 @@ class CustomerIn(BaseModel):
     contact_email: Optional[constr(max_length=150, strip_whitespace=True)] = None
     contact_phone: Optional[constr(max_length=30, strip_whitespace=True)] = None
     description: Optional[constr(max_length=1000, strip_whitespace=True)] = None
+    source: Optional[str] = "dynamic"
     is_active: bool = True
+    source: Optional[str] = "dynamic"
 
     @validator("name", "contact_name")
     def sanitize_text(cls, v):
@@ -41,6 +44,7 @@ class VlanIn(BaseModel):
     site_id: Optional[str] = None
     status: str = "active"
     description: Optional[constr(max_length=1000, strip_whitespace=True)] = None
+    source: Optional[str] = "dynamic"
 
     @validator("vid")
     def validate_vid(cls, v):
@@ -58,6 +62,7 @@ class BlockIn(BaseModel):
     site_id: Optional[str] = None
     status: str = "active"
     description: Optional[constr(max_length=1000, strip_whitespace=True)] = None
+    source: Optional[str] = "dynamic"
 
 # ── ALLOCATIONS ───────────────────────────────────────
 class AllocIn(BaseModel):
@@ -68,6 +73,7 @@ class AllocIn(BaseModel):
     status: str = "active"
     owner_type: str = "customer"
     description: Optional[constr(max_length=1000, strip_whitespace=True)] = None
+    source: Optional[str] = "dynamic"
     notes: Optional[constr(max_length=2000, strip_whitespace=True)] = None
 
 # ── AUTH ──────────────────────────────────────────────

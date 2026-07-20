@@ -422,9 +422,16 @@ export default function BlockDetail({ blockId, onBack, dark }) {
         if (!cust) {
           const r=await authFetch("/api/v1/customers",{method:"POST",
             headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({name:value,is_active:true})});
+            body:JSON.stringify({name:value,is_active:true,source:"dynamic"})});
           cust=await r.json();
           setCustomers(prev=>[...prev,cust]);
+        } else if (cust.source === "dynamic" && cust.name !== value) {
+          // Auto-sync: update customer name jika source dynamic
+          await authFetch(`/api/v1/customers/${cust.id}`, {method:"PUT",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({name:value,is_active:cust.is_active,source:"dynamic"})});
+          cust = { ...cust, name: value };
+          setCustomers(prev => prev.map(c => c.id === cust.id ? { ...c, name: value } : c));
         }
         payload.customer_id=cust.id;
         payload.status="active";
@@ -437,8 +444,17 @@ export default function BlockDetail({ blockId, onBack, dark }) {
         if (!vlan) {
           const r=await authFetch("/api/v1/vlans",{method:"POST",
             headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({vid,name:`VLAN ${vid}`,status:"active"})});
+            body:JSON.stringify({vid,name:`VLAN ${vid}`,status:"active",source:"dynamic"})});
           if(r.ok){vlan=await r.json();setVlans(prev=>[...prev,vlan]);}
+        } else if (vlan.source === "dynamic" && (!vlan.name || vlan.name.startsWith("VLAN "))) {
+          // Auto-sync: update vlan name dari allocation description
+          const desc = data?.allocations?.find(a => a.vlan_id === vlan.id)?.description || vlan.name;
+          if (desc !== vlan.name) {
+            await authFetch(`/api/v1/vlans/${vlan.id}`, {method:"PUT",
+              headers:{"Content-Type":"application/json"},
+              body:JSON.stringify({name:desc,source:"dynamic"})});
+            setVlans(prev => prev.map(v => v.id === vlan.id ? { ...v, name: desc } : v));
+          }
         }
         payload.vlan_id=vlan?.id||null;
       }
