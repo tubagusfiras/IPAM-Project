@@ -418,7 +418,7 @@ export default function BlockDetail({ blockId, onBack, dark }) {
     if (field==="customer_name") {
       if (!value) { payload.customer_id=null; }
       else {
-        let cust=customers.find(c=>c.name.toLowerCase()===value.toLowerCase());
+        let cust=customers.find(c=>c.name.toLowerCase().replace(/["'']/g,'').trim()===value.toLowerCase().replace(/["'']/g,'').trim());
         if (!cust) {
           const r=await authFetch("/api/v1/customers",{method:"POST",
             headers:{"Content-Type":"application/json"},
