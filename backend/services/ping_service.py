@@ -12,8 +12,8 @@ import aiohttp
 from typing import Optional
 
 # ── Config ──
-PING_TIMEOUT = 3          # detik per ping
-MAX_CONCURRENT = 20        # max parallel ping
+PING_TIMEOUT = 2          # detik per ping
+MAX_CONCURRENT = 40        # max parallel ping
 CF_WORKER_URL = "https://ipam-global-ping.intermerda900.workers.dev/ping"
 
 # ── ICMP Ping (dari server lokal) ──

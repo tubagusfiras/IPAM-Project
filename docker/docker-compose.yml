@@ -13,8 +13,8 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ../backend/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
-    ports:
-      - "0.0.0.0:5433:5432"
+      - ../backend/migrate_db_security.sql:/docker-entrypoint-initdb.d/02_security.sql:ro
+    # Hapus port mapping: DB hanya bisa diakses dari internal Docker network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ipam -d ipam"]
       interval: 10s
@@ -28,8 +28,7 @@ services:
     container_name: ipam-redis
     restart: unless-stopped
     command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
-    ports:
-      - "0.0.0.0:6380:6379"
+    # Hapus port mapping: Redis internal only
     networks:
       - ipam-net
 
