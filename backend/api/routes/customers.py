@@ -34,16 +34,16 @@ async def get_customer(customer_id: str, db=Depends(get_db)):
 @router.post("/api/v1/customers", status_code=201)
 async def create_customer(body: CustomerIn, db=Depends(get_db)):
     row = await db.fetchrow(
-        "INSERT INTO customers (name,code,contact_name,contact_email,contact_phone,description,is_active) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *",
-        body.name, body.code, body.contact_name, body.contact_email, body.contact_phone, body.description, body.is_active
+        "INSERT INTO customers (name,code,contact_name,contact_email,contact_phone,description,is_active,source) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *",
+        body.name, body.code, body.contact_name, body.contact_email, body.contact_phone, body.description, body.is_active, body.source or "dynamic"
     )
     return dict(row)
 
 @router.put("/api/v1/customers/{customer_id}")
 async def update_customer(customer_id: str, body: CustomerIn, db=Depends(get_db)):
     row = await db.fetchrow(
-        "UPDATE customers SET name=$1,code=$2,contact_name=$3,contact_email=$4,contact_phone=$5,description=$6,is_active=$7 WHERE id=$8::uuid RETURNING *",
-        body.name, body.code, body.contact_name, body.contact_email, body.contact_phone, body.description, body.is_active, customer_id
+        "UPDATE customers SET name=$1,code=$2,contact_name=$3,contact_email=$4,contact_phone=$5,description=$6,is_active=$7,source=$8 WHERE id=$9::uuid RETURNING *",
+        body.name, body.code, body.contact_name, body.contact_email, body.contact_phone, body.description, body.is_active, body.source or "dynamic", customer_id
     )
     if not row: raise HTTPException(404, "Customer not found")
     return dict(row)
