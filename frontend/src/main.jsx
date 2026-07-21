@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
+import { ToastProvider } from './components/Toast.jsx'
 
 // Initialize theme - sync dengan monitoring v2
 const savedTheme = localStorage.getItem('sdi-theme')
@@ -14,6 +15,8 @@ else document.documentElement.classList.remove('dark')
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <App />
+    <ToastProvider>
+      <App />
+    </ToastProvider>
   </React.StrictMode>
 )

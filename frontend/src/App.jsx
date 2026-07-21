@@ -1,6 +1,6 @@
 import { useState, useEffect, Suspense, lazy } from "react";
 import { getToken, getStoredUser, clearToken } from "./api.js";
-import { ToastProvider, useToast } from "./components/Toast.jsx";
+import { useToast } from "./components/Toast.jsx";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary.jsx";
 import Login from "./pages/Login.jsx";
 import { Sidebar } from "./components/Sidebar.jsx";
@@ -254,8 +254,7 @@ export default function App() {
   }
 
   return (
-    <ToastProvider>
-      <div style={{minHeight:"100vh",background:"var(--bg)"}}>
+    <div style={{minHeight:"100vh",background:"var(--bg)"}}>
         {/* Mobile overlay when sidebar open */}
         {!collapsed && (
           <div onClick={()=>setCollapsed(true)} className="mobile-overlay" />
@@ -294,6 +293,5 @@ export default function App() {
           </div>
         </main>
       </div>
-    </ToastProvider>
   );
 }
