@@ -239,7 +239,7 @@ function ownerInfo(type) {
 }
 
 // ── AUTOCOMPLETE INPUT ───────────────────────────────────────────────────────
-function AutoInput({ value, onChange, suggestions=[], placeholder, mono, onCreate, onCommit }) {
+function AutoInput({ value, onChange, suggestions=[], placeholder, mono, onCreate, onBlur }) {
   const [open, setOpen]   = useState(false);
   const [query, setQuery] = useState(value||"");
   const ref = useRef();
