@@ -34,16 +34,16 @@ async def list_vlans(
 @router.post("/api/v1/vlans", status_code=201)
 async def create_vlan(body: VlanIn, db=Depends(get_db)):
     row = await db.fetchrow(
-        "INSERT INTO vlans (vid,name,site_id,status,description) VALUES ($1,$2,$3::uuid,$4::vlan_status_t,$5) RETURNING *",
-        body.vid, body.name, body.site_id, body.status, body.description
+        "INSERT INTO vlans (vid,name,site_id,status,description,source) VALUES ($1,$2,$3::uuid,$4::vlan_status_t,$5,$6) RETURNING *",
+        body.vid, body.name, body.site_id, body.status, body.description, body.source or "dynamic"
     )
     return dict(row)
 
 @router.put("/api/v1/vlans/{vlan_id}")
 async def update_vlan(vlan_id: str, body: VlanIn, db=Depends(get_db)):
     row = await db.fetchrow(
-        "UPDATE vlans SET vid=$1,name=$2,site_id=$3::uuid,status=$4::vlan_status_t,description=$5 WHERE id=$6::uuid RETURNING *",
-        body.vid, body.name, body.site_id, body.status, body.description, vlan_id
+        "UPDATE vlans SET vid=$1,name=$2,site_id=$3::uuid,status=$4::vlan_status_t,description=$5,source=$6 WHERE id=$7::uuid RETURNING *",
+        body.vid, body.name, body.site_id, body.status, body.description, body.source or "dynamic", vlan_id
     )
     if not row: raise HTTPException(404, "VLAN not found")
     return dict(row)
