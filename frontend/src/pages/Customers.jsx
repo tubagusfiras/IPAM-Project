@@ -27,15 +27,17 @@ function CustomerModal({ customer, onClose, onSaved }) {
     setSaving(false);
   };
 
-  const Field = ({ label, k, placeholder, mono, type="text" }) => (
+function FieldInput({ label, value, onChange, placeholder, mono, type="text" }) {
+  return (
     <div>
       <label style={{display:"block",fontSize:10,fontWeight:700,textTransform:"uppercase",
         letterSpacing:"0.08em",color:"var(--text-dim)",marginBottom:6}}>{label}</label>
-      <input type={type} value={form[k]} onChange={e=>set(k)(e.target.value)}
+      <input type={type} value={value||""} onChange={e=>onChange(e.target.value)}
         placeholder={placeholder} className="input"
         style={{fontFamily:mono?"var(--font-mono)":"inherit"}}/>
     </div>
   );
+}
 
   return (
     <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
@@ -60,11 +62,11 @@ function CustomerModal({ customer, onClose, onSaved }) {
             </div>
           )}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-            <div style={{gridColumn:"1/-1"}}><Field label="Customer Name *" k="name" placeholder="e.g. PT Sumber Data Indonesia"/></div>
-            <Field label="Customer Code" k="code" placeholder="e.g. SDI-001" mono/>
-            <Field label="Email" k="email" placeholder="e.g. noc@sdi.id" type="email"/>
-            <Field label="Phone" k="phone" placeholder="e.g. +62..."/>
-            <div style={{gridColumn:"1/-1"}}><Field label="Description" k="description" placeholder="Optional notes"/></div>
+            <div style={{gridColumn:"1/-1"}}><FieldInput label="Customer Name *" value={form.name} onChange={v=>set("name")(v)} placeholder="e.g. PT Sumber Data Indonesia"/></div>
+            <FieldInput label="Customer Code" value={form.code} onChange={v=>set("code")(v)} placeholder="e.g. SDI-001" mono/>
+            <FieldInput label="Email" value={form.email} onChange={v=>set("email")(v)} placeholder="e.g. noc@sdi.id" type="email"/>
+            <FieldInput label="Phone" value={form.phone} onChange={v=>set("phone")(v)} placeholder="e.g. +62..."/>
+            <div style={{gridColumn:"1/-1"}}><FieldInput label="Description" value={form.description} onChange={v=>set("description")(v)} placeholder="Optional notes"/></div>
             <div style={{gridColumn:"1/-1",display:"flex",alignItems:"center",gap:10}}>
               <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer"}}>
                 <input type="checkbox" checked={form.is_active}
