@@ -148,6 +148,7 @@ export default function Vlans() {
   const [total,     setTotal]     = useState(0);
   const [sites,     setSites]     = useState([]);
   const [search,    setSearch]    = useState("");
+  const [sourceFilter, setSourceFilter] = useState("all");
   const [siteFilter,setSiteFilter]= useState("");
   const [loading,   setLoading]   = useState(true);
   const [modal,     setModal]     = useState(null);
@@ -198,6 +199,12 @@ export default function Vlans() {
     setConfirm(null);
   };
 
+  const filteredItems = items.filter(v => {
+    if (sourceFilter === "all") return true;
+    if (sourceFilter === "dynamic") return v.source === "dynamic";
+    if (sourceFilter === "static") return v.source === "static";
+    return true;
+  });
   const activeCount = items.filter(v=>v.status==="active").length;
 
   return (
@@ -211,6 +218,13 @@ export default function Vlans() {
       {/* Toolbar */}
       <div className="card" style={{padding:"10px 14px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
         <SearchBar value={search} onChange={setSearch} placeholder="Search VLAN ID or name..." width={320} />
+        <select value={sourceFilter} onChange={e=>setSourceFilter(e.target.value)}
+          className="select" style={{height:34,fontSize:13,minWidth:140}}>
+          <option value="all">All Sources</option>
+          <option value="dynamic">Dynamic (D)</option>
+          <option value="static">Static (S)</option>
+        </select>
+        <span style={{fontSize:12,color:"var(--text-muted)"}}>{filteredItems.length} results</span>
         <select value={siteFilter} onChange={e=>setSiteFilter(e.target.value)}
           className="select" style={{height:34,fontSize:13,minWidth:140}}>
           <option value="">All Sites</option>
@@ -244,12 +258,12 @@ export default function Vlans() {
           <tbody>
             {loading ? (
               <tr><td colSpan={7} style={{padding:0}}><Loading message="Loading VLANs..." /></td></tr>
-            ) : items.length===0 ? (
+            ) : filteredItems.length===0 ? (
               <tr><td colSpan={7}>
                 <EmptyState icon={Icons.network} title="No VLANs found"
                   message={search?"Try a different search":"Add your first VLAN"} />
               </td></tr>
-            ) : items.map((v,idx)=>{
+            ) : filteredItems.map((v,idx)=>{
               const sc = STATUS_STYLE[v.status]||STATUS_STYLE.active;
               return (
                 <tr key={v.id} className="table-row"

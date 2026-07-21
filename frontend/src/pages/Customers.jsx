@@ -141,6 +141,7 @@ export default function Customers() {
   const [items,      setItems]      = useState([]);
   const [total,      setTotal]      = useState(0);
   const [search,     setSearch]     = useState("");
+  const [sourceFilter, setSourceFilter] = useState("all");
   const [loading,    setLoading]    = useState(true);
   const [modal,      setModal]      = useState(null);
   const [confirm,    setConfirm]    = useState(null);
@@ -190,6 +191,12 @@ export default function Customers() {
     setConfirm(null);
   };
 
+  const filteredItems = items.filter(c => {
+    if (sourceFilter === "all") return true;
+    if (sourceFilter === "dynamic") return c.source === "dynamic";
+    if (sourceFilter === "static") return c.source === "static";
+    return true;
+  });
   const activeCount = items.filter(c=>c.is_active).length;
 
   return (
@@ -203,6 +210,13 @@ export default function Customers() {
       {/* Toolbar */}
       <div className="card" style={{padding:"10px 14px",display:"flex",alignItems:"center",gap:10}}>
         <SearchBar value={search} onChange={v=>{setSearch(v);setPage(0);}} placeholder="Search by name, code, email..." width={320} />
+        <select value={sourceFilter} onChange={e=>{setSourceFilter(e.target.value);setPage(0);}} 
+          className="select" style={{height:36,fontSize:13,minWidth:140}}>
+          <option value="all">All Sources</option>
+          <option value="dynamic">Dynamic (D)</option>
+          <option value="static">Static (S)</option>
+        </select>
+        <span style={{fontSize:12,color:"var(--text-muted)"}}>{filteredItems.length} results</span>
         <div style={{marginLeft:"auto",display:"flex",gap:8}}>
           {[
             ["Total",  total,       "var(--text-muted)","var(--surface-3)","var(--border-soft)"],
@@ -237,7 +251,7 @@ export default function Customers() {
                   message={search?"Try a different search term":"Add your first customer"}
                   action={!search?"Add Customer":null} onAction={!search?()=>setModal("add"):null} />
               </td></tr>
-            ) : items.map((c,idx)=>(
+            ) : filteredItems.map((c,idx)=>(
               <tr key={c.id} className="table-row"
                 style={{background: idx%2===0?"var(--surface-1)":"var(--surface-2)"}}>
 
