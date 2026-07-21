@@ -250,7 +250,7 @@ function AutoInput({ value, onChange, suggestions=[], placeholder, mono, onCreat
     ? suggestions.filter(s=>s.toLowerCase().includes(query.toLowerCase())).slice(0,8)
     : suggestions.slice(0,8);
 
-  const select = v => { setQuery(v); onChange(v); setOpen(false); if(onCommit) setTimeout(()=>onCommit(v),50); };
+  const select = v => { setQuery(v); onChange(v); setOpen(false); };
 
   return (
     <div ref={ref} style={{position:"relative",width:"100%"}}>
@@ -258,7 +258,8 @@ function AutoInput({ value, onChange, suggestions=[], placeholder, mono, onCreat
         onChange={e=>{ setQuery(e.target.value); onChange(e.target.value); setOpen(true); }}
         onFocus={()=>setOpen(true)}
         onBlur={()=>setTimeout(()=>setOpen(false),150)}
-        onKeyDown={e=>{
+        onBlur={onBlur}
+          onKeyDown={e=>{
           if(e.key==="Enter") {
             if(filtered.length>0) select(filtered[0]);
             else if(query && onCreate) { onCreate(query); setOpen(false); }
@@ -341,7 +342,8 @@ function InlineCell({ value, onSave, mono, placeholder, suggestions=[], onCreate
     <input ref={ref} value={val} autoFocus type={type}
       onChange={e=>setVal(e.target.value)}
       onBlur={()=>commit(undefined)}
-      onKeyDown={e=>{ if(e.key==="Enter") commit(); if(e.key==="Escape"){ setEditing(false); setVal(value||""); }}}
+      onBlur={onBlur}
+          onKeyDown={e=>{ if(e.key==="Enter") commit(); if(e.key==="Escape"){ setEditing(false); setVal(value||""); }}}
       className="input"
       style={{fontSize:12,padding:"3px 8px",fontFamily:mono?"var(--font-mono)":"inherit",minWidth:80}}
     />
