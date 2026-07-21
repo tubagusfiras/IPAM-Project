@@ -76,6 +76,7 @@ export function Header({ title, subtitle, onBack, dark, onToggleDark, collapsed,
   const handleSelect = (type, item) => {
     setSearch(""); setSearchResults(null);
     if (type === "blocks" && item?.id) onNavigate("block-detail", { id: item.id, prefix: item.label || item.name });
+    else if (type === "allocations" && item?.block_id) onNavigate("block-detail", { id: item.block_id, prefix: item.label || item.name });
     else if (type === "customers") onNavigate("customers");
     else if (type === "allocations") onNavigate("ipv4");
   };

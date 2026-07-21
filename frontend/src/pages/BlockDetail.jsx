@@ -250,7 +250,7 @@ function AutoInput({ value, onChange, suggestions=[], placeholder, mono, onCreat
     ? suggestions.filter(s=>s.toLowerCase().includes(query.toLowerCase())).slice(0,8)
     : suggestions.slice(0,8);
 
-  const select = v => { setQuery(v); onChange(v); setOpen(false); if(onCommit) setTimeout(()=>onCommit(),50); };
+  const select = v => { setQuery(v); onChange(v); setOpen(false); if(onCommit) setTimeout(()=>onCommit(v),50); };
 
   return (
     <div ref={ref} style={{position:"relative",width:"100%"}}>
@@ -262,7 +262,7 @@ function AutoInput({ value, onChange, suggestions=[], placeholder, mono, onCreat
           if(e.key==="Enter") {
             if(filtered.length===1) select(filtered[0]);
             else if(query && onCreate) { onCreate(query); setOpen(false); }
-            else if(query) { onChange(query); if(onCommit) setTimeout(()=>onCommit(),10); }
+            else if(query) { onChange(query); if(onCommit) setTimeout(()=>onCommit(query),10); }
           }
           if(e.key==="Escape") setOpen(false);
         }}
@@ -310,8 +310,8 @@ function InlineCell({ value, onSave, mono, placeholder, suggestions=[], onCreate
   useEffect(()=>{ if(!editing) setVal(value||""); },[value, editing]);
   useEffect(()=>{ if(editing && ref.current) ref.current.focus(); },[editing]);
 
-  const commit = async v => {
-    const final = v!==undefined ? v : val;
+  const commit = async (v) => {
+    const final = v !== undefined ? v : val;
     setEditing(false);
     if (final !== (value||"")) await onSave(final||null);
   };
