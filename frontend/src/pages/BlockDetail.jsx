@@ -243,29 +243,46 @@ function AutoInput({ value, onChange, suggestions=[], placeholder, mono, onCreat
   const [open, setOpen]   = useState(false);
   const [query, setQuery] = useState(value||"");
   const ref = useRef();
+  const blurTimer = useRef(null);
 
   useEffect(()=>{ setQuery(value||""); },[value]);
+  useEffect(()=>()=>{ if(blurTimer.current) clearTimeout(blurTimer.current); },[]);
 
   const filtered = query
     ? suggestions.filter(s=>s.toLowerCase().includes(query.toLowerCase())).slice(0,8)
     : suggestions.slice(0,8);
 
-  const select = v => { setQuery(v); onChange(v); setOpen(false); };
+  // select() commits IMMEDIATELY - tidak nunggu blur, supaya tidak ada race/lost update
+  const select = v => {
+    if(blurTimer.current) clearTimeout(blurTimer.current);
+    setQuery(v);
+    onChange(v);
+    setOpen(false);
+    if(onBlur) onBlur(v);
+  };
 
   return (
     <div ref={ref} style={{position:"relative",width:"100%"}}>
       <input value={query}
         onChange={e=>{ setQuery(e.target.value); onChange(e.target.value); setOpen(true); }}
         onFocus={()=>setOpen(true)}
-        onBlur={()=>setTimeout(()=>setOpen(false),150)}
-        onBlur={onBlur}
-          onKeyDown={e=>{
+        onBlur={()=>{
+          blurTimer.current = setTimeout(()=>{
+            setOpen(false);
+            if(onBlur) onBlur(query);
+          },150);
+        }}
+        onKeyDown={e=>{
           if(e.key==="Enter") {
-            if(filtered.length>0) select(filtered[0]);
-            else if(query && onCreate) { onCreate(query); setOpen(false); }
-            else if(query) { onChange(query); if(onCommit) setTimeout(()=>onCommit(query),10); }
+            e.preventDefault();
+            if(blurTimer.current) clearTimeout(blurTimer.current);
+            // Enter selalu commit TEKS YANG DIKETIK user (query), bukan suggestion pertama.
+            // Suggestion tetap bisa dipilih lewat klik/mouse; Enter = pakai apa yang diketik.
+            setOpen(false);
+            onChange(query);
+            if(onBlur) onBlur(query);
           }
-          if(e.key==="Escape") setOpen(false);
+          if(e.key==="Escape") { setOpen(false); setQuery(value||""); }
         }}
         placeholder={placeholder}
         className="input"
@@ -330,13 +347,38 @@ function InlineCell({ value, onSave, mono, placeholder, suggestions=[], onCreate
     >{value||<span style={{fontSize:11}}>{placeholder||"—"}</span>}</div>
   );
 
-  if (suggestions.length>0) return (
-    <AutoInput value={val} onChange={v=>setVal(v)}
-      suggestions={suggestions} mono={mono}
-      placeholder={placeholder} onCreate={onCreate}
-      onBlur={()=>commit(undefined)}
-    />
-  );
+  if (suggestions.length>0) {
+    const listId = `ac-${Math.random().toString(36).slice(2)}`;
+    return (
+      <>
+        <input ref={ref} value={val} autoFocus type={type}
+          list={listId}
+          onChange={e=>{
+            const v = e.target.value;
+            setVal(v);
+            // Auto-create baru saat user pilih item persis dari datalist (native browser behavior
+            // memicu 'change' + value match; kita cek di commit juga)
+          }}
+          onBlur={()=>commit(undefined)}
+          onKeyDown={e=>{
+            if(e.key==="Enter") {
+              e.preventDefault();
+              // onSave (saveField) sudah handle create-baru & update-existing sekaligus,
+              // jadi cukup commit sekali - jangan panggil onCreate terpisah (dobel trigger).
+              commit(undefined);
+            }
+            if(e.key==="Escape"){ setEditing(false); setVal(value||""); }
+          }}
+          className="input"
+          style={{fontSize:12,padding:"3px 8px",fontFamily:mono?"var(--font-mono)":"inherit",minWidth:80}}
+          placeholder={placeholder}
+        />
+        <datalist id={listId}>
+          {suggestions.slice(0,50).map(s=><option key={s} value={s} />)}
+        </datalist>
+      </>
+    );
+  }
 
   return (
     <input ref={ref} value={val} autoFocus type={type}
