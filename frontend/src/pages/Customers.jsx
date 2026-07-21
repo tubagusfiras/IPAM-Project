@@ -2,6 +2,18 @@ import { useState, useEffect, useCallback } from "react";
 import { getCustomers, createCustomer, updateCustomer, deleteCustomer, authFetch} from "../api.js";
 import { Btn, SearchBar, Loading, EmptyState, PageHeader, Icons, Badge } from "../components/ui.jsx";
 
+function FieldInput({ label, value, onChange, placeholder, mono, type="text" }) {
+  return (
+    <div>
+      <label style={{display:"block",fontSize:10,fontWeight:700,textTransform:"uppercase",
+        letterSpacing:"0.08em",color:"var(--text-dim)",marginBottom:6}}>{label}</label>
+      <input type={type} value={value||""} onChange={e=>onChange(e.target.value)}
+        placeholder={placeholder} className="input"
+        style={{fontFamily:mono?"var(--font-mono)":"inherit"}}/>
+    </div>
+  );
+}
+
 function CustomerModal({ customer, onClose, onSaved }) {
   const isEdit = !!customer?.id;
   const [form, setForm] = useState({
@@ -26,18 +38,6 @@ function CustomerModal({ customer, onClose, onSaved }) {
     } catch(e) { setErr(e.message); }
     setSaving(false);
   };
-
-function FieldInput({ label, value, onChange, placeholder, mono, type="text" }) {
-  return (
-    <div>
-      <label style={{display:"block",fontSize:10,fontWeight:700,textTransform:"uppercase",
-        letterSpacing:"0.08em",color:"var(--text-dim)",marginBottom:6}}>{label}</label>
-      <input type={type} value={value||""} onChange={e=>onChange(e.target.value)}
-        placeholder={placeholder} className="input"
-        style={{fontFamily:mono?"var(--font-mono)":"inherit"}}/>
-    </div>
-  );
-}
 
   return (
     <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
