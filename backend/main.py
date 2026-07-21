@@ -1473,7 +1473,7 @@ async def reset_user_password(user_id: str, body: ChangePasswordIn, current_user
 async def global_search(q: str = Query(..., min_length=2), db=Depends(get_db)):
     results = {}
     results["blocks"]      = [dict(r) for r in await db.fetch("SELECT id, prefix::text AS label, name, ip_version FROM ip_blocks WHERE prefix::text ILIKE $1 OR name ILIKE $1 LIMIT 5", f"%{q}%")]
-    results["allocations"] = [dict(r) for r in await db.fetch("SELECT id, prefix::text AS label, customer_name, status FROM v_allocation_detail WHERE prefix::text ILIKE $1 OR customer_name ILIKE $1 LIMIT 10", f"%{q}%")]
+    results["allocations"] = [dict(r) for r in await db.fetch("SELECT a.id, a.prefix::text AS label, a.customer_name, a.block_id, a.status FROM v_allocation_detail a WHERE a.prefix::text ILIKE $1 OR a.customer_name ILIKE $1 LIMIT 10", f"%{q}%")]
     results["customers"]   = [dict(r) for r in await db.fetch("SELECT id, name AS label, code FROM customers WHERE name ILIKE $1 OR code ILIKE $1 LIMIT 5", f"%{q}%")]
     return results
 
