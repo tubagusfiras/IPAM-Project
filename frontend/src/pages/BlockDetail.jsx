@@ -342,8 +342,7 @@ function InlineCell({ value, onSave, mono, placeholder, suggestions=[], onCreate
     <input ref={ref} value={val} autoFocus type={type}
       onChange={e=>setVal(e.target.value)}
       onBlur={()=>commit(undefined)}
-      onBlur={onBlur}
-          onKeyDown={e=>{ if(e.key==="Enter") commit(undefined); if(e.key==="Escape"){ setEditing(false); setVal(value||""); }}}
+      onKeyDown={e=>{ if(e.key==="Enter") commit(undefined); if(e.key==="Escape"){ setEditing(false); setVal(value||""); }}}
       className="input"
       style={{fontSize:12,padding:"3px 8px",fontFamily:mono?"var(--font-mono)":"inherit",minWidth:80}}
     />
