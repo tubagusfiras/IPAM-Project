@@ -260,7 +260,7 @@ function AutoInput({ value, onChange, suggestions=[], placeholder, mono, onCreat
         onBlur={()=>setTimeout(()=>setOpen(false),150)}
         onKeyDown={e=>{
           if(e.key==="Enter") {
-            if(filtered.length===1) select(filtered[0]);
+            if(filtered.length>0) select(filtered[0]);
             else if(query && onCreate) { onCreate(query); setOpen(false); }
             else if(query) { onChange(query); if(onCommit) setTimeout(()=>onCommit(query),10); }
           }
