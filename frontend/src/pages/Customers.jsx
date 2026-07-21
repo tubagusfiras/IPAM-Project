@@ -21,7 +21,7 @@ function CustomerModal({ customer, onClose, onSaved }) {
     setSaving(true); setErr(null);
     try {
       if (isEdit) await updateCustomer(customer.id, form);
-      else        await createCustomer(form);
+      else        await createCustomer({...form, source:"static"});
       onSaved();
     } catch(e) { setErr(e.message); }
     setSaving(false);

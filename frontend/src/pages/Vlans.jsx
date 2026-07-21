@@ -25,7 +25,7 @@ function VlanModal({ vlan, sites, onClose, onSaved }) {
     if (!form.vid) return setErr("VLAN ID is required");
     setSaving(true); setErr(null);
     try {
-      const payload = { ...form, vid: parseInt(form.vid), site_id: form.site_id||null };
+      const payload = { ...form, vid: parseInt(form.vid), site_id: form.site_id||null, source: isEdit ? form.source : "static" };
       if (isEdit) await updateVlan(vlan.id, payload);
       else        await createVlan(payload);
       onSaved();
