@@ -25,11 +25,21 @@ async def list_allocations(
         params.append(block_id)
         conditions.append(f"a.block_id = ${len(params)}::uuid")
     if customer_id:
-        params.append(customer_id)
-        conditions.append(f"a.customer_id = ${len(params)}::uuid")
+        ids = [x.strip() for x in customer_id.split(",") if x.strip()]
+        if len(ids) > 1:
+            params.append(ids)
+            conditions.append(f"a.customer_id = ANY(${len(params)}::uuid[])")
+        else:
+            params.append(ids[0])
+            conditions.append(f"a.customer_id = ${len(params)}::uuid")
     if vlan_id:
-        params.append(vlan_id)
-        conditions.append(f"a.vlan_id = ${len(params)}::uuid")
+        ids = [x.strip() for x in vlan_id.split(",") if x.strip()]
+        if len(ids) > 1:
+            params.append(ids)
+            conditions.append(f"a.vlan_id = ANY(${len(params)}::uuid[])")
+        else:
+            params.append(ids[0])
+            conditions.append(f"a.vlan_id = ${len(params)}::uuid")
     if status:
         params.append(status)
         conditions.append(f"a.status = ${len(params)}::alloc_status_t")

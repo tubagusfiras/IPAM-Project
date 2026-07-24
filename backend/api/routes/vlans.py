@@ -9,6 +9,7 @@ router = APIRouter(tags=["VLANs"])
 async def list_vlans(
     search: Optional[str]=Query(None),
     site_id: Optional[str]=Query(None),
+    source: Optional[str]=Query(None, description="Filter by source: static or dynamic"),
     limit: int=Query(50,ge=1,le=500),
     offset: int=Query(0,ge=0),
     db=Depends(get_db)
@@ -20,6 +21,9 @@ async def list_vlans(
     if site_id:
         params.append(site_id)
         conditions.append(f"v.site_id = ${len(params)}::uuid")
+    if source:
+        params.append(source)
+        conditions.append(f"v.source = ${len(params)}")
     where = " AND ".join(conditions)
     params.extend([limit, offset])
     rows = await db.fetch(f"""

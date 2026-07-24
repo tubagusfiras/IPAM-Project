@@ -8,20 +8,28 @@ router = APIRouter(tags=["Customers"])
 @router.get("/api/v1/customers")
 async def list_customers(
     search: Optional[str]=Query(None),
+    source: Optional[str]=Query(None, description="Filter by source: static or dynamic"),
     limit: int=Query(50,ge=1,le=500),
     offset: int=Query(0,ge=0),
     db=Depends(get_db)
 ):
     q = f"%{search}%" if search else "%"
-    rows = await db.fetch("""
+    conditions = ["(c.name ILIKE $1 OR c.code ILIKE $1)"]
+    params = [q]
+    if source:
+        params.append(source)
+        conditions.append(f"c.source = ${len(params)}")
+    where = " AND ".join(conditions)
+    params.extend([limit, offset])
+    rows = await db.fetch(f"""
         SELECT c.*, COUNT(DISTINCT a.id) AS alloc_count
         FROM customers c
         LEFT JOIN allocations a ON a.customer_id = c.id
-        WHERE c.name ILIKE $1 OR c.code ILIKE $1
+        WHERE {where}
         GROUP BY c.id ORDER BY c.name
-        LIMIT $2 OFFSET $3
-    """, q, limit, offset)
-    total = await db.fetchval("SELECT COUNT(*) FROM customers WHERE name ILIKE $1 OR code ILIKE $1", q)
+        LIMIT ${len(params)-1} OFFSET ${len(params)}
+    """, *params)
+    total = await db.fetchval(f"SELECT COUNT(*) FROM customers c WHERE {where}", *params[:-2])
     return {"total": total, "items": [dict(r) for r in rows]}
 
 @router.get("/api/v1/customers/{customer_id}")
