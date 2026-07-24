@@ -133,18 +133,40 @@ export function Header({ title, subtitle, onBack, dark, onToggleDark, collapsed,
             onBlur={e=>{e.target.style.width="220px";e.target.style.borderColor="var(--input-border)"}}/>
         </div>
         {searchResults && (
-          <div style={{position:"absolute",top:"calc(100% + 4px)",right:0,width:380,background:"var(--surface-1)",border:"1px solid var(--border-soft)",borderRadius:"var(--radius)",boxShadow:"var(--shadow-lg)",overflow:"hidden",zIndex:100}}>
+          <div style={{position:"absolute",top:"calc(100% + 4px)",right:0,width:420,maxHeight:480,overflowY:"auto",background:"var(--surface-1)",border:"1px solid var(--border-soft)",borderRadius:"var(--radius)",boxShadow:"var(--shadow-lg)",overflow:"hidden",zIndex:100}}>
             {["blocks","allocations","customers"].map(cat=>{
               const items = searchResults[cat]||[];
               return items.length > 0 ? (
                 <div key={cat}>
                   <div style={{padding:"6px 12px",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.07em",color:CAT_COLORS[cat]||"var(--text-dim)",background:"var(--surface-2)"}}>{cat}</div>
                   {items.slice(0,4).map((item,i)=>(
-                    <div key={i} onClick={()=>handleSelect(cat,item)} style={{padding:"7px 12px",display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:12,transition:"background 0.1s"}}
+                    <div key={i} onClick={()=>handleSelect(cat,item)} style={{padding:"7px 12px",display:"flex",flexDirection:"column",gap:2,cursor:"pointer",fontSize:12,transition:"background 0.1s"}}
                       onMouseEnter={e=>e.currentTarget.style.background="var(--surface-3)"}
                       onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                      <span style={{fontFamily:"var(--font-mono)",color:"var(--accent)",fontWeight:600}}>{item.label||item.name}</span>
-                      {item.name && <span style={{color:"var(--text-dim)",marginLeft:"auto",fontSize:10}}>{item.name}</span>}
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <span style={{fontFamily:"var(--font-mono)",color:"var(--accent)",fontWeight:600}}>{item.label||item.name}</span>
+                        {cat==="allocations" && item.block_prefix && <span style={{color:"var(--text-dim)",fontSize:10}}>in {item.block_prefix}</span>}
+                        {cat==="allocations" && item.status && <span style={{marginLeft:"auto",fontSize:9,padding:"1px 6px",borderRadius:99,background:"var(--surface-3)",color:"var(--text-muted)"}}>{item.status}</span>}
+                        {cat==="customers" && item.code && <span style={{color:"var(--text-dim)",marginLeft:"auto",fontSize:10}}>{item.code}</span>}
+                      </div>
+                      {cat==="allocations" && (item.customer_name || item.vlan_vid || item.description) && (
+                        <div style={{fontSize:10,color:"var(--text-dim)",display:"flex",gap:6,flexWrap:"wrap"}}>
+                          {item.customer_name && <span>{item.customer_name}</span>}
+                          {item.vlan_vid && <span>VLAN {item.vlan_vid}{item.vlan_name?` (${item.vlan_name})`:""}</span>}
+                          {item.description && <span style={{fontStyle:"italic"}}>{item.description}</span>}
+                        </div>
+                      )}
+                      {cat==="blocks" && (item.name || item.description) && (
+                        <div style={{fontSize:10,color:"var(--text-dim)"}}>
+                          {item.name}{item.name && item.description ? " — " : ""}{item.description}
+                        </div>
+                      )}
+                      {cat==="customers" && (item.contact_email || item.alloc_count!=null) && (
+                        <div style={{fontSize:10,color:"var(--text-dim)"}}>
+                          {item.contact_email}{item.contact_email && item.alloc_count!=null ? " · " : ""}
+                          {item.alloc_count!=null && `${item.alloc_count} allocations`}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
