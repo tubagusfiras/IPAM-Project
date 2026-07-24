@@ -77,17 +77,21 @@ export const updateSite      = (id,b) => request(`/sites/${id}`, json("PUT", b))
 export const deleteSite      = (id)   => request(`/sites/${id}`, { method:"DELETE" });
 
 // Customers
-export const getCustomers    = (q="",limit=100,offset=0) => request(`/customers?limit=${limit}&offset=${offset}${q?"&search="+encodeURIComponent(q):""}`);
+export const getCustomers    = (q="",limit=100,offset=0,source="") => request(`/customers?limit=${limit}&offset=${offset}${q?"&search="+encodeURIComponent(q):""}${source?"&source="+source:""}`);
 export const getCustomer     = (id)   => request(`/customers/${id}`);
 export const createCustomer  = (b)    => request("/customers", json("POST", b));
 export const updateCustomer  = (id,b) => request(`/customers/${id}`, json("PUT", b));
 export const deleteCustomer  = (id)   => request(`/customers/${id}`, { method:"DELETE" });
 
 // VLANs
-export const getVlans        = (q="",site_id="",limit=200) => request(`/vlans?limit=${limit}${q?"&search="+encodeURIComponent(q):""}${site_id?"&site_id="+site_id:""}`);
+export const getVlans        = (q="",site_id="",limit=200,offset=0,source="") => request(`/vlans?limit=${limit}&offset=${offset}${q?"&search="+encodeURIComponent(q):""}${site_id?"&site_id="+site_id:""}${source?"&source="+source:""}`);
 export const createVlan      = (b)    => request("/vlans", json("POST", b));
 export const updateVlan      = (id,b) => request(`/vlans/${id}`, json("PUT", b));
 export const deleteVlan      = (id)   => request(`/vlans/${id}`, { method:"DELETE" });
+
+// Batch allocation lookups (avoid N+1 requests for router placements)
+export const getAllocationsByCustomerIds = (ids) => ids.length ? request(`/allocations?customer_id=${ids.join(",")}&limit=1000`) : Promise.resolve({items:[]});
+export const getAllocationsByVlanIds     = (ids) => ids.length ? request(`/allocations?vlan_id=${ids.join(",")}&limit=1000`) : Promise.resolve({items:[]});
 
 // Blocks
 export const getBlocks       = (p={}) => {
