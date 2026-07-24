@@ -4,7 +4,7 @@ import { Btn, SearchBar, Loading, EmptyState, PageHeader, Icons, Badge, StatusBa
 
 const STATUS_STYLE = {
   active:     { color:"var(--success)", bg:"var(--success-surface)", border:"var(--success-border)" },
-  inactive:   { color:"var(--text-dim)", bg:"var(--surface-3)", border:"var(--border-soft)" },
+  reserved:   { color:"var(--text-dim)", bg:"var(--surface-3)", border:"var(--border-soft)" },
   deprecated: { color:"var(--warning)", bg:"var(--warning-surface)", border:"var(--warning-border)" },
 };
 
@@ -73,7 +73,7 @@ function VlanModal({ vlan, sites, onClose, onSaved }) {
                 letterSpacing:"0.08em",color:"var(--text-dim)",marginBottom:6}}>Status</label>
               <select value={form.status} onChange={e=>set("status")(e.target.value)} className="select">
                 <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
+                <option value="reserved">Reserved</option>
                 <option value="deprecated">Deprecated</option>
               </select>
             </div>
