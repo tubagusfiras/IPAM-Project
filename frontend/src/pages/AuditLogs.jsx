@@ -28,6 +28,48 @@ function formatDateTime(dateStr) {
   });
 }
 
+const HIDDEN_FIELDS = new Set(["id","created_at","updated_at","block_id"]);
+const FIELD_LABELS = {
+  name:"Name", prefix:"Prefix", status:"Status", owner_type:"Owner Type",
+  description:"Description", notes:"Notes", customer_id:"Customer",
+  vlan_id:"VLAN", site_id:"Site", is_active:"Active", contact_email:"Email",
+  contact_phone:"Phone", contact_name:"Contact Name", code:"Code",
+  vid:"VLAN ID", asn:"ASN", router:"Router", operator:"Operator", city:"City",
+  region:"Region", source:"Source",
+};
+
+function fieldLabel(key) {
+  return FIELD_LABELS[key] || key.replace(/_/g,' ').replace(/\b\w/g, l=>l.toUpperCase());
+}
+
+function displayValue(v) {
+  if (v === null || v === undefined || v === "") return "—";
+  if (typeof v === "boolean") return v ? "Yes" : "No";
+  return String(v);
+}
+
+function computeDiff(oldData, newData) {
+  const keys = new Set([...Object.keys(oldData||{}), ...Object.keys(newData||{})]);
+  const changes = [];
+  for (const key of keys) {
+    if (HIDDEN_FIELDS.has(key)) continue;
+    const oldV = oldData ? oldData[key] : undefined;
+    const newV = newData ? newData[key] : undefined;
+    if (JSON.stringify(oldV) !== JSON.stringify(newV)) {
+      changes.push({ key, oldV, newV });
+    }
+  }
+  return changes;
+}
+
+function summarizeData(data) {
+  if (!data) return [];
+  return Object.entries(data)
+    .filter(([k]) => !HIDDEN_FIELDS.has(k))
+    .filter(([,v]) => v !== null && v !== undefined && v !== "")
+    .map(([k,v]) => ({ key:k, value:v }));
+}
+
 export default function AuditLogs() {
   const [items,      setItems]      = useState([]);
   const [total,      setTotal]      = useState(0);
@@ -174,30 +216,63 @@ export default function AuditLogs() {
                       </div>
 
                       {/* Expanded detail */}
-                      {isExpanded && (
-                        <div style={{
-                          marginTop:10,padding:"10px 12px",borderRadius:"var(--radius-sm)",
-                          background:"var(--surface-3)",border:"1px solid var(--border-soft)",
-                          fontSize:11,fontFamily:"var(--font-mono)",
-                        }}>
-                          {log.old_data && (
-                            <div style={{marginBottom: log.new_data ? 8 : 0}}>
-                              <div style={{color:"var(--text-dim)",marginBottom:4,fontWeight:600}}>BEFORE</div>
-                              <div style={{color:"var(--text-muted)",whiteSpace:"pre-wrap",wordBreak:"break-all"}}>
-                                {JSON.stringify(log.old_data, null, 2)}
-                              </div>
-                            </div>
-                          )}
-                          {log.new_data && (
-                            <div>
-                              <div style={{color:"var(--text-dim)",marginBottom:4,fontWeight:600}}>AFTER</div>
-                              <div style={{color:"var(--text-muted)",whiteSpace:"pre-wrap",wordBreak:"break-all"}}>
-                                {JSON.stringify(log.new_data, null, 2)}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                      {isExpanded && (() => {
+                        const isUpdate = log.old_data && log.new_data;
+                        const changes = isUpdate ? computeDiff(log.old_data, log.new_data) : [];
+                        const summary = !isUpdate ? summarizeData(log.new_data || log.old_data) : [];
+                        return (
+                          <div style={{
+                            marginTop:10,padding:"12px 14px",borderRadius:"var(--radius-sm)",
+                            background:"var(--surface-3)",border:"1px solid var(--border-soft)",
+                            fontSize:12,
+                          }}>
+                            {isUpdate ? (
+                              changes.length === 0 ? (
+                                <div style={{color:"var(--text-dim)",fontStyle:"italic"}}>No field changes detected</div>
+                              ) : (
+                                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                                  {changes.map(({key,oldV,newV}) => (
+                                    <div key={key} style={{display:"flex",flexDirection:"column",gap:3}}>
+                                      <div style={{fontSize:10,fontWeight:600,color:"var(--text-dim)",textTransform:"uppercase",letterSpacing:"0.05em"}}>
+                                        {fieldLabel(key)}
+                                      </div>
+                                      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                                        <span style={{
+                                          padding:"3px 8px",borderRadius:5,fontSize:11,fontFamily:"var(--font-mono)",
+                                          background:"var(--danger-surface)",color:"var(--danger)",
+                                          textDecoration:"line-through",opacity:0.8,
+                                        }}>{displayValue(oldV)}</span>
+                                        <span style={{color:"var(--text-dim)",fontSize:12}}>→</span>
+                                        <span style={{
+                                          padding:"3px 8px",borderRadius:5,fontSize:11,fontFamily:"var(--font-mono)",
+                                          background:"var(--success-surface)",color:"var(--success)",fontWeight:600,
+                                        }}>{displayValue(newV)}</span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )
+                            ) : (
+                              summary.length === 0 ? (
+                                <div style={{color:"var(--text-dim)",fontStyle:"italic"}}>No additional details</div>
+                              ) : (
+                                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"6px 16px"}}>
+                                  {summary.map(({key,value}) => (
+                                    <div key={key} style={{display:"flex",flexDirection:"column",gap:2}}>
+                                      <span style={{fontSize:9,fontWeight:600,color:"var(--text-dim)",textTransform:"uppercase",letterSpacing:"0.05em"}}>
+                                        {fieldLabel(key)}
+                                      </span>
+                                      <span style={{fontSize:12,color:"var(--text)",fontFamily:"var(--font-mono)"}}>
+                                        {displayValue(value)}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>
