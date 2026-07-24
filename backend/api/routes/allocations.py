@@ -1,8 +1,10 @@
 import base64, json
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, HTTPException, Query, Depends, Request
 from typing import Optional
 from models.schemas import AllocIn
 from core.database import get_db
+from core.security import get_current_user
+from core.audit import log_audit, get_client_ip
 
 router = APIRouter(tags=["Allocations"])
 
@@ -121,22 +123,43 @@ async def list_allocations_cursor(
     return {"items": items, "next_cursor": next_cursor, "has_more": has_more}
 
 @router.post("/api/v1/allocations", status_code=201)
-async def create_allocation(body: AllocIn, db=Depends(get_db)):
+async def create_allocation(body: AllocIn, request: Request, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     row = await db.fetchrow(
         "INSERT INTO allocations (prefix,block_id,customer_id,vlan_id,status,owner_type,description,notes) VALUES ($1::cidr,$2::uuid,$3::uuid,$4::uuid,$5::alloc_status_t,$6::owner_type_t,$7,$8) RETURNING *",
         body.prefix, body.block_id, body.customer_id, body.vlan_id, body.status, body.owner_type, body.description, body.notes
     )
+    await log_audit(db, "create", "allocation", row["id"], str(row["prefix"]),
+        description=f"Allocation created: {row['prefix']}", new_data={**dict(row),"prefix":str(row["prefix"])},
+        changed_by=current_user.get("username","admin"), ip_address=get_client_ip(request),
+        customer_id=str(body.customer_id) if body.customer_id else None,
+        vlan_id=str(body.vlan_id) if body.vlan_id else None)
     return {**dict(row), "prefix": str(row["prefix"])}
 
 @router.put("/api/v1/allocations/{alloc_id}")
-async def update_allocation(alloc_id: str, body: AllocIn, db=Depends(get_db)):
+async def update_allocation(alloc_id: str, body: AllocIn, request: Request, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
+    old_row = await db.fetchrow("SELECT * FROM allocations WHERE id=$1::uuid", alloc_id)
     row = await db.fetchrow(
         "UPDATE allocations SET prefix=$1::inet,block_id=$2::uuid,customer_id=$3::uuid,vlan_id=$4::uuid,status=$5::alloc_status_t,owner_type=$6::owner_type_t,description=$7,notes=$8 WHERE id=$9::uuid RETURNING *",
         body.prefix, body.block_id, body.customer_id, body.vlan_id, body.status, body.owner_type, body.description, body.notes, alloc_id
     )
     if not row: raise HTTPException(404, "Allocation not found")
+    old_dict = {**dict(old_row),"prefix":str(old_row["prefix"])} if old_row else None
+    await log_audit(db, "update", "allocation", alloc_id, str(row["prefix"]),
+        description=f"Allocation updated: {row['prefix']}",
+        old_data=old_dict, new_data={**dict(row),"prefix":str(row["prefix"])},
+        changed_by=current_user.get("username","admin"), ip_address=get_client_ip(request),
+        customer_id=str(body.customer_id) if body.customer_id else None,
+        vlan_id=str(body.vlan_id) if body.vlan_id else None)
     return {**dict(row), "prefix": str(row["prefix"])}
 
 @router.delete("/api/v1/allocations/{alloc_id}", status_code=204)
-async def delete_allocation(alloc_id: str, db=Depends(get_db)):
+async def delete_allocation(alloc_id: str, request: Request, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
+    old_row = await db.fetchrow("SELECT * FROM allocations WHERE id=$1::uuid", alloc_id)
     await db.execute("DELETE FROM allocations WHERE id=$1::uuid", alloc_id)
+    if old_row:
+        await log_audit(db, "delete", "allocation", alloc_id, str(old_row["prefix"]),
+            description=f"Allocation deleted: {old_row['prefix']}",
+            old_data={**dict(old_row),"prefix":str(old_row["prefix"])},
+            changed_by=current_user.get("username","admin"), ip_address=get_client_ip(request),
+            customer_id=str(old_row["customer_id"]) if old_row["customer_id"] else None,
+            vlan_id=str(old_row["vlan_id"]) if old_row["vlan_id"] else None)
