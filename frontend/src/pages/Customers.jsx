@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { getCustomers, createCustomer, updateCustomer, deleteCustomer, authFetch} from "../api.js";
+import { getCustomers, createCustomer, updateCustomer, deleteCustomer, getAllocationsByCustomerIds } from "../api.js";
 import { Btn, SearchBar, Loading, EmptyState, PageHeader, Icons, Badge } from "../components/ui.jsx";
 
 function FieldInput({ label, value, onChange, placeholder, mono, type="text" }) {
@@ -151,38 +151,32 @@ export default function Customers() {
 
   const load = useCallback(() => {
     setLoading(true);
-    getCustomers(search, LIMIT, page*LIMIT)
+    getCustomers(search, LIMIT, page*LIMIT, sourceFilter==="all"?"":sourceFilter)
       .then(d=>{ setItems(d.items||[]); setTotal(d.total||0); })
       .catch(console.error)
       .finally(()=>setLoading(false));
-  }, [search, page]);
+  }, [search, page, sourceFilter]);
 
   useEffect(()=>{ load(); },[load]);
 
-  // Fetch router placements per customer dari allocations
+  // Fetch router placements per customer dari allocations (batch, single request)
   useEffect(()=>{
-    if (!items.length) return;
+    if (!items.length) { setRouterMap({}); return; }
     const ids = items.map(c=>c.id);
-    // Fetch allocations untuk semua customer yang visible
-    Promise.all(ids.map(id =>
-      authFetch(`/api/v1/allocations?customer_id=${id}&limit=100`)
-        .then(r=>r.json())
-        .then(d=>{
-          const allocs = d.items || [];
-          // Kumpulkan unique routers
-          const routers = [...new Set(
-            allocs
-              .map(a=>a.block_router)
-              .filter(Boolean)
-          )].sort();
-          return [id, routers];
-        })
-        .catch(()=>[id,[]])
-    )).then(results=>{
-      const map = {};
-      results.forEach(([id, routers])=>{ map[id] = routers; });
-      setRouterMap(map);
-    });
+    getAllocationsByCustomerIds(ids)
+      .then(d=>{
+        const allocs = d.items || [];
+        const map = {};
+        ids.forEach(id=>{ map[id] = []; });
+        allocs.forEach(a=>{
+          if (!a.customer_id || !a.block_router) return;
+          if (!map[a.customer_id]) map[a.customer_id] = [];
+          if (!map[a.customer_id].includes(a.block_router)) map[a.customer_id].push(a.block_router);
+        });
+        Object.keys(map).forEach(id=>map[id].sort());
+        setRouterMap(map);
+      })
+      .catch(()=>setRouterMap({}));
   }, [items]);
 
   const handleDelete = async (c) => {
