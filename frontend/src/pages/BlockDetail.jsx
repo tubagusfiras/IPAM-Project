@@ -8,7 +8,7 @@ import { getBlock, updateBlock, getSites, getCustomers, getVlans,
 // ── CONSTANTS ────────────────────────────────────────────────────────────────
 const OWNER_TYPES = [
   { value:"customer",       label:"Customer",       color:"var(--text-muted)", icon:"" },
-  { value:"infrastructure", label:"Infrastructure", color:"var(--text-muted)", icon:"" },
+  { value:"internal",       label:"Infrastructure", color:"var(--text-muted)", icon:"" },
   { value:"ptp",            label:"PTP",            color:"var(--text-muted)", icon:"" },
   { value:"peering",        label:"Peering",        color:"var(--text-muted)", icon:"" },
   { value:"management",     label:"Mgmt",           color:"var(--text-muted)", icon:"" },
