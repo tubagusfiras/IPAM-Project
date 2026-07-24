@@ -1224,7 +1224,15 @@ async def list_audit_logs(
     )
     total = await db.fetchval(f"SELECT COUNT(*) FROM audit_logs WHERE {where}", *params[:-2])
     distinct_users = await db.fetch("SELECT DISTINCT changed_by FROM audit_logs WHERE changed_by IS NOT NULL ORDER BY changed_by")
-    return {"total": total, "items": [dict(r) for r in rows], "users": [r["changed_by"] for r in distinct_users]}
+    items = []
+    for r in rows:
+        item = dict(r)
+        if item.get("old_data") and isinstance(item["old_data"], str):
+            item["old_data"] = json.loads(item["old_data"])
+        if item.get("new_data") and isinstance(item["new_data"], str):
+            item["new_data"] = json.loads(item["new_data"])
+        items.append(item)
+    return {"total": total, "items": items, "users": [r["changed_by"] for r in distinct_users]}
 
 
 # ------------------------------------------------------------------
