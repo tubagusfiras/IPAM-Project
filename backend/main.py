@@ -16,6 +16,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 from loguru import logger
+from core.audit import get_client_ip
 import time as time_module
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -933,16 +934,18 @@ async def _delete_scan_from_redis(scan_id: str):
 
 async def _log_audit(db, action: str, entity_type: str, entity_id, entity_prefix: str,
                       description: str = "", old_data: dict = None, new_data: dict = None,
-                      changed_by: str = "admin"):
+                      changed_by: str = "admin", ip_address: str = None,
+                      customer_id: str = None, vlan_id: str = None):
     """Insert audit log entry."""
     try:
         await db.execute(
-            "INSERT INTO audit_logs (action, entity_type, entity_id, entity_prefix, description, changed_by, old_data, new_data) "
-            "VALUES ($1,$2,$3::uuid,$4,$5,$6,$7::jsonb,$8::jsonb)",
+            "INSERT INTO audit_logs (action, entity_type, entity_id, entity_prefix, description, changed_by, old_data, new_data, ip_address, customer_id, vlan_id) "
+            "VALUES ($1,$2,$3::uuid,$4,$5,$6,$7::jsonb,$8::jsonb,$9,$10::uuid,$11::uuid)",
             action, entity_type, str(entity_id) if entity_id else None, entity_prefix,
             description, changed_by,
             json.dumps(old_data, default=str) if old_data else None,
             json.dumps(new_data, default=str) if new_data else None,
+            ip_address, customer_id, vlan_id,
         )
     except Exception as e:
         logger.error("Audit log error: {}", e)
@@ -1137,7 +1140,7 @@ async def clear_scan(scan_id: str):
     return {"status": "cleared"}
 
 @app.post("/api/v1/scan/action", summary="Take action on scan result", tags=["IP Scan"])
-async def scan_action(body: dict, db=Depends(get_db)):
+async def scan_action(body: dict, request: Request, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     """Perform action on scan result — mark or delete allocation."""
     action = body.get("action")  # "delete" | "mark_deprecated"
     alloc_id = body.get("alloc_id")
@@ -1153,18 +1156,23 @@ async def scan_action(body: dict, db=Depends(get_db)):
         raise HTTPException(404, "Allocation not found")
     old_data = dict(existing)
     prefix = old_data.get("prefix")
+    ip_addr = get_client_ip(request)
+    cust_id = str(old_data["customer_id"]) if old_data.get("customer_id") else None
 
     if action == "delete":
         await db.execute("DELETE FROM allocations WHERE id=$1::uuid", alloc_id)
         await _log_audit(db, "delete", "allocation", alloc_id, str(prefix),
                           description=f"Deleted via IP Scan — ghost allocation ({old_data.get('customer_name') or old_data.get('owner_type')})",
-                          old_data=old_data)
+                          old_data=old_data, changed_by=current_user.get("username","admin"),
+                          ip_address=ip_addr, customer_id=cust_id)
         return {"status": "deleted"}
     elif action == "mark_deprecated":
         await db.execute("UPDATE allocations SET status='deprecated' WHERE id=$1::uuid", alloc_id)
         await _log_audit(db, "update", "allocation", alloc_id, str(prefix),
                           description=f"Marked deprecated via IP Scan ({old_data.get('customer_name') or old_data.get('owner_type')})",
-                          old_data=old_data, new_data={**old_data, "status": "deprecated"})
+                          old_data=old_data, new_data={**old_data, "status": "deprecated"},
+                          changed_by=current_user.get("username","admin"),
+                          ip_address=ip_addr, customer_id=cust_id)
         return {"status": "marked_deprecated"}
     else:
         raise HTTPException(400, "Invalid action")
@@ -1173,6 +1181,12 @@ async def scan_action(body: dict, db=Depends(get_db)):
 async def list_audit_logs(
     entity_type: Optional[str] = Query(None),
     action: Optional[str] = Query(None),
+    changed_by: Optional[str] = Query(None),
+    customer_id: Optional[str] = Query(None),
+    vlan_id: Optional[str] = Query(None),
+    date_from: Optional[str] = Query(None, description="ISO date, inclusive"),
+    date_to: Optional[str] = Query(None, description="ISO date, inclusive"),
+    search: Optional[str] = Query(None, description="Search entity_prefix/description"),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db=Depends(get_db)
@@ -1184,6 +1198,24 @@ async def list_audit_logs(
     if action:
         params.append(action)
         conditions.append(f"action = ${len(params)}")
+    if changed_by:
+        params.append(changed_by)
+        conditions.append(f"changed_by = ${len(params)}")
+    if customer_id:
+        params.append(customer_id)
+        conditions.append(f"customer_id = ${len(params)}::uuid")
+    if vlan_id:
+        params.append(vlan_id)
+        conditions.append(f"vlan_id = ${len(params)}::uuid")
+    if date_from:
+        params.append(date_from)
+        conditions.append(f"created_at >= ${len(params)}::date")
+    if date_to:
+        params.append(date_to)
+        conditions.append(f"created_at < (${len(params)}::date + interval '1 day')")
+    if search:
+        params.append(f"%{search}%")
+        conditions.append(f"(entity_prefix ILIKE ${len(params)} OR description ILIKE ${len(params)})")
     where = " AND ".join(conditions)
     params.extend([limit, offset])
     rows = await db.fetch(
@@ -1191,7 +1223,8 @@ async def list_audit_logs(
         *params
     )
     total = await db.fetchval(f"SELECT COUNT(*) FROM audit_logs WHERE {where}", *params[:-2])
-    return {"total": total, "items": [dict(r) for r in rows]}
+    distinct_users = await db.fetch("SELECT DISTINCT changed_by FROM audit_logs WHERE changed_by IS NOT NULL ORDER BY changed_by")
+    return {"total": total, "items": [dict(r) for r in rows], "users": [r["changed_by"] for r in distinct_users]}
 
 
 # ------------------------------------------------------------------

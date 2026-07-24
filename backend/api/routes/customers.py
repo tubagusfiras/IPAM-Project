@@ -1,7 +1,9 @@
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, HTTPException, Query, Depends, Request
 from typing import Optional
 from models.schemas import CustomerIn
 from core.database import get_db
+from core.security import get_current_user
+from core.audit import log_audit, get_client_ip
 
 router = APIRouter(tags=["Customers"])
 
@@ -40,22 +42,38 @@ async def get_customer(customer_id: str, db=Depends(get_db)):
     return {**dict(row), "allocations": [dict(a) for a in allocs]}
 
 @router.post("/api/v1/customers", status_code=201)
-async def create_customer(body: CustomerIn, db=Depends(get_db)):
+async def create_customer(body: CustomerIn, request: Request, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     row = await db.fetchrow(
         "INSERT INTO customers (name,code,contact_name,contact_email,contact_phone,description,is_active,source) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *",
         body.name, body.code, body.contact_name, body.contact_email, body.contact_phone, body.description, body.is_active, body.source or "dynamic"
     )
+    await log_audit(db, "create", "customer", row["id"], body.name,
+        description=f"Customer created: {body.name}", new_data=dict(row),
+        changed_by=current_user.get("username","admin"), ip_address=get_client_ip(request),
+        customer_id=str(row["id"]))
     return dict(row)
 
 @router.put("/api/v1/customers/{customer_id}")
-async def update_customer(customer_id: str, body: CustomerIn, db=Depends(get_db)):
+async def update_customer(customer_id: str, body: CustomerIn, request: Request, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
+    old_row = await db.fetchrow("SELECT * FROM customers WHERE id=$1::uuid", customer_id)
     row = await db.fetchrow(
         "UPDATE customers SET name=$1,code=$2,contact_name=$3,contact_email=$4,contact_phone=$5,description=$6,is_active=$7,source=$8 WHERE id=$9::uuid RETURNING *",
         body.name, body.code, body.contact_name, body.contact_email, body.contact_phone, body.description, body.is_active, body.source or "dynamic", customer_id
     )
     if not row: raise HTTPException(404, "Customer not found")
+    await log_audit(db, "update", "customer", customer_id, body.name,
+        description=f"Customer updated: {body.name}",
+        old_data=dict(old_row) if old_row else None, new_data=dict(row),
+        changed_by=current_user.get("username","admin"), ip_address=get_client_ip(request),
+        customer_id=customer_id)
     return dict(row)
 
 @router.delete("/api/v1/customers/{customer_id}", status_code=204)
-async def delete_customer(customer_id: str, db=Depends(get_db)):
+async def delete_customer(customer_id: str, request: Request, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
+    old_row = await db.fetchrow("SELECT * FROM customers WHERE id=$1::uuid", customer_id)
     await db.execute("DELETE FROM customers WHERE id=$1::uuid", customer_id)
+    if old_row:
+        await log_audit(db, "delete", "customer", customer_id, old_row["name"],
+            description=f"Customer deleted: {old_row['name']}", old_data=dict(old_row),
+            changed_by=current_user.get("username","admin"), ip_address=get_client_ip(request),
+            customer_id=customer_id)

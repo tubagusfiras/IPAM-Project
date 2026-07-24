@@ -1,7 +1,9 @@
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, HTTPException, Query, Depends, Request
 from typing import Optional
 from models.schemas import BlockIn
 from core.database import get_db
+from core.security import get_current_user
+from core.audit import log_audit, get_client_ip
 
 router = APIRouter(tags=["IP Blocks"])
 
@@ -120,22 +122,37 @@ async def get_block(block_id: str, db=Depends(get_db)):
     return {**dict(row), "prefix": str(row["prefix"]), "allocations": [dict(a) for a in allocs]}
 
 @router.post("/api/v1/blocks", status_code=201)
-async def create_block(body: BlockIn, db=Depends(get_db)):
+async def create_block(body: BlockIn, request: Request, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     row = await db.fetchrow(
         "INSERT INTO ip_blocks (prefix,name,asn,router,operator,site_id,status,description) VALUES ($1::cidr,$2,$3,$4,$5,$6::uuid,$7::block_status_t,$8) RETURNING *",
         body.prefix, body.name, body.asn, body.router, body.operator, body.site_id, body.status, body.description
     )
+    await log_audit(db, "create", "block", row["id"], str(row["prefix"]),
+        description=f"Block created: {row['prefix']}", new_data={**dict(row),"prefix":str(row["prefix"])},
+        changed_by=current_user.get("username","admin"), ip_address=get_client_ip(request))
     return {**dict(row), "prefix": str(row["prefix"])}
 
 @router.put("/api/v1/blocks/{block_id}")
-async def update_block(block_id: str, body: BlockIn, db=Depends(get_db)):
+async def update_block(block_id: str, body: BlockIn, request: Request, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
+    old_row = await db.fetchrow("SELECT * FROM ip_blocks WHERE id=$1::uuid", block_id)
     row = await db.fetchrow(
         "UPDATE ip_blocks SET prefix=$1::cidr,name=$2,asn=$3,router=$4,operator=$5,site_id=$6::uuid,status=$7::block_status_t,description=$8 WHERE id=$9::uuid RETURNING *",
         body.prefix, body.name, body.asn, body.router, body.operator, body.site_id, body.status, body.description, block_id
     )
     if not row: raise HTTPException(404, "Block not found")
+    old_dict = {**dict(old_row),"prefix":str(old_row["prefix"])} if old_row else None
+    await log_audit(db, "update", "block", block_id, str(row["prefix"]),
+        description=f"Block updated: {row['prefix']}",
+        old_data=old_dict, new_data={**dict(row),"prefix":str(row["prefix"])},
+        changed_by=current_user.get("username","admin"), ip_address=get_client_ip(request))
     return {**dict(row), "prefix": str(row["prefix"])}
 
 @router.delete("/api/v1/blocks/{block_id}", status_code=204)
-async def delete_block(block_id: str, db=Depends(get_db)):
+async def delete_block(block_id: str, request: Request, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
+    old_row = await db.fetchrow("SELECT * FROM ip_blocks WHERE id=$1::uuid", block_id)
     await db.execute("DELETE FROM ip_blocks WHERE id=$1::uuid", block_id)
+    if old_row:
+        await log_audit(db, "delete", "block", block_id, str(old_row["prefix"]),
+            description=f"Block deleted: {old_row['prefix']}",
+            old_data={**dict(old_row),"prefix":str(old_row["prefix"])},
+            changed_by=current_user.get("username","admin"), ip_address=get_client_ip(request))
