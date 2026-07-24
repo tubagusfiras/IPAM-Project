@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { getVlans, getSites, createVlan, updateVlan, deleteVlan, authFetch} from "../api.js";
+import { getVlans, getSites, createVlan, updateVlan, deleteVlan, getAllocationsByVlanIds } from "../api.js";
 import { Btn, SearchBar, Loading, EmptyState, PageHeader, Icons, Badge, StatusBadge } from "../components/ui.jsx";
 
 const STATUS_STYLE = {
@@ -150,47 +150,58 @@ export default function Vlans() {
   const [search,    setSearch]    = useState("");
   const [sourceFilter, setSourceFilter] = useState("all");
   const [siteFilter,setSiteFilter]= useState("");
+  const [page,      setPage]      = useState(0);
   const [loading,   setLoading]   = useState(true);
   const [modal,     setModal]     = useState(null);
   const [confirm,   setConfirm]   = useState(null);
   const [routerMap, setRouterMap] = useState({});
+  const [allocCountMap, setAllocCountMap] = useState({});
   const LIMIT = 100;
 
   const load = useCallback(() => {
     setLoading(true);
-    getVlans(search, siteFilter, LIMIT)
+    getVlans(search, siteFilter, LIMIT, page*LIMIT, sourceFilter==="all"?"":sourceFilter)
       .then(d=>{ setItems(d.items||[]); setTotal(d.total||0); })
       .catch(console.error)
       .finally(()=>setLoading(false));
-  }, [search, siteFilter]);
+  }, [search, siteFilter, sourceFilter, page]);
 
-  useEffect(()=>{ load(); },[load]);
+  useEffect(()=>{
+    const t = setTimeout(()=>{ load(); }, 300);
+    return ()=>clearTimeout(t);
+  },[load]);
   useEffect(()=>{ getSites("",100).then(d=>setSites(d.items||d||[])); },[]);
 
-  // Fetch router placements per VLAN
+  // Fetch router placements per VLAN (batch, single request)
   useEffect(()=>{
-    if (!items.length) return;
-    // Init semua ke null (loading)
+    if (!items.length) { setRouterMap({}); return; }
+    const ids = items.map(v=>v.id);
     const initMap = {};
-    items.forEach(v=>{ initMap[v.id] = null; });
+    ids.forEach(id=>{ initMap[id] = null; });
     setRouterMap(initMap);
 
-    Promise.all(items.map(v =>
-      authFetch(`/api/v1/allocations?vlan_id=${v.id}&limit=100`)
-        .then(r=>r.json())
-        .then(d=>{
-          const allocs = d.items || [];
-          const routers = [...new Set(
-            allocs.map(a=>a.block_router).filter(Boolean)
-          )].sort();
-          return [v.id, routers];
-        })
-        .catch(()=>[v.id,[]])
-    )).then(results=>{
-      const map = {};
-      results.forEach(([id, routers])=>{ map[id] = routers; });
-      setRouterMap(map);
-    });
+    getAllocationsByVlanIds(ids)
+      .then(d=>{
+        const allocs = d.items || [];
+        const map = {};
+        const countMap = {};
+        ids.forEach(id=>{ map[id] = []; countMap[id] = 0; });
+        allocs.forEach(a=>{
+          if (!a.vlan_id) return;
+          countMap[a.vlan_id] = (countMap[a.vlan_id]||0) + 1;
+          if (!a.block_router) return;
+          if (!map[a.vlan_id]) map[a.vlan_id] = [];
+          if (!map[a.vlan_id].includes(a.block_router)) map[a.vlan_id].push(a.block_router);
+        });
+        Object.keys(map).forEach(id=>map[id].sort());
+        setRouterMap(map);
+        setAllocCountMap(countMap);
+      })
+      .catch(()=>{
+        const emptyMap = {};
+        ids.forEach(id=>{ emptyMap[id] = []; });
+        setRouterMap(emptyMap);
+      });
   }, [items]);
 
   const handleDelete = async (v) => {
@@ -199,12 +210,7 @@ export default function Vlans() {
     setConfirm(null);
   };
 
-  const filteredItems = items.filter(v => {
-    if (sourceFilter === "all") return true;
-    if (sourceFilter === "dynamic") return v.source === "dynamic";
-    if (sourceFilter === "static") return v.source === "static";
-    return true;
-  });
+  const filteredItems = items;
   const activeCount = items.filter(v=>v.status==="active").length;
 
   return (
@@ -218,14 +224,14 @@ export default function Vlans() {
       {/* Toolbar */}
       <div className="card" style={{padding:"10px 14px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
         <SearchBar value={search} onChange={setSearch} placeholder="Search VLAN ID or name..." width={320} />
-        <select value={sourceFilter} onChange={e=>setSourceFilter(e.target.value)}
+        <select value={sourceFilter} onChange={e=>{setSourceFilter(e.target.value);setPage(0);}}
           className="select" style={{height:34,fontSize:13,minWidth:140}}>
           <option value="all">All Sources</option>
           <option value="dynamic">Dynamic (D)</option>
           <option value="static">Static (S)</option>
         </select>
         <span style={{fontSize:12,color:"var(--text-muted)"}}>{filteredItems.length} results</span>
-        <select value={siteFilter} onChange={e=>setSiteFilter(e.target.value)}
+        <select value={siteFilter} onChange={e=>{setSiteFilter(e.target.value);setPage(0);}}
           className="select" style={{height:34,fontSize:13,minWidth:140}}>
           <option value="">All Sites</option>
           {sites.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
@@ -341,12 +347,30 @@ export default function Vlans() {
             })}
           </tbody>
         </table>
+
+        {/* Pagination */}
+        {total > LIMIT && (
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",
+            padding:"12px 16px",borderTop:"1px solid var(--border-soft)"}}>
+            <span style={{fontSize:12,color:"var(--text-muted)"}}>
+              Showing {page*LIMIT+1}–{Math.min((page+1)*LIMIT,total)} of {total}
+            </span>
+            <div style={{display:"flex",gap:6}}>
+              <button onClick={()=>setPage(p=>Math.max(0,p-1))} disabled={page===0}
+                className="btn btn-secondary btn-sm">← Prev</button>
+              <button onClick={()=>setPage(p=>p+1)} disabled={(page+1)*LIMIT>=total}
+                className="btn btn-secondary btn-sm">Next →</button>
+            </div>
+          </div>
+        )}
       </div>
 
       {modal&&<VlanModal vlan={modal==="add"?null:modal} sites={sites}
         onClose={()=>setModal(null)} onSaved={()=>{setModal(null);load();}}/>}
       {confirm&&<ConfirmModal
-        message={`Delete VLAN ${confirm.vid}${confirm.name?` (${confirm.name})`:""} ? This action cannot be undone.`}
+        message={allocCountMap[confirm.id]>0
+          ? `Delete VLAN ${confirm.vid}${confirm.name?` (${confirm.name})`:""}? This VLAN has ${allocCountMap[confirm.id]} allocation(s) linked. Deleting may orphan or unlink those allocations. This action cannot be undone.`
+          : `Delete VLAN ${confirm.vid}${confirm.name?` (${confirm.name})`:""}? This action cannot be undone.`}
         onConfirm={()=>handleDelete(confirm)} onCancel={()=>setConfirm(null)}/>}
     </div>
   );

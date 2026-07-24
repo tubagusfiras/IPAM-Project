@@ -157,7 +157,10 @@ export default function Customers() {
       .finally(()=>setLoading(false));
   }, [search, page, sourceFilter]);
 
-  useEffect(()=>{ load(); },[load]);
+  useEffect(()=>{
+    const t = setTimeout(()=>{ load(); }, 300);
+    return ()=>clearTimeout(t);
+  },[load]);
 
   // Fetch router placements per customer dari allocations (batch, single request)
   useEffect(()=>{
@@ -366,7 +369,9 @@ export default function Customers() {
       {modal&&<CustomerModal customer={modal==="add"?null:modal}
         onClose={()=>setModal(null)} onSaved={()=>{setModal(null);load();}}/>}
       {confirm&&<ConfirmModal
-        message={`Delete customer "${confirm.name}"? This action cannot be undone.`}
+        message={confirm.alloc_count>0
+          ? `Delete customer "${confirm.name}"? This customer has ${confirm.alloc_count} allocation(s) linked. Deleting may orphan or unlink those allocations. This action cannot be undone.`
+          : `Delete customer "${confirm.name}"? This action cannot be undone.`}
         onConfirm={()=>handleDelete(confirm)} onCancel={()=>setConfirm(null)}/>}
     </div>
   );
