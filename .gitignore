@@ -36,3 +36,5 @@ Thumbs.db
 
 # Redis dump
 dump.rdb
+frontend/test-results/
+frontend/playwright-report/

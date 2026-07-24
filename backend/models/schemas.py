@@ -1,5 +1,5 @@
 from typing import Optional
-from pydantic import BaseModel, validator, constr, EmailStr
+from pydantic import BaseModel, validator, field_validator, constr, EmailStr
 
 # ── HELPERS ───────────────────────────────────────────
 def strip_dangerous(v: str) -> str:
@@ -38,6 +38,8 @@ class CustomerIn(BaseModel):
         return strip_dangerous(v) if v else v
 
 # ── VLANs ─────────────────────────────────────────────
+VLAN_STATUS_VALUES = {"active", "reserved", "deprecated"}
+
 class VlanIn(BaseModel):
     vid: int
     name: Optional[constr(max_length=100, strip_whitespace=True)] = None
@@ -52,7 +54,15 @@ class VlanIn(BaseModel):
             raise ValueError("VLAN ID must be between 1 and 4094")
         return v
 
+    @field_validator("status")
+    def validate_status(cls, v):
+        if v not in VLAN_STATUS_VALUES:
+            raise ValueError(f"status must be one of {sorted(VLAN_STATUS_VALUES)}")
+        return v
+
 # ── IP BLOCKS ─────────────────────────────────────────
+BLOCK_STATUS_VALUES = {"active", "reserved", "deprecated"}
+
 class BlockIn(BaseModel):
     prefix: constr(max_length=50, strip_whitespace=True)
     name: Optional[constr(max_length=200, strip_whitespace=True)] = None
@@ -64,7 +74,16 @@ class BlockIn(BaseModel):
     description: Optional[constr(max_length=1000, strip_whitespace=True)] = None
     source: Optional[str] = "dynamic"
 
+    @field_validator("status")
+    def validate_status(cls, v):
+        if v not in BLOCK_STATUS_VALUES:
+            raise ValueError(f"status must be one of {sorted(BLOCK_STATUS_VALUES)}")
+        return v
+
 # ── ALLOCATIONS ───────────────────────────────────────
+ALLOC_STATUS_VALUES = {"active", "reserved", "available", "deprecated"}
+OWNER_TYPE_VALUES = {"customer", "internal", "ptp", "peering", "management", "reserved"}
+
 class AllocIn(BaseModel):
     prefix: constr(max_length=50, strip_whitespace=True)
     block_id: str
@@ -75,6 +94,18 @@ class AllocIn(BaseModel):
     description: Optional[constr(max_length=1000, strip_whitespace=True)] = None
     source: Optional[str] = "dynamic"
     notes: Optional[constr(max_length=2000, strip_whitespace=True)] = None
+
+    @field_validator("status")
+    def validate_status(cls, v):
+        if v not in ALLOC_STATUS_VALUES:
+            raise ValueError(f"status must be one of {sorted(ALLOC_STATUS_VALUES)}")
+        return v
+
+    @field_validator("owner_type")
+    def validate_owner_type(cls, v):
+        if v not in OWNER_TYPE_VALUES:
+            raise ValueError(f"owner_type must be one of {sorted(OWNER_TYPE_VALUES)}")
+        return v
 
 # ── AUTH ──────────────────────────────────────────────
 class LoginIn(BaseModel):
