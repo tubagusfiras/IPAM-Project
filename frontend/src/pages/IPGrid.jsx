@@ -5,7 +5,7 @@ function getOwnerColors(dark) {
   // Used = solid gray, Free = bright blue (kontras jelas)
   if (dark) return {
     customer:       { bg:"rgba(148,163,184,0.25)", border:"#64748b", dot:"#94a3b8", label:"Allocated"     },
-    infrastructure: { bg:"rgba(148,163,184,0.25)", border:"#64748b", dot:"#94a3b8", label:"Allocated"     },
+    internal:       { bg:"rgba(148,163,184,0.25)", border:"#64748b", dot:"#94a3b8", label:"Allocated"     },
     ptp:            { bg:"rgba(148,163,184,0.25)", border:"#64748b", dot:"#94a3b8", label:"Allocated"     },
     peering:        { bg:"rgba(148,163,184,0.25)", border:"#64748b", dot:"#94a3b8", label:"Allocated"     },
     management:     { bg:"rgba(148,163,184,0.25)", border:"#64748b", dot:"#94a3b8", label:"Allocated"     },
@@ -14,7 +14,7 @@ function getOwnerColors(dark) {
   };
   return {
     customer:       { bg:"rgba(100,116,139,0.15)", border:"#94a3b8", dot:"#64748b", label:"Allocated"     },
-    infrastructure: { bg:"rgba(100,116,139,0.15)", border:"#94a3b8", dot:"#64748b", label:"Allocated"     },
+    internal:       { bg:"rgba(100,116,139,0.15)", border:"#94a3b8", dot:"#64748b", label:"Allocated"     },
     ptp:            { bg:"rgba(100,116,139,0.15)", border:"#94a3b8", dot:"#64748b", label:"Allocated"     },
     peering:        { bg:"rgba(100,116,139,0.15)", border:"#94a3b8", dot:"#64748b", label:"Allocated"     },
     management:     { bg:"rgba(100,116,139,0.15)", border:"#94a3b8", dot:"#64748b", label:"Allocated"     },
