@@ -1,4 +1,4 @@
-import { authFetch } from "../api.js";
+import { authFetch, getSites, getCustomers, getVlans } from "../api.js";
 import { useState, useEffect, useCallback } from "react";
 
 const ACTION_STYLE = {
@@ -48,6 +48,22 @@ function displayValue(v) {
   return String(v);
 }
 
+function isEmptyValue(v) {
+  return v === null || v === undefined || v === "";
+}
+
+const LOOKUP_FIELDS = { site_id:"sites", customer_id:"customers", vlan_id:"vlans" };
+
+function resolveDisplay(key, v, lookups) {
+  if (isEmptyValue(v)) return "—";
+  const lookupType = LOOKUP_FIELDS[key];
+  if (lookupType && lookups?.[lookupType]?.[v]) {
+    return lookups[lookupType][v];
+  }
+  if (typeof v === "boolean") return v ? "Yes" : "No";
+  return String(v);
+}
+
 function computeDiff(oldData, newData) {
   const keys = new Set([...Object.keys(oldData||{}), ...Object.keys(newData||{})]);
   const changes = [];
@@ -55,6 +71,7 @@ function computeDiff(oldData, newData) {
     if (HIDDEN_FIELDS.has(key)) continue;
     const oldV = oldData ? oldData[key] : undefined;
     const newV = newData ? newData[key] : undefined;
+    if (isEmptyValue(oldV) && isEmptyValue(newV)) continue;
     if (JSON.stringify(oldV) !== JSON.stringify(newV)) {
       changes.push({ key, oldV, newV });
     }
@@ -66,7 +83,7 @@ function summarizeData(data) {
   if (!data) return [];
   return Object.entries(data)
     .filter(([k]) => !HIDDEN_FIELDS.has(k))
-    .filter(([,v]) => v !== null && v !== undefined && v !== "")
+    .filter(([,v]) => !isEmptyValue(v))
     .map(([k,v]) => ({ key:k, value:v }));
 }
 
@@ -78,7 +95,22 @@ export default function AuditLogs() {
   const [entityFilter, setEntityFilter] = useState("");
   const [expanded,   setExpanded]   = useState(null);
   const [page,       setPage]       = useState(0);
+  const [lookups,    setLookups]    = useState({ sites:{}, customers:{}, vlans:{} });
   const LIMIT = 50;
+
+  useEffect(() => {
+    Promise.all([
+      getSites().then(d=>d.items||d||[]).catch(()=>[]),
+      getCustomers("",500).then(d=>d.items||[]).catch(()=>[]),
+      getVlans("","",500).then(d=>d.items||[]).catch(()=>[]),
+    ]).then(([sites, customers, vlans]) => {
+      setLookups({
+        sites: Object.fromEntries(sites.map(s=>[s.id, s.name])),
+        customers: Object.fromEntries(customers.map(c=>[c.id, c.name])),
+        vlans: Object.fromEntries(vlans.map(v=>[v.id, `VLAN ${v.vid}${v.name?` (${v.name})`:""}`])),
+      });
+    });
+  }, []);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -241,12 +273,12 @@ export default function AuditLogs() {
                                           padding:"3px 8px",borderRadius:5,fontSize:11,fontFamily:"var(--font-mono)",
                                           background:"var(--danger-surface)",color:"var(--danger)",
                                           textDecoration:"line-through",opacity:0.8,
-                                        }}>{displayValue(oldV)}</span>
+                                        }}>{resolveDisplay(key, oldV, lookups)}</span>
                                         <span style={{color:"var(--text-dim)",fontSize:12}}>→</span>
                                         <span style={{
                                           padding:"3px 8px",borderRadius:5,fontSize:11,fontFamily:"var(--font-mono)",
                                           background:"var(--success-surface)",color:"var(--success)",fontWeight:600,
-                                        }}>{displayValue(newV)}</span>
+                                        }}>{resolveDisplay(key, newV, lookups)}</span>
                                       </div>
                                     </div>
                                   ))}
@@ -263,7 +295,7 @@ export default function AuditLogs() {
                                         {fieldLabel(key)}
                                       </span>
                                       <span style={{fontSize:12,color:"var(--text)",fontFamily:"var(--font-mono)"}}>
-                                        {displayValue(value)}
+                                        {resolveDisplay(key, value, lookups)}
                                       </span>
                                     </div>
                                   ))}
