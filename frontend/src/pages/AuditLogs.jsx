@@ -184,10 +184,10 @@ export default function AuditLogs() {
         <div style={{display:"flex",alignItems:"center",gap:6,padding:"3px 8px",
           borderRadius:"var(--radius-sm)",background:"var(--surface-2)",border:"1px solid var(--border-soft)"}}>
           <input type="date" value={dateFrom} onChange={e=>{setDateFrom(e.target.value);setPage(0);}}
-            className="input" style={{height:28,fontSize:12,width:128,border:"none",background:"transparent",color:"var(--text)",colorScheme:"light dark"}} title="From date"/>
+            className="input" style={{height:28,fontSize:12,width:128,border:"none",background:"transparent",color:"var(--text)"}} title="From date"/>
           <span style={{color:"var(--text-dim)",fontSize:12}}>–</span>
           <input type="date" value={dateTo} onChange={e=>{setDateTo(e.target.value);setPage(0);}}
-            className="input" style={{height:28,fontSize:12,width:128,border:"none",background:"transparent",color:"var(--text)",colorScheme:"light dark"}} title="To date"/>
+            className="input" style={{height:28,fontSize:12,width:128,border:"none",background:"transparent",color:"var(--text)"}} title="To date"/>
         </div>
         <input value={searchText} onChange={e=>{setSearchText(e.target.value);setPage(0);}}
           placeholder="Search prefix or description..." className="input"

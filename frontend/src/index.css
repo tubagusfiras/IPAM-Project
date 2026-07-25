@@ -316,6 +316,13 @@
   select option:disabled {
     color: var(--text-dim);
   }
+  /* Fix date input calendar icon + text color in dark mode */
+  input[type="date"] {
+    color-scheme: light;
+  }
+  :root.dark input[type="date"] {
+    color-scheme: dark;
+  }
 
   /* ── Sidebar ── */
   .sidebar-item {
