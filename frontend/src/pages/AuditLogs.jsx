@@ -181,10 +181,14 @@ export default function AuditLogs() {
           <option value="">All Users</option>
           {users.map(u=><option key={u} value={u}>{u}</option>)}
         </select>
-        <input type="date" value={dateFrom} onChange={e=>{setDateFrom(e.target.value);setPage(0);}}
-          className="input" style={{height:34,fontSize:12,width:135}} title="From date"/>
-        <input type="date" value={dateTo} onChange={e=>{setDateTo(e.target.value);setPage(0);}}
-          className="input" style={{height:34,fontSize:12,width:135}} title="To date"/>
+        <div style={{display:"flex",alignItems:"center",gap:6,padding:"3px 8px",
+          borderRadius:"var(--radius-sm)",background:"var(--surface-2)",border:"1px solid var(--border-soft)"}}>
+          <input type="date" value={dateFrom} onChange={e=>{setDateFrom(e.target.value);setPage(0);}}
+            className="input" style={{height:28,fontSize:12,width:128,border:"none",background:"transparent"}} title="From date"/>
+          <span style={{color:"var(--text-dim)",fontSize:12}}>–</span>
+          <input type="date" value={dateTo} onChange={e=>{setDateTo(e.target.value);setPage(0);}}
+            className="input" style={{height:28,fontSize:12,width:128,border:"none",background:"transparent"}} title="To date"/>
+        </div>
         <input value={searchText} onChange={e=>{setSearchText(e.target.value);setPage(0);}}
           placeholder="Search prefix or description..." className="input"
           style={{height:34,fontSize:13,width:200}}/>
