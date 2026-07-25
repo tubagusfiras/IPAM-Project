@@ -119,15 +119,22 @@ export default function AuditLogs() {
       limit: LIMIT, offset: page*LIMIT,
       ...(actionFilter && {action: actionFilter}),
       ...(entityFilter && {entity_type: entityFilter}),
+      ...(userFilter && {changed_by: userFilter}),
+      ...(dateFrom && {date_from: dateFrom}),
+      ...(dateTo && {date_to: dateTo}),
+      ...(searchText && {search: searchText}),
     });
     authFetch(`/api/v1/audit-logs?${params}`)
       .then(r=>r.json())
-      .then(d=>{ setItems(d.items||[]); setTotal(d.total||0); })
+      .then(d=>{ setItems(d.items||[]); setTotal(d.total||0); if (d.users) setUsers(d.users); })
       .catch(console.error)
       .finally(()=>setLoading(false));
-  }, [actionFilter, entityFilter, page]);
+  }, [actionFilter, entityFilter, userFilter, dateFrom, dateTo, searchText, page]);
 
-  useEffect(()=>{ load(); },[load]);
+  useEffect(() => {
+    const t = setTimeout(()=>{ load(); }, 300);
+    return ()=>clearTimeout(t);
+  }, [load]);
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:20}}>
@@ -164,6 +171,18 @@ export default function AuditLogs() {
           <option value="customer">Customer</option>
           <option value="vlan">VLAN</option>
         </select>
+        <select value={userFilter} onChange={e=>{setUserFilter(e.target.value);setPage(0);}}
+          className="select" style={{height:34,fontSize:13,minWidth:130}}>
+          <option value="">All Users</option>
+          {users.map(u=><option key={u} value={u}>{u}</option>)}
+        </select>
+        <input type="date" value={dateFrom} onChange={e=>{setDateFrom(e.target.value);setPage(0);}}
+          className="input" style={{height:34,fontSize:12,width:135}} title="From date"/>
+        <input type="date" value={dateTo} onChange={e=>{setDateTo(e.target.value);setPage(0);}}
+          className="input" style={{height:34,fontSize:12,width:135}} title="To date"/>
+        <input value={searchText} onChange={e=>{setSearchText(e.target.value);setPage(0);}}
+          placeholder="Search prefix or description..." className="input"
+          style={{height:34,fontSize:13,width:200}}/>
         <div style={{marginLeft:"auto",display:"flex",gap:8}}>
           <div style={{display:"flex",alignItems:"center",gap:6,
             padding:"4px 12px",borderRadius:99,
