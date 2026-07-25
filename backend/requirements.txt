@@ -1,7 +1,5 @@
 # IPAM Backend Dependencies
-# Generated: 2026-06-23
 # Usage: pip install -r requirements.txt
-
 fastapi
 uvicorn[standard]
 asyncpg
@@ -15,9 +13,10 @@ pyjwt
 slowapi
 prometheus-client
 loguru
-
-# Development
-ruff
+aiohttp[speedups]
+# Testing (kept in the same image for simplicity — run pytest directly, no extra install step)
 pytest
 pytest-asyncio
 httpx
+time_machine
+ruff
