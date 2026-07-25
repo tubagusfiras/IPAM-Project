@@ -5,6 +5,7 @@ const ACTION_STYLE = {
   create: { color:"var(--success)", bg:"var(--success-surface)", border:"var(--success-border)", label:"Created" },
   update: { color:"var(--warning)", bg:"var(--warning-surface)", border:"var(--warning-border)", label:"Updated" },
   delete: { color:"var(--danger)",  bg:"var(--danger-surface)",  border:"var(--danger-border)",  label:"Deleted" },
+  import: { color:"var(--info, var(--accent))", bg:"var(--info-surface, var(--accent-dim))", border:"var(--info-border, var(--border-soft))", label:"Imported" },
 };
 
 function timeAgo(dateStr) {
@@ -153,6 +154,7 @@ export default function AuditLogs() {
           <option value="create">Created</option>
           <option value="update">Updated</option>
           <option value="delete">Deleted</option>
+          <option value="import">Imported</option>
         </select>
         <select value={entityFilter} onChange={e=>{setEntityFilter(e.target.value);setPage(0);}}
           className="select" style={{height:34,fontSize:13,minWidth:140}}>

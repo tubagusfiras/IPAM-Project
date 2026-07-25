@@ -157,10 +157,6 @@ async def get_db():
     async with pool.acquire() as conn:
         yield conn
 
-def log_action(conn, table, record_id, action, old=None, new=None):
-    return conn.execute(
-        "INSERT INTO audit_log (table_name, record_id, action, old_data, new_data) VALUES ($1,$2,$3,$4,$5)",
-        table, record_id, action, json.dumps(old) if old else None, json.dumps(new) if new else None)
 
 # ── ROUTE MODULE IMPORTS ─────────────────────────────────────
 from models.schemas import SiteIn, CustomerIn, VlanIn, BlockIn, AllocIn, LoginIn, ChangePasswordIn, UserIn, UserUpdateIn
@@ -1626,8 +1622,9 @@ async def confirm_import(body: dict, db=Depends(get_db)):
             imported += 1
 
     # Log
-    await db.execute("INSERT INTO audit_log (table_name, record_id, action, new_data, changed_by) VALUES ('ip_blocks', $1::uuid, 'import', $2::jsonb, 'csv_import')",
-                     block_id, json.dumps({"imported": imported, "skipped": skipped}))
+    await _log_audit(db, "import", "block", block_id, None,
+        description=f"CSV import: {imported} allocation(s) imported, {skipped} skipped",
+        new_data={"imported": imported, "skipped": skipped}, changed_by="csv_import")
 
     return {"block_id": str(block_id), "imported": imported, "skipped": skipped}
 
