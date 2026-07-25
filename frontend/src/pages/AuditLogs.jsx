@@ -97,6 +97,11 @@ export default function AuditLogs() {
   const [expanded,   setExpanded]   = useState(null);
   const [page,       setPage]       = useState(0);
   const [lookups,    setLookups]    = useState({ sites:{}, customers:{}, vlans:{} });
+  const [userFilter, setUserFilter] = useState("");
+  const [dateFrom,   setDateFrom]   = useState("");
+  const [dateTo,     setDateTo]     = useState("");
+  const [searchText, setSearchText] = useState("");
+  const [users,      setUsers]      = useState([]);
   const LIMIT = 50;
 
   useEffect(() => {
