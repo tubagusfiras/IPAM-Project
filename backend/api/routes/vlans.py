@@ -7,6 +7,11 @@ from core.audit import log_audit, get_client_ip
 
 router = APIRouter(tags=["VLANs"])
 
+@router.get("/api/v1/vlans/lookup", summary="Lightweight id+name list for dropdowns/lookups, no limit")
+async def lookup_vlans(db=Depends(get_db)):
+    rows = await db.fetch("SELECT id, vid, name FROM vlans ORDER BY vid")
+    return [dict(r) for r in rows]
+
 @router.get("/api/v1/vlans")
 async def list_vlans(
     search: Optional[str]=Query(None),

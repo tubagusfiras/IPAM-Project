@@ -85,6 +85,8 @@ export const deleteCustomer  = (id)   => request(`/customers/${id}`, { method:"D
 
 // VLANs
 export const getVlans        = (q="",site_id="",limit=200,offset=0,source="") => request(`/vlans?limit=${limit}&offset=${offset}${q?"&search="+encodeURIComponent(q):""}${site_id?"&site_id="+site_id:""}${source?"&source="+source:""}`);
+export const getVlansLookup  = () => request(`/vlans/lookup`);
+export const getCustomersLookup = () => request(`/customers/lookup`);
 export const createVlan      = (b)    => request("/vlans", json("POST", b));
 export const updateVlan      = (id,b) => request(`/vlans/${id}`, json("PUT", b));
 export const deleteVlan      = (id)   => request(`/vlans/${id}`, { method:"DELETE" });

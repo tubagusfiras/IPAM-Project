@@ -1,4 +1,4 @@
-import { authFetch, getSites, getCustomers, getVlans } from "../api.js";
+import { authFetch, getSites, getCustomersLookup, getVlansLookup } from "../api.js";
 import { useState, useEffect, useCallback } from "react";
 
 const ACTION_STYLE = {
@@ -107,8 +107,8 @@ export default function AuditLogs() {
   useEffect(() => {
     Promise.all([
       getSites().then(d=>d.items||d||[]).catch(()=>[]),
-      getCustomers("",500).then(d=>d.items||[]).catch(()=>[]),
-      getVlans("","",500).then(d=>d.items||[]).catch(()=>[]),
+      getCustomersLookup().catch(()=>[]),
+      getVlansLookup().catch(()=>[]),
     ]).then(([sites, customers, vlans]) => {
       setLookups({
         sites: Object.fromEntries(sites.map(s=>[s.id, s.name])),

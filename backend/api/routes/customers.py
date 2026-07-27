@@ -7,6 +7,11 @@ from core.audit import log_audit, get_client_ip
 
 router = APIRouter(tags=["Customers"])
 
+@router.get("/api/v1/customers/lookup", summary="Lightweight id+name list for dropdowns/lookups, no limit")
+async def lookup_customers(db=Depends(get_db)):
+    rows = await db.fetch("SELECT id, name, code FROM customers ORDER BY name")
+    return [dict(r) for r in rows]
+
 @router.get("/api/v1/customers")
 async def list_customers(
     search: Optional[str]=Query(None),
