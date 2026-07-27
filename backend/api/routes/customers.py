@@ -29,9 +29,11 @@ async def list_customers(
     where = " AND ".join(conditions)
     params.extend([limit, offset])
     rows = await db.fetch(f"""
-        SELECT c.*, COUNT(DISTINCT a.id) AS alloc_count
+        SELECT c.*, COUNT(DISTINCT a.id) AS alloc_count,
+               array_remove(array_agg(DISTINCT v.vid), NULL) AS vlan_ids
         FROM customers c
         LEFT JOIN allocations a ON a.customer_id = c.id
+        LEFT JOIN vlans v ON a.vlan_id = v.id
         WHERE {where}
         GROUP BY c.id ORDER BY c.name
         LIMIT ${len(params)-1} OFFSET ${len(params)}

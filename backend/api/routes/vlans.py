@@ -34,7 +34,10 @@ async def list_vlans(
     where = " AND ".join(conditions)
     params.extend([limit, offset])
     rows = await db.fetch(f"""
-        SELECT v.*, s.name AS site_name
+        SELECT v.*, s.name AS site_name,
+               (SELECT array_agg(DISTINCT c.name) FROM allocations a
+                JOIN customers c ON a.customer_id=c.id
+                WHERE a.vlan_id=v.id AND a.customer_id IS NOT NULL) AS customer_names
         FROM vlans v LEFT JOIN sites s ON v.site_id=s.id
         WHERE {where} ORDER BY v.vid
         LIMIT ${len(params)-1} OFFSET ${len(params)}
