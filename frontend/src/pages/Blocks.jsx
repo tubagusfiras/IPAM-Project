@@ -141,7 +141,7 @@ function BlockFormModal({ block, sites, onClose, onSaved }) {
                 color:"var(--text-muted)",marginBottom:6,
               }}>Status</label>
               <select value={form.status} onChange={e=>set("status")(e.target.value)} className="select">
-                {["active","reserved","deprecated"].map(s=>(
+                {["active","available","reserved","deprecated"].map(s=>(
                   <option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>
                 ))}
               </select>

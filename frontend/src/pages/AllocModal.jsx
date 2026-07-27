@@ -801,7 +801,7 @@ function BlockEditModal({ block, sites, onClose, onSaved }) {
               <label style={{display:"block",fontSize:10,fontWeight:600,textTransform:"uppercase",
                 letterSpacing:"0.08em",color:"var(--text-muted)",marginBottom:6}}>Status</label>
               <select value={form.status} onChange={e=>set("status")(e.target.value)} className="select">
-                {["active","reserved","deprecated"].map(s=>(
+                {STATUS_OPTS.map(s=>(
                   <option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>
                 ))}
               </select>
