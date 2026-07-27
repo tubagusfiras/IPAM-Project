@@ -123,11 +123,30 @@ async def list_allocations_cursor(
     return {"items": items, "next_cursor": next_cursor, "has_more": has_more}
 
 @router.post("/api/v1/allocations", status_code=201)
+async def _maybe_rename_vlan(db, vlan_id, owner_name):
+    """Auto-name a VLAN from the allocation's Owner/Customer value, but only
+    if the VLAN doesn't already have a name — never overwrites an existing
+    name, whether it was set automatically before or typed in manually."""
+    if not vlan_id or not owner_name:
+        return
+    vlan_row = await db.fetchrow("SELECT name FROM vlans WHERE id=$1::uuid", vlan_id)
+    if vlan_row and not vlan_row["name"]:
+        await db.execute("UPDATE vlans SET name=$1 WHERE id=$2::uuid", owner_name, vlan_id)
+
+
 async def create_allocation(body: AllocIn, request: Request, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     row = await db.fetchrow(
-        "INSERT INTO allocations (prefix,block_id,customer_id,vlan_id,status,owner_type,description,notes) VALUES ($1::cidr,$2::uuid,$3::uuid,$4::uuid,$5::alloc_status_t,$6::owner_type_t,$7,$8) RETURNING *",
-        body.prefix, body.block_id, body.customer_id, body.vlan_id, body.status, body.owner_type, body.description, body.notes
+        "INSERT INTO allocations (prefix,block_id,customer_id,vlan_id,status,owner_type,description,notes,end_device_xc) VALUES ($1::cidr,$2::uuid,$3::uuid,$4::uuid,$5::alloc_status_t,$6::owner_type_t,$7,$8,$9) RETURNING *",
+        body.prefix, body.block_id, body.customer_id, body.vlan_id, body.status, body.owner_type, body.description, body.notes, body.end_device_xc
     )
+    if body.vlan_id:
+        owner_name = None
+        if body.owner_type == "customer" and body.customer_id:
+            cust = await db.fetchrow("SELECT name FROM customers WHERE id=$1::uuid", body.customer_id)
+            owner_name = cust["name"] if cust else None
+        else:
+            owner_name = body.description
+        await _maybe_rename_vlan(db, body.vlan_id, owner_name)
     # Auto-activate the parent block: a block with a real allocation inside it
     # should never be shown as idle/available. Only fires when the block is
     # not already active, so it never overwrites a manually-set state unnecessarily.
@@ -149,10 +168,18 @@ async def create_allocation(body: AllocIn, request: Request, db=Depends(get_db),
 async def update_allocation(alloc_id: str, body: AllocIn, request: Request, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     old_row = await db.fetchrow("SELECT * FROM allocations WHERE id=$1::uuid", alloc_id)
     row = await db.fetchrow(
-        "UPDATE allocations SET prefix=$1::inet,block_id=$2::uuid,customer_id=$3::uuid,vlan_id=$4::uuid,status=$5::alloc_status_t,owner_type=$6::owner_type_t,description=$7,notes=$8 WHERE id=$9::uuid RETURNING *",
-        body.prefix, body.block_id, body.customer_id, body.vlan_id, body.status, body.owner_type, body.description, body.notes, alloc_id
+        "UPDATE allocations SET prefix=$1::inet,block_id=$2::uuid,customer_id=$3::uuid,vlan_id=$4::uuid,status=$5::alloc_status_t,owner_type=$6::owner_type_t,description=$7,notes=$8,end_device_xc=$9 WHERE id=$10::uuid RETURNING *",
+        body.prefix, body.block_id, body.customer_id, body.vlan_id, body.status, body.owner_type, body.description, body.notes, body.end_device_xc, alloc_id
     )
     if not row: raise HTTPException(404, "Allocation not found")
+    if body.vlan_id:
+        owner_name = None
+        if body.owner_type == "customer" and body.customer_id:
+            cust = await db.fetchrow("SELECT name FROM customers WHERE id=$1::uuid", body.customer_id)
+            owner_name = cust["name"] if cust else None
+        else:
+            owner_name = body.description
+        await _maybe_rename_vlan(db, body.vlan_id, owner_name)
     old_dict = {**dict(old_row),"prefix":str(old_row["prefix"])} if old_row else None
     await log_audit(db, "update", "allocation", alloc_id, str(row["prefix"]),
         description=f"Allocation updated: {row['prefix']}",

@@ -94,6 +94,7 @@ class AllocIn(BaseModel):
     description: Optional[constr(max_length=1000, strip_whitespace=True)] = None
     source: Optional[str] = "dynamic"
     notes: Optional[constr(max_length=2000, strip_whitespace=True)] = None
+    end_device_xc: Optional[constr(max_length=200, strip_whitespace=True)] = None
 
     @field_validator("status")
     def validate_status(cls, v):
