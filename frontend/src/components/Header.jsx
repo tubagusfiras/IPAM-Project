@@ -78,10 +78,11 @@ export function Header({ title, subtitle, onBack, dark, onToggleDark, collapsed,
     if (type === "blocks" && item?.id) onNavigate("block-detail", { id: item.id, prefix: item.label || item.name });
     else if (type === "allocations" && item?.block_id) onNavigate("block-detail", { id: item.block_id, prefix: item.label || item.name });
     else if (type === "customers") onNavigate("customers");
+    else if (type === "vlans") onNavigate("vlans");
     else if (type === "allocations") onNavigate("ipv4");
   };
 
-  const CAT_COLORS = { blocks:"#3b82f6", allocations:"#22c55e", customers:"#f97316" };
+  const CAT_COLORS = { blocks:"#3b82f6", allocations:"#22c55e", customers:"#f97316", vlans:"#a855f7" };
 
   return (
     <header style={{
@@ -134,7 +135,7 @@ export function Header({ title, subtitle, onBack, dark, onToggleDark, collapsed,
         </div>
         {searchResults && (
           <div style={{position:"absolute",top:"calc(100% + 4px)",right:0,width:420,maxHeight:480,overflowY:"auto",background:"var(--surface-1)",border:"1px solid var(--border-soft)",borderRadius:"var(--radius)",boxShadow:"var(--shadow-lg)",overflow:"hidden",zIndex:100}}>
-            {["blocks","allocations","customers"].map(cat=>{
+            {["blocks","allocations","customers","vlans"].map(cat=>{
               const items = searchResults[cat]||[];
               return items.length > 0 ? (
                 <div key={cat}>
@@ -144,10 +145,11 @@ export function Header({ title, subtitle, onBack, dark, onToggleDark, collapsed,
                       onMouseEnter={e=>e.currentTarget.style.background="var(--surface-3)"}
                       onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
                       <div style={{display:"flex",alignItems:"center",gap:8}}>
-                        <span style={{fontFamily:"var(--font-mono)",color:"var(--accent)",fontWeight:600}}>{item.label||item.name}</span>
+                        <span style={{fontFamily:"var(--font-mono)",color:"var(--accent)",fontWeight:600}}>{cat==="vlans" ? `VLAN ${item.label}` : (item.label||item.name)}</span>
                         {cat==="allocations" && item.block_prefix && <span style={{color:"var(--text-dim)",fontSize:10}}>in {item.block_prefix}</span>}
                         {cat==="allocations" && item.status && <span style={{marginLeft:"auto",fontSize:9,padding:"1px 6px",borderRadius:99,background:"var(--surface-3)",color:"var(--text-muted)"}}>{item.status}</span>}
                         {cat==="customers" && item.code && <span style={{color:"var(--text-dim)",marginLeft:"auto",fontSize:10}}>{item.code}</span>}
+                        {cat==="vlans" && <span style={{marginLeft:"auto",fontSize:9,padding:"1px 6px",borderRadius:99,background:"var(--surface-3)",color:"var(--text-muted)"}}>{item.status}</span>}
                       </div>
                       {cat==="allocations" && (item.customer_name || item.vlan_vid || item.description) && (
                         <div style={{fontSize:10,color:"var(--text-dim)",display:"flex",gap:6,flexWrap:"wrap"}}>
@@ -160,6 +162,9 @@ export function Header({ title, subtitle, onBack, dark, onToggleDark, collapsed,
                         <div style={{fontSize:10,color:"var(--text-dim)"}}>
                           {item.name}{item.name && item.description ? " — " : ""}{item.description}
                         </div>
+                      )}
+                      {cat==="vlans" && item.name && (
+                        <div style={{fontSize:10,color:"var(--text-dim)"}}>{item.name}</div>
                       )}
                       {cat==="customers" && (item.contact_email || item.alloc_count!=null) && (
                         <div style={{fontSize:10,color:"var(--text-dim)"}}>
