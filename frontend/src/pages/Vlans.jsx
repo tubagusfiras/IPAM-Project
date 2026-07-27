@@ -256,16 +256,16 @@ export default function Vlans() {
         <table style={{width:"100%",borderCollapse:"collapse"}}>
           <thead>
             <tr>
-              {["VLAN ID","Name","Src","Site","Status","Router Placements","End Device XC",""].map(h=>(
+              {["VLAN ID","Name","Src","Site","Customer","Status","Router Placements","End Device XC",""].map(h=>(
                 <th key={h} className="table-header">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={7} style={{padding:0}}><Loading message="Loading VLANs..." /></td></tr>
+              <tr><td colSpan={8} style={{padding:0}}><Loading message="Loading VLANs..." /></td></tr>
             ) : filteredItems.length===0 ? (
-              <tr><td colSpan={7}>
+              <tr><td colSpan={8}>
                 <EmptyState icon={Icons.network} title="No VLANs found"
                   message={search?"Try a different search":"Add your first VLAN"} />
               </td></tr>
@@ -307,6 +307,22 @@ export default function Vlans() {
                     <span style={{fontSize:12,color:"var(--text-muted)"}}>
                       {v.site_name||"—"}
                     </span>
+                  </td>
+
+                  {/* Customer */}
+                  <td className="table-cell" style={{minWidth:140}}>
+                    {(v.customer_names||[]).length === 0 ? (
+                      <span style={{color:"var(--text-dim)",fontSize:11}}>—</span>
+                    ) : (
+                      <div style={{display:"flex",flexDirection:"column",gap:2}}>
+                        {v.customer_names.slice(0,2).map((name,i)=>(
+                          <span key={i} style={{fontSize:11,color:"var(--text-muted)"}}>{name}</span>
+                        ))}
+                        {v.customer_names.length>2 && (
+                          <span style={{fontSize:10,color:"var(--text-dim)"}}>+{v.customer_names.length-2} more</span>
+                        )}
+                      </div>
+                    )}
                   </td>
 
                   {/* Status */}

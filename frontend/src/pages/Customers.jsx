@@ -111,7 +111,7 @@ function ConfirmModal({ message, onConfirm, onCancel }) {
 function SkeletonRow() {
   return (
     <tr>
-      {[140,80,160,120,100,80,60].map((w,i)=>(
+      {[140,80,160,120,100,120,80,60].map((w,i)=>(
         <td key={i} className="table-cell">
           <div className="skeleton" style={{height:13,width:w,borderRadius:4}}/>
         </td>
@@ -234,16 +234,16 @@ export default function Customers() {
         <table style={{width:"100%",borderCollapse:"collapse"}}>
           <thead>
             <tr>
-              {["Customer","Customer ID","Contact","Allocations","Router Placements","Status",""].map(h=>(
+              {["Customer","Customer ID","Contact","Allocations","VLANs","Router Placements","Status",""].map(h=>(
                 <th key={h} className="table-header">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={7} style={{padding:0}}><Loading message="Loading customers..." /></td></tr>
+              <tr><td colSpan={8} style={{padding:0}}><Loading message="Loading customers..." /></td></tr>
             ) : items.length===0 ? (
-              <tr><td colSpan={7}>
+              <tr><td colSpan={8}>
                 <EmptyState icon={Icons.wireless} title="No customers found"
                   message={search?"Try a different search term":"Add your first customer"}
                   action={!search?"Add Customer":null} onAction={!search?()=>setModal("add"):null} />
@@ -306,6 +306,27 @@ export default function Customers() {
                   }}>
                     {c.alloc_count||0}
                   </span>
+                </td>
+
+                {/* VLANs */}
+                <td className="table-cell" style={{minWidth:140}}>
+                  {(c.vlan_ids||[]).length === 0 ? (
+                    <span style={{color:"var(--text-dim)",fontSize:11}}>—</span>
+                  ) : (
+                    <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+                      {c.vlan_ids.slice(0,3).map(vid=>(
+                        <span key={vid} style={{
+                          fontFamily:"var(--font-mono)",fontSize:10,fontWeight:500,
+                          padding:"2px 7px",borderRadius:4,
+                          background:"var(--surface-3)",color:"var(--text-muted)",
+                          border:"1px solid var(--border-soft)",
+                        }}>{vid}</span>
+                      ))}
+                      {c.vlan_ids.length>3 && (
+                        <span style={{fontSize:10,color:"var(--text-dim)"}}>+{c.vlan_ids.length-3}</span>
+                      )}
+                    </div>
+                  )}
                 </td>
 
                 {/* Router placements */}
