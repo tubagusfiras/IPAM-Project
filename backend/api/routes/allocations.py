@@ -128,6 +128,16 @@ async def create_allocation(body: AllocIn, request: Request, db=Depends(get_db),
         "INSERT INTO allocations (prefix,block_id,customer_id,vlan_id,status,owner_type,description,notes) VALUES ($1::cidr,$2::uuid,$3::uuid,$4::uuid,$5::alloc_status_t,$6::owner_type_t,$7,$8) RETURNING *",
         body.prefix, body.block_id, body.customer_id, body.vlan_id, body.status, body.owner_type, body.description, body.notes
     )
+    # Auto-activate the parent block: a block with a real allocation inside it
+    # should never be shown as idle/available. Only fires when the block is
+    # not already active, so it never overwrites a manually-set state unnecessarily.
+    block_row = await db.fetchrow("SELECT status FROM ip_blocks WHERE id=$1::uuid", body.block_id)
+    if block_row and block_row["status"] != "active":
+        await db.execute("UPDATE ip_blocks SET status='active' WHERE id=$1::uuid", body.block_id)
+        await log_audit(db, "update", "block", body.block_id, None,
+            description=f"Block auto-activated (allocation {row['prefix']} created)",
+            old_data={"status": block_row["status"]}, new_data={"status": "active"},
+            changed_by=current_user.get("username","admin"), ip_address=get_client_ip(request))
     await log_audit(db, "create", "allocation", row["id"], str(row["prefix"]),
         description=f"Allocation created: {row['prefix']}", new_data={**dict(row),"prefix":str(row["prefix"])},
         changed_by=current_user.get("username","admin"), ip_address=get_client_ip(request),

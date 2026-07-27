@@ -61,7 +61,7 @@ class VlanIn(BaseModel):
         return v
 
 # ── IP BLOCKS ─────────────────────────────────────────
-BLOCK_STATUS_VALUES = {"active", "reserved", "deprecated"}
+BLOCK_STATUS_VALUES = {"active", "reserved", "deprecated", "available"}
 
 class BlockIn(BaseModel):
     prefix: constr(max_length=50, strip_whitespace=True)

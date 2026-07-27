@@ -77,7 +77,7 @@ class TestVlanStatusValidation:
 
 class TestBlockStatusValidation:
     def test_valid_statuses_accepted(self):
-        for s in ["active", "reserved", "deprecated"]:
+        for s in ["active", "reserved", "deprecated", "available"]:
             b = BlockIn(prefix="10.0.0.0/24", status=s)
             assert b.status == s
 
