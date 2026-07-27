@@ -21,7 +21,10 @@ async def list_customers(
     db=Depends(get_db)
 ):
     q = f"%{search}%" if search else "%"
-    conditions = ["(c.name ILIKE $1 OR c.code ILIKE $1)"]
+    conditions = ["""(c.name ILIKE $1 OR c.code ILIKE $1 OR EXISTS (
+        SELECT 1 FROM allocations a2 JOIN vlans v2 ON a2.vlan_id=v2.id
+        WHERE a2.customer_id=c.id AND v2.vid::text ILIKE $1
+    ))"""]
     params = [q]
     if source:
         params.append(source)
