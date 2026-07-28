@@ -37,7 +37,11 @@ async def list_vlans(
         SELECT v.*, s.name AS site_name,
                (SELECT array_agg(DISTINCT c.name) FROM allocations a
                 JOIN customers c ON a.customer_id=c.id
-                WHERE a.vlan_id=v.id AND a.customer_id IS NOT NULL) AS customer_names
+                WHERE a.vlan_id=v.id AND a.customer_id IS NOT NULL) AS customer_names,
+               (SELECT array_agg(DISTINCT s2.name) FROM allocations a2
+                JOIN ip_blocks b2 ON a2.block_id=b2.id
+                JOIN sites s2 ON b2.site_id=s2.id
+                WHERE a2.vlan_id=v.id) AS site_names
         FROM vlans v LEFT JOIN sites s ON v.site_id=s.id
         WHERE {where} ORDER BY v.vid
         LIMIT ${len(params)-1} OFFSET ${len(params)}
