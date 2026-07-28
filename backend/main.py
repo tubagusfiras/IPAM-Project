@@ -1616,9 +1616,27 @@ async def confirm_import(body: dict, db=Depends(get_db)):
                     cust = await db.fetchrow("INSERT INTO customers (name) VALUES ($1) RETURNING id", alloc["customer"].strip())
                     customer_id = cust["id"]
 
+            # Find or create VLAN (by vid + site_id, sesuai UNIQUE(vid, site_id) di schema)
+            # agar allocation hasil import ter-link ke VLAN yang benar, bukan dibiarkan NULL.
+            vlan_id = None
+            vlan_vid = alloc.get("vlan")
+            if vlan_vid:
+                if site_id:
+                    vlan = await db.fetchrow("SELECT id FROM vlans WHERE vid = $1 AND site_id = $2::uuid", vlan_vid, site_id)
+                else:
+                    vlan = await db.fetchrow("SELECT id FROM vlans WHERE vid = $1 AND site_id IS NULL", vlan_vid)
+                if vlan:
+                    vlan_id = vlan["id"]
+                else:
+                    vlan = await db.fetchrow(
+                        "INSERT INTO vlans (vid, name, status, site_id) VALUES ($1, $2, $3, $4::uuid) RETURNING id",
+                        vlan_vid, f"VLAN {vlan_vid}", "active", site_id
+                    )
+                    vlan_id = vlan["id"]
+
             await db.fetchrow(
-                "INSERT INTO allocations (prefix, block_id, customer_id, status, description, notes) VALUES ($1::cidr, $2::uuid, $3::uuid, $4::alloc_status_t, $5, $6) RETURNING id",
-                alloc["prefix"], block_id, customer_id, alloc.get("status", "active"), alloc.get("description", ""), alloc.get("notes", "")
+                "INSERT INTO allocations (prefix, block_id, customer_id, vlan_id, status, description, notes) VALUES ($1::cidr, $2::uuid, $3::uuid, $4::uuid, $5::alloc_status_t, $6, $7) RETURNING id",
+                alloc["prefix"], block_id, customer_id, vlan_id, alloc.get("status", "active"), alloc.get("description", ""), alloc.get("notes", "")
             )
             imported += 1
 
