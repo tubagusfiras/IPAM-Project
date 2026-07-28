@@ -122,7 +122,6 @@ async def list_allocations_cursor(
         next_cursor = base64.b64encode(json.dumps({"prefix": str(items[-1]["prefix"])}).encode()).decode()
     return {"items": items, "next_cursor": next_cursor, "has_more": has_more}
 
-@router.post("/api/v1/allocations", status_code=201)
 async def _maybe_rename_vlan(db, vlan_id, owner_name):
     """Auto-name a VLAN from the allocation's Owner/Customer value, but only
     if the VLAN doesn't already have a name — never overwrites an existing
@@ -156,6 +155,7 @@ async def _maybe_fill_vlan_site(db, vlan_id, block_id):
     await db.execute("UPDATE vlans SET site_id=$1::uuid WHERE id=$2::uuid", block_row["site_id"], vlan_id)
 
 
+@router.post("/api/v1/allocations", status_code=201)
 async def create_allocation(body: AllocIn, request: Request, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     row = await db.fetchrow(
         "INSERT INTO allocations (prefix,block_id,customer_id,vlan_id,status,owner_type,description,notes,end_device_xc) VALUES ($1::cidr,$2::uuid,$3::uuid,$4::uuid,$5::alloc_status_t,$6::owner_type_t,$7,$8,$9) RETURNING *",
