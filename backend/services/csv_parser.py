@@ -1,6 +1,15 @@
 """CSV Parser — extract IPv4 & IPv6 allocations from non-uniform CSV formats."""
 
-import ipaddress, math, re
+import ipaddress, math, re, csv, io
+
+
+def _split_csv_line(line):
+    """Split satu baris CSV dengan proper quote-handling (mendukung field
+    yang mengandung koma di dalam tanda kutip, misal: "PT Foo, Bar")."""
+    try:
+        return next(csv.reader(io.StringIO(line)))
+    except StopIteration:
+        return []
 
 
 def to_plen(size):
@@ -63,7 +72,7 @@ def parse_ipv4_csv(content: str, filename: str = None):
 
     # Phase 1: Scan ALL lines untuk metadata (bukan hanya awal)
     for line_idx, line in enumerate(lines[:30]):  # scan first 30 lines
-        cols = [c.strip() for c in line.split(",")]
+        cols = [c.strip() for c in _split_csv_line(line)]
         raw = cols[0] if cols else ""
 
         # Scan semua kolom untuk metadata
@@ -138,7 +147,7 @@ def parse_ipv4_csv(content: str, filename: str = None):
 
     # Phase 2: Parse data rows
     for line in lines:
-        cols = [c.strip() for c in line.split(",")]
+        cols = [c.strip() for c in _split_csv_line(line)]
         raw = cols[0] if cols else ""
 
         # Deteksi header "Alokasi"
@@ -208,18 +217,17 @@ def parse_ipv4_csv(content: str, filename: str = None):
     base_net = ipaddress.ip_network(meta["prefix"], strict=False)
     base_ip = str(base_net.network_address).rsplit(".", 1)[0]
 
-    # Build allocations
-    last_name = None
-    last_vlan = None
+    # Build allocations.
+    # NOTE: TIDAK carry-forward nama/vlan dari baris sebelumnya. Format CSV SDI
+    # tidak konsisten antar file (penempatan row/cell berbeda-beda), sehingga
+    # carry-forward "buta" berisiko salah assign baris yang sebenarnya kosong
+    # ke customer terakhir yang ditemukan (over-assignment, riskan). Baris
+    # dengan nama & vlan kosong dua-duanya dianggap available/kosong.
     raw_allocs = []
 
     for r in data_rows:
-        name = r["name"] or last_name
-        vlan = r["vlan"] or last_vlan
-
-        if r["name"] or r["vlan"]:
-            last_name = r["name"]
-            last_vlan = r["vlan"]
+        name = r["name"]
+        vlan = r["vlan"]
 
         size = r["bcast"] - r["net"] + 1
         plen = to_plen(size)
