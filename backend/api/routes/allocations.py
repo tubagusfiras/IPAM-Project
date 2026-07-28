@@ -134,6 +134,28 @@ async def _maybe_rename_vlan(db, vlan_id, owner_name):
         await db.execute("UPDATE vlans SET name=$1 WHERE id=$2::uuid", owner_name, vlan_id)
 
 
+async def _maybe_fill_vlan_site(db, vlan_id, block_id):
+    """Auto-fill a VLAN's site from its allocation's block, but only if the
+    VLAN doesn't already have a site set, and only if doing so wouldn't
+    violate the (vid, site_id) uniqueness constraint (another VLAN row with
+    the same VID already claims that site)."""
+    if not vlan_id or not block_id:
+        return
+    vlan_row = await db.fetchrow("SELECT vid, site_id FROM vlans WHERE id=$1::uuid", vlan_id)
+    if not vlan_row or vlan_row["site_id"]:
+        return
+    block_row = await db.fetchrow("SELECT site_id FROM ip_blocks WHERE id=$1::uuid", block_id)
+    if not block_row or not block_row["site_id"]:
+        return
+    conflict = await db.fetchrow(
+        "SELECT id FROM vlans WHERE vid=$1 AND site_id=$2::uuid AND id!=$3::uuid",
+        vlan_row["vid"], block_row["site_id"], vlan_id
+    )
+    if conflict:
+        return
+    await db.execute("UPDATE vlans SET site_id=$1::uuid WHERE id=$2::uuid", block_row["site_id"], vlan_id)
+
+
 async def create_allocation(body: AllocIn, request: Request, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     row = await db.fetchrow(
         "INSERT INTO allocations (prefix,block_id,customer_id,vlan_id,status,owner_type,description,notes,end_device_xc) VALUES ($1::cidr,$2::uuid,$3::uuid,$4::uuid,$5::alloc_status_t,$6::owner_type_t,$7,$8,$9) RETURNING *",
@@ -147,6 +169,7 @@ async def create_allocation(body: AllocIn, request: Request, db=Depends(get_db),
         else:
             owner_name = body.description
         await _maybe_rename_vlan(db, body.vlan_id, owner_name)
+        await _maybe_fill_vlan_site(db, body.vlan_id, body.block_id)
     # Auto-activate the parent block: a block with a real allocation inside it
     # should never be shown as idle/available. Only fires when the block is
     # not already active, so it never overwrites a manually-set state unnecessarily.
@@ -180,6 +203,7 @@ async def update_allocation(alloc_id: str, body: AllocIn, request: Request, db=D
         else:
             owner_name = body.description
         await _maybe_rename_vlan(db, body.vlan_id, owner_name)
+        await _maybe_fill_vlan_site(db, body.vlan_id, body.block_id)
     old_dict = {**dict(old_row),"prefix":str(old_row["prefix"])} if old_row else None
     await log_audit(db, "update", "allocation", alloc_id, str(row["prefix"]),
         description=f"Allocation updated: {row['prefix']}",
