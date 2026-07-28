@@ -125,23 +125,6 @@ function ConfirmModal({ message, onConfirm, onCancel }) {
   );
 }
 
-function RouterTags({ routers }) {
-  if (!routers) return <div className="skeleton" style={{height:13,width:80,borderRadius:4}}/>;
-  if (!routers.length) return <span style={{color:"var(--text-dim)",fontSize:11}}>—</span>;
-  return (
-    <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
-      {routers.map((r,i) => (
-        <span key={i} style={{
-          fontFamily:"var(--font-mono)",fontSize:10,fontWeight:500,
-          padding:"2px 7px",borderRadius:4,
-          background:"var(--surface-3)",
-          color:"var(--text-muted)",
-          border:"1px solid var(--border-soft)",
-        }}>{r}</span>
-      ))}
-    </div>
-  );
-}
 
 export default function Vlans() {
   const [items,     setItems]     = useState([]);
@@ -154,7 +137,6 @@ export default function Vlans() {
   const [loading,   setLoading]   = useState(true);
   const [modal,     setModal]     = useState(null);
   const [confirm,   setConfirm]   = useState(null);
-  const [routerMap, setRouterMap] = useState({});
   const [allocCountMap, setAllocCountMap] = useState({});
   const LIMIT = 100;
 
@@ -172,36 +154,22 @@ export default function Vlans() {
   },[load]);
   useEffect(()=>{ getSites("",100).then(d=>setSites(d.items||d||[])); },[]);
 
-  // Fetch router placements per VLAN (batch, single request)
+  // Fetch allocation counts per VLAN (used for delete-impact preview)
   useEffect(()=>{
-    if (!items.length) { setRouterMap({}); return; }
+    if (!items.length) return;
     const ids = items.map(v=>v.id);
-    const initMap = {};
-    ids.forEach(id=>{ initMap[id] = null; });
-    setRouterMap(initMap);
-
     getAllocationsByVlanIds(ids)
       .then(d=>{
         const allocs = d.items || [];
-        const map = {};
         const countMap = {};
-        ids.forEach(id=>{ map[id] = []; countMap[id] = 0; });
+        ids.forEach(id=>{ countMap[id] = 0; });
         allocs.forEach(a=>{
           if (!a.vlan_id) return;
           countMap[a.vlan_id] = (countMap[a.vlan_id]||0) + 1;
-          if (!a.block_router) return;
-          if (!map[a.vlan_id]) map[a.vlan_id] = [];
-          if (!map[a.vlan_id].includes(a.block_router)) map[a.vlan_id].push(a.block_router);
         });
-        Object.keys(map).forEach(id=>map[id].sort());
-        setRouterMap(map);
         setAllocCountMap(countMap);
       })
-      .catch(()=>{
-        const emptyMap = {};
-        ids.forEach(id=>{ emptyMap[id] = []; });
-        setRouterMap(emptyMap);
-      });
+      .catch(()=>{});
   }, [items]);
 
   const handleDelete = async (v) => {
@@ -263,9 +231,9 @@ export default function Vlans() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={8} style={{padding:0}}><Loading message="Loading VLANs..." /></td></tr>
+              <tr><td colSpan={7} style={{padding:0}}><Loading message="Loading VLANs..." /></td></tr>
             ) : filteredItems.length===0 ? (
-              <tr><td colSpan={8}>
+              <tr><td colSpan={7}>
                 <EmptyState icon={Icons.network} title="No VLANs found"
                   message={search?"Try a different search":"Add your first VLAN"} />
               </td></tr>
@@ -303,10 +271,20 @@ export default function Vlans() {
                   </td>
 
                   {/* Site */}
-                  <td className="table-cell">
-                    <span style={{fontSize:12,color:"var(--text-muted)"}}>
-                      {v.site_name||"—"}
-                    </span>
+                  <td className="table-cell" style={{minWidth:120}}>
+                    {(v.site_names||[]).length === 0 ? (
+                      <span style={{color:"var(--text-dim)",fontSize:11}}>—</span>
+                    ) : (
+                      <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+                        {v.site_names.map((name,i)=>(
+                          <span key={i} style={{
+                            fontSize:10,fontWeight:500,padding:"2px 7px",borderRadius:4,
+                            background:"var(--surface-3)",color:"var(--text-muted)",
+                            border:"1px solid var(--border-soft)",
+                          }}>{name}</span>
+                        ))}
+                      </div>
+                    )}
                   </td>
 
                   {/* Customer */}
@@ -333,11 +311,6 @@ export default function Vlans() {
                       <span style={{width:5,height:5,borderRadius:"50%",background:sc.color}}/>
                       {v.status}
                     </span>
-                  </td>
-
-                  {/* Router placements */}
-                  <td className="table-cell" style={{minWidth:160}}>
-                    <RouterTags routers={routerMap[v.id]}/>
                   </td>
 
                   {/* End Device XC */}
