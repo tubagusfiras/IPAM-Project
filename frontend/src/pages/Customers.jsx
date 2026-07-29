@@ -121,6 +121,7 @@ function SkeletonRow() {
 }
 
 function RouterTags({ routers }) {
+  if (routers === null) return <div className="skeleton" style={{height:13,width:80,borderRadius:4}}/>;
   if (!routers?.length) return <span style={{color:"var(--text-dim)",fontSize:11}}>—</span>;
   return (
     <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
@@ -166,6 +167,9 @@ export default function Customers() {
   useEffect(()=>{
     if (!items.length) { setRouterMap({}); return; }
     const ids = items.map(c=>c.id);
+    const initMap = {};
+    ids.forEach(id=>{ initMap[id] = null; });
+    setRouterMap(initMap);
     getAllocationsByCustomerIds(ids)
       .then(d=>{
         const allocs = d.items || [];
