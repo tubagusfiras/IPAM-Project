@@ -1600,6 +1600,15 @@ async def confirm_import(body: dict, db=Depends(get_db)):
                 skipped += 1
                 continue
             alloc["prefix"] = prefix
+
+            # Skip baris "available"/kosong sepenuhnya - JANGAN insert row untuk slot
+            # kosong. Slot tanpa row allocation otomatis dianggap free oleh IPGrid,
+            # jadi user bisa langsung klik-add dari IP map tanpa perlu delete manual
+            # row "available" yang nyangkut terlebih dahulu.
+            if alloc.get("status") == "available":
+                skipped += 1
+                continue
+
             # Skip if already exists
             exists = await db.fetchrow("SELECT id FROM allocations WHERE prefix = $1::cidr AND block_id = $2::uuid", prefix, block_id)
             if exists:
