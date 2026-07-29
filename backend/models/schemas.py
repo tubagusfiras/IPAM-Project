@@ -1,5 +1,5 @@
 from typing import Optional
-from pydantic import BaseModel, validator, field_validator, constr, EmailStr
+from pydantic import BaseModel, field_validator, constr, EmailStr
 
 # ── HELPERS ───────────────────────────────────────────
 def strip_dangerous(v: str) -> str:
@@ -17,7 +17,7 @@ class SiteIn(BaseModel):
     description: Optional[constr(max_length=1000, strip_whitespace=True)] = None
     source: Optional[str] = "dynamic"
 
-    @validator("name")
+    @field_validator("name")
     def sanitize_name(cls, v):
         return strip_dangerous(v)
 
@@ -33,7 +33,7 @@ class CustomerIn(BaseModel):
     is_active: bool = True
     source: Optional[str] = "dynamic"
 
-    @validator("name", "contact_name")
+    @field_validator("name", "contact_name")
     def sanitize_text(cls, v):
         return strip_dangerous(v) if v else v
 
@@ -48,7 +48,7 @@ class VlanIn(BaseModel):
     description: Optional[constr(max_length=1000, strip_whitespace=True)] = None
     source: Optional[str] = "dynamic"
 
-    @validator("vid")
+    @field_validator("vid")
     def validate_vid(cls, v):
         if v < 1 or v > 4094:
             raise ValueError("VLAN ID must be between 1 and 4094")
