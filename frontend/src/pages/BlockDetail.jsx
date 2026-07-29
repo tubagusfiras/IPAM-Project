@@ -1,21 +1,21 @@
 import { useState, useEffect, useCallback, useRef, memo } from "react";
 import AllocModal, { BlockEditModal, ConfirmModal, SubnetCalc } from "./AllocModal.jsx";
+import { OWNER_TYPES as OWNER_TYPE_VALUES, ALLOC_STATUS_OPTS } from "../constants.js";
 import IPGrid from "./IPGrid.jsx";
 import { createPortal } from "react-dom";
 import { getBlock, updateBlock, getSites, getCustomers, getVlans,
          createAllocation, updateAllocation, deleteAllocation, createCustomer, createVlan, authFetch} from "../api.js";
 
 // ── CONSTANTS ────────────────────────────────────────────────────────────────
-const OWNER_TYPES = [
-  { value:"customer",       label:"Customer",       color:"var(--text-muted)", icon:"" },
-  { value:"internal",       label:"Infrastructure", color:"var(--text-muted)", icon:"" },
-  { value:"ptp",            label:"PTP",            color:"var(--text-muted)", icon:"" },
-  { value:"peering",        label:"Peering",        color:"var(--text-muted)", icon:"" },
-  { value:"management",     label:"Mgmt",           color:"var(--text-muted)", icon:"" },
-  { value:"reserved",       label:"Reserved",       color:"var(--text-dim)",   icon:"" },
-];
+const OWNER_TYPE_LABEL_OVERRIDE = { internal: "Infrastructure" };
+const OWNER_TYPES = OWNER_TYPE_VALUES.map(o => ({
+  ...o,
+  label: OWNER_TYPE_LABEL_OVERRIDE[o.value] || o.label,
+  color: o.value === "reserved" ? "var(--text-dim)" : "var(--text-muted)",
+  icon: "",
+}));
 
-const STATUS_OPTS = ["active","available","reserved","deprecated"];
+const STATUS_OPTS = ALLOC_STATUS_OPTS;
 
 const STATUS_STYLE = {
   active:     { color:"var(--success)",  bg:"var(--success-surface)", border:"var(--success-border)", label:"Active" },

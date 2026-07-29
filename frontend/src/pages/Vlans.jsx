@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { getVlans, getSites, createVlan, updateVlan, deleteVlan, getAllocationsByVlanIds } from "../api.js";
+import { VLAN_STATUS_OPTS } from "../constants.js";
 import { Btn, SearchBar, Loading, EmptyState, PageHeader, Icons, Badge, StatusBadge } from "../components/ui.jsx";
 
 const STATUS_STYLE = {
@@ -72,9 +73,9 @@ function VlanModal({ vlan, sites, onClose, onSaved }) {
               <label style={{display:"block",fontSize:10,fontWeight:700,textTransform:"uppercase",
                 letterSpacing:"0.08em",color:"var(--text-dim)",marginBottom:6}}>Status</label>
               <select value={form.status} onChange={e=>set("status")(e.target.value)} className="select">
-                <option value="active">Active</option>
-                <option value="reserved">Reserved</option>
-                <option value="deprecated">Deprecated</option>
+                {VLAN_STATUS_OPTS.map(s=>(
+                  <option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>
+                ))}
               </select>
             </div>
             <div>

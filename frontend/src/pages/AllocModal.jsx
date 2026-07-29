@@ -1,17 +1,19 @@
 import { useState, useEffect, useRef } from "react";
 import { createAllocation, updateAllocation, getBlock, updateBlock, authFetch} from "../api.js";
+import { OWNER_TYPES as OWNER_TYPE_VALUES, ALLOC_STATUS_OPTS } from "../constants.js";
 
 // ── CONSTANTS ────────────────────────────────────────────────────────────────
-const OWNER_TYPES = [
-  { value:"customer",   label:"Customer",   color:"var(--accent)",   icon:"👤" },
-  { value:"internal",   label:"Internal",   color:"var(--accent2)",  icon:"🖥️" },
-  { value:"ptp",        label:"PTP",        color:"var(--warning)",  icon:"ptp" },
-  { value:"peering",    label:"Peering",    color:"#a855f7",         icon:"peering" },
-  { value:"management", label:"Mgmt",       color:"var(--info)",     icon:"⚙️" },
-  { value:"reserved",   label:"Reserved",   color:"var(--text-dim)", icon:"🔒" },
-];
+const OWNER_TYPE_STYLE = {
+  customer:   { color:"var(--accent)",   icon:"👤" },
+  internal:   { color:"var(--accent2)",  icon:"🖥️" },
+  ptp:        { color:"var(--warning)",  icon:"ptp" },
+  peering:    { color:"#a855f7",         icon:"peering" },
+  management: { color:"var(--info)",     icon:"⚙️" },
+  reserved:   { color:"var(--text-dim)", icon:"🔒" },
+};
+const OWNER_TYPES = OWNER_TYPE_VALUES.map(o => ({ ...o, ...OWNER_TYPE_STYLE[o.value] }));
 
-const STATUS_OPTS = ["active","available","reserved","deprecated"];
+const STATUS_OPTS = ALLOC_STATUS_OPTS;
 
 const STATUS_STYLE = {
   active:     { color:"var(--success)", bg:"var(--success-surface)", border:"var(--success-border)" },

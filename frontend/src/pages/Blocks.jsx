@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { getBlocks, createBlock, updateBlock, deleteBlock, getSites } from "../api.js";
+import { BLOCK_STATUS_OPTS } from "../constants.js";
 import { Btn, SearchBar, Loading, PageHeader, Icons } from "../components/ui.jsx";
 
 const VERSION_COLOR = {
@@ -141,7 +142,7 @@ function BlockFormModal({ block, sites, onClose, onSaved }) {
                 color:"var(--text-muted)",marginBottom:6,
               }}>Status</label>
               <select value={form.status} onChange={e=>set("status")(e.target.value)} className="select">
-                {["active","available","reserved","deprecated"].map(s=>(
+                {BLOCK_STATUS_OPTS.map(s=>(
                   <option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>
                 ))}
               </select>
