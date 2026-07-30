@@ -261,7 +261,7 @@ export default function IPScan() {
             {(isDone || scanData.scanned > 0) && (
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginTop:16}}>
                 {[
-                  {key:"responding",   label:"Responding",   val:scanData.responding_count,   icon:"✓", color:"var(--success)", bg:"var(--success-surface)", border:"var(--success-border)"},
+                  {key:"active",       label:"Responding",    val:scanData.responding_count,   icon:"✓", color:"var(--success)", bg:"var(--success-surface)", border:"var(--success-border)"},
                   {key:"ghost",        label:"Ghost",         val:scanData.ghost_count,         icon:"ghost", color:"#ef4444",         bg:"rgba(239,68,68,0.08)",   border:"rgba(239,68,68,0.22)"},
                   {key:"unregistered", label:"Unregistered",  val:scanData.unregistered_count,  icon:"warn",  color:"#f59e0b",         bg:"rgba(245,158,11,0.08)", border:"rgba(245,158,11,0.22)"},
                   {key:"idle",         label:"Idle",          val:idleCount,                    icon:"○",   color:"var(--text-dim)", bg:"var(--surface-2)",      border:"var(--border-soft)"},
