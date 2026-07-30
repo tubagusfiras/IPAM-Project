@@ -14,6 +14,25 @@ function formatElapsed(sec) {
   return `${Math.floor(sec/60)}m ${sec%60}s`;
 }
 
+function getRowStatus(r) {
+  if (r.discrepancy === "ghost") return "ghost";
+  if (r.discrepancy === "unregistered") return "unregistered";
+  if (r.responding && r.alloc_prefix) return "active";
+  return "idle";
+}
+
+const ROW_STATUS_STYLE = {
+  active:        { label: "Active",       color: "var(--success)", bg: "var(--success-surface)", border: "var(--success-border)" },
+  ghost:         { label: "Ghost",        color: "#ef4444",        bg: "rgba(239,68,68,0.08)",   border: "rgba(239,68,68,0.22)" },
+  unregistered:  { label: "Unregistered", color: "#f59e0b",        bg: "rgba(245,158,11,0.08)",  border: "rgba(245,158,11,0.22)" },
+  idle:          { label: "Idle",         color: "var(--text-dim)", bg: "var(--surface-2)",      border: "var(--border-soft)" },
+};
+
+// IP sort helper: numeric last-octet order, not string order
+function ipSortKey(ip) {
+  return ip.split(".").map(Number).reduce((acc,o)=>acc*256+o, 0);
+}
+
 export default function IPScan() {
   const [blocks,      setBlocks]      = useState([]);
   const [blockId,     setBlockId]     = useState("");
@@ -119,15 +138,23 @@ export default function IPScan() {
 
   const ghosts        = scanData?.ghost_allocs || [];
   const unregistered  = scanData?.unregistered_ips || [];
-  const responding    = (scanData?.results || []).filter(r => r.responding && !r.discrepancy);
+  const allResults     = scanData?.results || [];
+  const responding    = allResults.filter(r => r.responding && !r.discrepancy);
   const selectedBlock = blocks.find(b => b.id === blockId);
   const pct = scanData?.pct || 0;
   const isRunning = scanData?.status === "running" || polling;
   const isDone    = scanData?.status === "done";
   const hasData   = !!scanData;
 
-  const filteredGhosts = filterType==="all"||filterType==="ghost" ? ghosts : [];
-  const filteredUnreg  = filterType==="all"||filterType==="unregistered" ? unregistered : [];
+  // Unified per-IP table, sorted numerically, filtered by the selected status card.
+  // "idle" (empty, no allocation, no response) is hidden unless explicitly selected.
+  const sortedResults = [...allResults].sort((a,b)=>ipSortKey(a.ip)-ipSortKey(b.ip));
+  const visibleRows = sortedResults.filter(r => {
+    const status = getRowStatus(r);
+    if (filterType === "all") return status !== "idle";
+    return status === filterType;
+  });
+  const idleCount = allResults.filter(r=>getRowStatus(r)==="idle").length;
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:20}}>
@@ -237,6 +264,7 @@ export default function IPScan() {
                   {key:"responding",   label:"Responding",   val:scanData.responding_count,   icon:"✓", color:"var(--success)", bg:"var(--success-surface)", border:"var(--success-border)"},
                   {key:"ghost",        label:"Ghost",         val:scanData.ghost_count,         icon:"ghost", color:"#ef4444",         bg:"rgba(239,68,68,0.08)",   border:"rgba(239,68,68,0.22)"},
                   {key:"unregistered", label:"Unregistered",  val:scanData.unregistered_count,  icon:"warn",  color:"#f59e0b",         bg:"rgba(245,158,11,0.08)", border:"rgba(245,158,11,0.22)"},
+                  {key:"idle",         label:"Idle",          val:idleCount,                    icon:"○",   color:"var(--text-dim)", bg:"var(--surface-2)",      border:"var(--border-soft)"},
                 ].map(s=>(
                   <div key={s.key}
                     onClick={()=>setFilterType(filterType===s.key ? "all" : s.key)}
@@ -283,156 +311,102 @@ export default function IPScan() {
       {isDone && (
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
 
-          {/* Ghost allocations */}
-          {filteredGhosts.length>0 && (
-            <div className="card" style={{overflow:"hidden"}}>
-              <div style={{padding:"14px 16px",borderBottom:"1px solid var(--border-medium)",
-                display:"flex",alignItems:"center",gap:10,background:"var(--surface-2)"}}>
-                <span style={{fontSize:16,fontWeight:700}}>GHOST</span>
-                <span style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>Ghost Allocations</span>
-                <span style={{fontSize:11,color:"#ef4444",background:"rgba(239,68,68,0.1)",
-                  border:"1px solid rgba(239,68,68,0.25)",padding:"2px 8px",borderRadius:99,fontWeight:600}}>
-                  {ghosts.length}
-                </span>
-                <span style={{fontSize:11,color:"var(--text-dim)",marginLeft:4}}>
-                  Terdaftar di IPAM, tidak ada IP yang respond
-                </span>
-              </div>
-              <table style={{width:"100%",borderCollapse:"collapse"}}>
-                <thead>
-                  <tr>
-                    {["Prefix","Owner Type","Customer","Status","Action"].map(h=>(
-                      <th key={h} className="table-header">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {ghosts.map((g,i)=>(
-                    <tr key={g.alloc_id||i} className="table-row"
-                      style={{background:i%2===0?"var(--surface-1)":"var(--surface-2)"}}>
-                      <td className="table-cell">
-                        <div style={{display:"flex",alignItems:"center",gap:8}}>
-                          <div style={{width:3,height:24,borderRadius:2,
-                            background: g.likely_firewall ? "var(--text-dim)" : "#ef4444",flexShrink:0}}/>
-                          <span style={{fontFamily:"var(--font-mono)",fontSize:12,fontWeight:600,color:"var(--accent)"}}>
-                            {g.alloc_prefix}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="table-cell">
-                        <span style={{fontSize:11,color:"var(--text-muted)",textTransform:"capitalize"}}>{g.owner_type}</span>
-                      </td>
-                      <td className="table-cell">
-                        <span style={{fontSize:12,color:g.customer_name?"var(--text)":"var(--text-dim)"}}>
-                          {g.customer_name||"—"}
-                        </span>
-                      </td>
-                      <td className="table-cell">
-                        <span style={{
-                          fontSize:10,fontWeight:600,padding:"3px 9px",borderRadius:99,
-                          background: g.likely_firewall ? "var(--surface-3)" : "rgba(239,68,68,0.1)",
-                          color: g.likely_firewall ? "var(--text-dim)" : "#ef4444",
-                          border: `1px solid ${g.likely_firewall ? "var(--border-soft)" : "rgba(239,68,68,0.25)"}`,
-                        }}>
-                          {g.likely_firewall ? "LIKELY FIREWALL" : "GHOST"}
-                        </span>
-                      </td>
-                      <td className="table-cell" onClick={e=>e.stopPropagation()}>
-                        {g.alloc_id && (
-                          <div style={{display:"flex",gap:4}}>
-                            <button onClick={()=>doAction("mark_deprecated", g.alloc_id, g.alloc_prefix)}
-                              className="btn btn-ghost btn-sm" style={{fontSize:11,padding:"3px 8px"}}>
-                              Mark Deprecated
-                            </button>
-                            <button onClick={()=>setConfirmDel(g)} className="btn btn-sm"
-                              style={{fontSize:11,padding:"3px 8px",background:"var(--danger-surface)",
-                                color:"var(--danger)",border:"1px solid var(--danger-border)"}}>
-                              Delete
-                            </button>
-                          </div>
-                        )}
-                      </td>
+          {/* Unified per-IP results table */}
+            {visibleRows.length>0 && (
+              <div className="card" style={{overflow:"hidden"}}>
+                <div style={{padding:"14px 16px",borderBottom:"1px solid var(--border-medium)",
+                  display:"flex",alignItems:"center",gap:10,background:"var(--surface-2)"}}>
+                  <span style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>IP Results</span>
+                  <span style={{fontSize:11,color:"var(--text-muted)"}}>
+                    {selectedBlock?.prefix||""}
+                  </span>
+                  <span style={{fontSize:11,color:"var(--text-dim)",background:"var(--surface-3)",
+                    border:"1px solid var(--border-soft)",padding:"2px 8px",borderRadius:99,fontWeight:600}}>
+                    {visibleRows.length}
+                  </span>
+                  {filterType!=="all" && (
+                    <button onClick={()=>setFilterType("all")} className="btn btn-ghost btn-sm"
+                      style={{fontSize:11,padding:"3px 8px",marginLeft:"auto"}}>
+                      Clear filter
+                    </button>
+                  )}
+                </div>
+                <table style={{width:"100%",borderCollapse:"collapse"}}>
+                  <thead>
+                    <tr>
+                      {["IP","Status","Owner Type","Customer","Action"].map(h=>(
+                        <th key={h} className="table-header">{h}</th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Unregistered devices */}
-          {filteredUnreg.length>0 && (
-            <div className="card" style={{overflow:"hidden"}}>
-              <div style={{padding:"14px 16px",borderBottom:"1px solid var(--border-medium)",
-                display:"flex",alignItems:"center",gap:10,background:"var(--surface-2)"}}>
-                <span style={{fontSize:16,fontWeight:700}}>WARN</span>
-                <span style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>Unregistered Devices</span>
-                <span style={{fontSize:11,color:"#f59e0b",background:"rgba(245,158,11,0.1)",
-                  border:"1px solid rgba(245,158,11,0.25)",padding:"2px 8px",borderRadius:99,fontWeight:600}}>
-                  {unregistered.length}
-                </span>
-                <span style={{fontSize:11,color:"var(--text-dim)",marginLeft:4}}>
-                  Respond tapi tidak terdaftar di IPAM
-                </span>
+                  </thead>
+                  <tbody>
+                    {visibleRows.map((r,i)=>{
+                      const status = getRowStatus(r);
+                      const style = ROW_STATUS_STYLE[status];
+                      const ghostAlloc = status==="ghost" ? ghosts.find(g=>g.alloc_prefix===r.alloc_prefix) : null;
+                      return (
+                        <tr key={r.ip} className="table-row"
+                          style={{background:i%2===0?"var(--surface-1)":"var(--surface-2)"}}>
+                          <td className="table-cell">
+                            <div style={{display:"flex",alignItems:"center",gap:8}}>
+                              <div style={{width:3,height:24,borderRadius:2,background:style.color,flexShrink:0}}/>
+                              <span style={{fontFamily:"var(--font-mono)",fontSize:12,fontWeight:600,color:"var(--text)"}}>
+                                {r.ip}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="table-cell">
+                            <span style={{
+                              fontSize:10,fontWeight:600,padding:"3px 9px",borderRadius:99,
+                              background:style.bg, color:style.color,
+                              border:`1px solid ${style.border}`,
+                            }}>
+                              {status==="ghost" && ghostAlloc?.likely_firewall ? "LIKELY FIREWALL" : style.label.toUpperCase()}
+                            </span>
+                          </td>
+                          <td className="table-cell">
+                            <span style={{fontSize:11,color:"var(--text-muted)",textTransform:"capitalize"}}>
+                              {r.owner_type||"—"}
+                            </span>
+                          </td>
+                          <td className="table-cell">
+                            <span style={{fontSize:12,color:r.customer_name?"var(--text)":"var(--text-dim)"}}>
+                              {r.customer_name||"—"}
+                            </span>
+                          </td>
+                          <td className="table-cell" onClick={e=>e.stopPropagation()}>
+                            {status==="ghost" && ghostAlloc && (
+                              <div style={{display:"flex",gap:4}}>
+                                <button onClick={()=>doAction("mark_deprecated", ghostAlloc.alloc_id, ghostAlloc.alloc_prefix)}
+                                  className="btn btn-ghost btn-sm" style={{fontSize:11,padding:"3px 8px"}}>
+                                  Mark Deprecated
+                                </button>
+                                <button onClick={()=>setConfirmDel(ghostAlloc)} className="btn btn-sm"
+                                  style={{fontSize:11,padding:"3px 8px",background:"var(--danger-surface)",
+                                    color:"var(--danger)",border:"1px solid var(--danger-border)"}}>
+                                  Delete
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-              <table style={{width:"100%",borderCollapse:"collapse"}}>
-                <thead>
-                  <tr>{["IP Address","Method","Block","Note"].map(h=>(
-                    <th key={h} className="table-header">{h}</th>
-                  ))}</tr>
-                </thead>
-                <tbody>
-                  {unregistered.map((r,i)=>(
-                    <tr key={r.ip} className="table-row" style={{background:i%2===0?"var(--surface-1)":"var(--surface-2)"}}>
-                      <td className="table-cell">
-                        <span style={{fontFamily:"var(--font-mono)",fontSize:12,fontWeight:600,color:"#f59e0b"}}>{r.ip}</span>
-                      </td>
-                      <td className="table-cell">
-                        <span style={{fontSize:11,color:"var(--text-muted)",textTransform:"uppercase",fontFamily:"var(--font-mono)"}}>{r.method}</span>
-                      </td>
-                      <td className="table-cell">
-                        <span style={{fontSize:11,color:"var(--text-muted)",fontFamily:"var(--font-mono)"}}>{selectedBlock?.prefix||"—"}</span>
-                      </td>
-                      <td className="table-cell">
-                        <span style={{fontSize:11,color:"var(--text-dim)"}}>Perlu investigasi manual</span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+            )}
 
-          {/* Responding clean list */}
-          {filterType==="responding" && responding.length>0 && (
-            <div className="card" style={{overflow:"hidden"}}>
-              <div style={{padding:"14px 16px",borderBottom:"1px solid var(--border-medium)",
-                display:"flex",alignItems:"center",gap:10,background:"var(--surface-2)"}}>
-                <span style={{fontSize:16}}>✓</span>
-                <span style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>Responding IPs</span>
-                <span style={{fontSize:11,color:"var(--success)",background:"var(--success-surface)",
-                  border:"1px solid var(--success-border)",padding:"2px 8px",borderRadius:99,fontWeight:600}}>
-                  {responding.length}
-                </span>
+            {visibleRows.length===0 && filterType!=="all" && (
+              <div className="card" style={{padding:32,textAlign:"center"}}>
+                <div style={{fontSize:13,color:"var(--text-dim)"}}>No IPs match this filter</div>
+                <button onClick={()=>setFilterType("all")} className="btn btn-ghost btn-sm" style={{marginTop:10}}>
+                  Clear filter
+                </button>
               </div>
-              <table style={{width:"100%",borderCollapse:"collapse"}}>
-                <thead><tr>{["IP","Method","Allocation","Customer"].map(h=>(
-                  <th key={h} className="table-header">{h}</th>
-                ))}</tr></thead>
-                <tbody>
-                  {responding.map((r,i)=>(
-                    <tr key={r.ip} className="table-row" style={{background:i%2===0?"var(--surface-1)":"var(--surface-2)"}}>
-                      <td className="table-cell"><span style={{fontFamily:"var(--font-mono)",fontSize:12,fontWeight:600,color:"var(--success)"}}>{r.ip}</span></td>
-                      <td className="table-cell"><span style={{fontSize:11,color:"var(--text-muted)",fontFamily:"var(--font-mono)",textTransform:"uppercase"}}>{r.method}</span></td>
-                      <td className="table-cell"><span style={{fontFamily:"var(--font-mono)",fontSize:11,color:"var(--accent)"}}>{r.alloc_prefix||"—"}</span></td>
-                      <td className="table-cell"><span style={{fontSize:12,color:"var(--text-muted)"}}>{r.customer_name||"—"}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+            )}
 
-          {/* All clean */}
+            {/* All clean */}
           {ghosts.length===0 && unregistered.length===0 && (
             <div className="card" style={{padding:48,textAlign:"center"}}>
               <div style={{fontSize:24,fontWeight:700}}>OK</div>
