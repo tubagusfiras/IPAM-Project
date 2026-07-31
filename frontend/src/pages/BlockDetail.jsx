@@ -461,20 +461,32 @@ export default function BlockDetail({ blockId, onBack, dark }) {
     if (field==="customer_name") {
       if (!value) { payload.customer_id=null; }
       else {
-        let cust=customers.find(c=>c.name.toLowerCase().replace(/["'']/g,'').trim()===value.toLowerCase().replace(/["'']/g,'').trim());
-        if (!cust) {
-          const r=await authFetch("/api/v1/customers",{method:"POST",
-            headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({name:value,is_active:true,source:"dynamic"})});
-          cust=await r.json();
-          setCustomers(prev=>[...prev,cust]);
-        } else if (cust.source === "dynamic" && cust.name !== value) {
-          // Auto-sync: update customer name jika source dynamic
-          await authFetch(`/api/v1/customers/${cust.id}`, {method:"PUT",
-            headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({name:value,is_active:cust.is_active,source:"dynamic"})});
-          cust = { ...cust, name: value };
-          setCustomers(prev => prev.map(c => c.id === cust.id ? { ...c, name: value } : c));
+        // If this allocation is already linked to a customer, RENAME that
+        // same customer instead of searching by name. Searching by exact
+        // string match was creating a brand-new (duplicate) customer any
+        // time the name changed even slightly, leaving the old customer
+        // row orphaned with zero allocations.
+        let cust = alloc.customer_id ? customers.find(c=>c.id===alloc.customer_id) : null;
+        if (cust) {
+          if (cust.name !== value) {
+            await authFetch(`/api/v1/customers/${cust.id}`, {method:"PUT",
+              headers:{"Content-Type":"application/json"},
+              body:JSON.stringify({name:value,is_active:cust.is_active,source:cust.source||"dynamic"})});
+            cust = { ...cust, name: value };
+            setCustomers(prev => prev.map(c => c.id === cust.id ? { ...c, name: value } : c));
+          }
+        } else {
+          // No customer linked yet on this allocation: match an existing
+          // customer by exact name (user picked from suggestions), or
+          // create a new one if none matches.
+          cust=customers.find(c=>c.name.toLowerCase().replace(/["'']/g,'').trim()===value.toLowerCase().replace(/["'']/g,'').trim());
+          if (!cust) {
+            const r=await authFetch("/api/v1/customers",{method:"POST",
+              headers:{"Content-Type":"application/json"},
+              body:JSON.stringify({name:value,is_active:true,source:"dynamic"})});
+            cust=await r.json();
+            setCustomers(prev=>[...prev,cust]);
+          }
         }
         payload.customer_id=cust.id;
         payload.status="active";
@@ -554,7 +566,7 @@ export default function BlockDetail({ blockId, onBack, dark }) {
     }
   };
 
-  // Optimistic update untuk description - langsung update state, API di background
+  // Optimistic update for description - update state immediately, API in background
   const saveFieldOptimistic = async (allocId, field, value) => {
     setData(prev => {
       if (!prev) return prev;
@@ -623,7 +635,7 @@ export default function BlockDetail({ blockId, onBack, dark }) {
   const availAllocs   = (data?.allocations||[]).filter(a=>a.status==="available").length;
   const usedIps   = parseFloat(data?.used_ips||0);
   const totalIps  = parseFloat(data?.total_ips||1);
-  // IPv6: total_ips astronomis, gunakan alloc count untuk display
+  // IPv6: total_ips is astronomical, use alloc count for display
   const v6AllocCount  = isV6 ? (data?.allocations||[]).length : 0;
   const v6ActiveCount = isV6 ? (data?.allocations||[]).filter(a=>a.status==="active").length : 0;
   const utilPct   = isV6 ? 0 : (totalIps ? Math.round(usedIps/totalIps*100) : 0);
@@ -1060,10 +1072,25 @@ export default function BlockDetail({ blockId, onBack, dark }) {
                     {/* Owner / Customer */}
                     <td style={{padding:"4px 8px",borderRight:"1px solid var(--border-soft)",minWidth:160}}>
                       {row.owner_type==="customer" ? (
-                        <InlineCell value={row.customer_name} placeholder="assign customer"
-                          suggestions={custNames}
-                          onCreate={v=>saveField(row.id,"customer_name",v)}
-                          onSave={v=>saveField(row.id,"customer_name",v)}/>
+                        <div style={{display:"flex",alignItems:"center",gap:4}}>
+                          <InlineCell value={row.customer_name} placeholder="assign customer"
+                            suggestions={custNames}
+                            onCreate={v=>saveField(row.id,"customer_name",v)}
+                            onSave={v=>saveField(row.id,"customer_name",v)}/>
+                          {row.customer_name && row.customer_id && (
+                            <a onClick={e=>{e.preventDefault();e.stopPropagation();window.location.hash=`customer-detail/${row.customer_id}`;}}
+                              href="#" title="View customer"
+                              style={{fontSize:9,color:"var(--text-dim)",flexShrink:0,cursor:"pointer",
+                                padding:"1px 2px",lineHeight:1,opacity:0.5,transition:"opacity 0.12s"}}
+                              onMouseEnter={e=>{e.currentTarget.style.opacity="1";e.currentTarget.style.color="var(--accent)";}}
+                              onMouseLeave={e=>{e.currentTarget.style.opacity="0.5";e.currentTarget.style.color="var(--text-dim)";}}>
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="11" height="11">
+                                <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/>
+                                <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+                              </svg>
+                            </a>
+                          )}
+                        </div>
                       ) : (
                         <InlineCell value={row.description} placeholder="description"
                           onSave={v=>saveFieldOptimistic(row.id,"description",v)}/>
@@ -1072,9 +1099,24 @@ export default function BlockDetail({ blockId, onBack, dark }) {
 
                     {/* VLAN */}
                     <td style={{padding:"4px 8px",borderRight:"1px solid var(--border-soft)"}}>
-                      <InlineCell value={row.vlan_vid?String(row.vlan_vid):""} placeholder="—"
-                        suggestions={vlanVids} mono
-                        onSave={v=>saveField(row.id,"vlan_vid",v)}/>
+                      <div style={{display:"flex",alignItems:"center",gap:4}}>
+                        <InlineCell value={row.vlan_vid?String(row.vlan_vid):""} placeholder="—"
+                          suggestions={vlanVids} mono
+                          onSave={v=>saveField(row.id,"vlan_vid",v)}/>
+                        {row.vlan_vid && row.vlan_id && (
+                          <a onClick={e=>{e.preventDefault();e.stopPropagation();window.location.hash=`vlan-detail/${row.vlan_id}`;}}
+                            href="#" title="View VLAN"
+                            style={{fontSize:9,color:"var(--text-dim)",flexShrink:0,cursor:"pointer",
+                              padding:"1px 2px",lineHeight:1,opacity:0.5,transition:"opacity 0.12s"}}
+                            onMouseEnter={e=>{e.currentTarget.style.opacity="1";e.currentTarget.style.color="var(--accent)";}}
+                            onMouseLeave={e=>{e.currentTarget.style.opacity="0.5";e.currentTarget.style.color="var(--text-dim)";}}>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="11" height="11">
+                              <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/>
+                              <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+                            </svg>
+                          </a>
+                        )}
+                      </div>
                     </td>
 
                     {/* End Device XC */}
