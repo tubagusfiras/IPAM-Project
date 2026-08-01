@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { getSites, createSite, updateSite, deleteSite, authFetch} from "../api.js";
-import { Btn, SearchBar, Loading, EmptyState, PageHeader, Toolbar, Icons } from "../components/ui.jsx";
+import { Btn, SearchBar, Loading, EmptyState, PageHeader, Toolbar, Icons, Confirm } from "../components/ui.jsx";
 
 function SiteModal({ site, onClose, onSaved }) {
   const isEdit = !!site?.id;
@@ -66,27 +66,6 @@ function SiteModal({ site, onClose, onSaved }) {
           <button onClick={save} disabled={saving} className="btn btn-primary">
             {saving?"Saving…":isEdit?"Save Changes":"Add Site"}
           </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ConfirmModal({ message, onConfirm, onCancel }) {
-  return (
-    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onCancel()}>
-      <div className="modal" style={{maxWidth:380}}>
-        <div className="modal-header">
-          <div style={{fontWeight:700,fontSize:15,color:"var(--text)"}}>Confirm Delete</div>
-          <button onClick={onCancel} style={{background:"none",border:"none",cursor:"pointer",
-            color:"var(--text-muted)",fontSize:18,padding:4}}>✕</button>
-        </div>
-        <div className="modal-body">
-          <p style={{fontSize:13,color:"var(--text-muted)",lineHeight:1.6,margin:0}}>{message}</p>
-        </div>
-        <div className="modal-footer">
-          <button onClick={onCancel} className="btn btn-secondary">Cancel</button>
-          <button onClick={onConfirm} className="btn btn-danger">Delete</button>
         </div>
       </div>
     </div>
@@ -266,7 +245,7 @@ export default function Sites() {
 
       {modal&&<SiteModal site={modal==="add"?null:modal}
         onClose={()=>setModal(null)} onSaved={()=>{setModal(null);load();}}/>}
-      {confirm&&<ConfirmModal
+      {confirm&&<Confirm
         message={`Delete site "${confirm.name}"? IP blocks assigned to this site will be unlinked.`}
         onConfirm={()=>handleDelete(confirm)} onCancel={()=>setConfirm(null)}/>}
     </div>

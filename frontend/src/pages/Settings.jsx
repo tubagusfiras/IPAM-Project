@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { authFetch, getStoredUser } from "../api.js";
 import { useI18n } from "../i18n.jsx";
-import { Btn, Loading, PageHeader, Icons, Alert, Card, Badge, Toolbar } from "../components/ui.jsx";
+import { Btn, Loading, PageHeader, Icons, Alert, Card, Badge, Toolbar, Confirm } from "../components/ui.jsx";
 
 const ROLE_STYLE = {
   admin: { color:"var(--accent)", bg:"var(--accent-dim)", label:"Admin" },
@@ -143,27 +143,6 @@ function ResetPasswordModal({ user, onClose, onSaved }) {
           <button onClick={save} disabled={saving} className="btn btn-primary">
             {saving ? t("settings.resetting") : t("settings.resetPassword")}
           </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ConfirmModal({ message, onConfirm, onCancel }) {
-  const { t } = useI18n();
-  return (
-    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onCancel()}>
-      <div className="modal" style={{maxWidth:380}}>
-        <div className="modal-header">
-          <div style={{fontWeight:700,fontSize:15,color:"var(--text)"}}>Confirm Delete</div>
-          <button onClick={onCancel} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-muted)",fontSize:18,padding:4}}>✕</button>
-        </div>
-        <div className="modal-body">
-          <p style={{fontSize:13,color:"var(--text-muted)",lineHeight:1.6,margin:0}}>{message}</p>
-        </div>
-        <div className="modal-footer">
-          <button onClick={onCancel}  className="btn btn-secondary">{t("common.cancel")}</button>
-          <button onClick={onConfirm} className="btn btn-danger">{t("confirm.delete")}</button>
         </div>
       </div>
     </div>
@@ -443,8 +422,9 @@ export default function Settings({ dark, onToggleDark }) {
           onSaved={()=>{ setResetModal(null); setActionMsg({type:"success",text:t("settings.passwordReset")}); setTimeout(()=>setActionMsg(null),3000); }}/>
       )}
       {confirmDel && (
-        <ConfirmModal message={`${t("settings.deleteUser")} "${confirmDel.username}"? ${t("settings.cannotUndo")}`}
-          onConfirm={()=>handleDeleteUser(confirmDel)} onCancel={()=>setConfirmDel(null)}/>
+        <Confirm message={`${t("settings.deleteUser")} "${confirmDel.username}"? ${t("settings.cannotUndo")}`}
+          onConfirm={()=>handleDeleteUser(confirmDel)} onCancel={()=>setConfirmDel(null)}
+          cancelLabel={t("common.cancel")} confirmLabel={t("confirm.delete")}/>
       )}
     </div>
   );

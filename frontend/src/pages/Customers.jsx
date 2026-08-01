@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { getCustomers, createCustomer, updateCustomer, deleteCustomer, getAllocationsByCustomerIds } from "../api.js";
-import { Btn, SearchBar, Loading, EmptyState, PageHeader, Icons, Badge } from "../components/ui.jsx";
+import { Btn, SearchBar, Loading, EmptyState, PageHeader, Icons, Badge, Confirm } from "../components/ui.jsx";
 
 function FieldInput({ label, value, onChange, placeholder, mono, type="text" }) {
   return (
@@ -82,26 +82,6 @@ function CustomerModal({ customer, onClose, onSaved }) {
           <button onClick={save} disabled={saving} className="btn btn-primary">
             {saving?"Saving…":isEdit?"Save Changes":"Add Customer"}
           </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ConfirmModal({ message, onConfirm, onCancel }) {
-  return (
-    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onCancel()}>
-      <div className="modal" style={{maxWidth:380}}>
-        <div className="modal-header">
-          <div style={{fontWeight:700,fontSize:15,color:"var(--text)"}}>Confirm Delete</div>
-          <button onClick={onCancel} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-muted)",fontSize:18,padding:4}}>✕</button>
-        </div>
-        <div className="modal-body">
-          <p style={{fontSize:13,color:"var(--text-muted)",lineHeight:1.6,margin:0}}>{message}</p>
-        </div>
-        <div className="modal-footer">
-          <button onClick={onCancel}  className="btn btn-secondary">Cancel</button>
-          <button onClick={onConfirm} className="btn btn-danger">Delete</button>
         </div>
       </div>
     </div>
@@ -413,7 +393,7 @@ export default function Customers({ onNavigate }) {
 
       {modal&&<CustomerModal customer={modal==="add"?null:modal}
         onClose={()=>setModal(null)} onSaved={()=>{setModal(null);load();}}/>}
-      {confirm&&<ConfirmModal
+      {confirm&&<Confirm
         message={confirm.alloc_count>0
           ? `Delete customer "${confirm.name}"? This customer has ${confirm.alloc_count} allocation(s) linked. Deleting may orphan or unlink those allocations. This action cannot be undone.`
           : `Delete customer "${confirm.name}"? This action cannot be undone.`}

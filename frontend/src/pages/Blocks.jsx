@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { getBlocks, createBlock, updateBlock, deleteBlock, getSites } from "../api.js";
 import { BLOCK_STATUS_OPTS } from "../constants.js";
-import { Btn, SearchBar, Loading, PageHeader, Icons } from "../components/ui.jsx";
+import { Btn, SearchBar, Loading, PageHeader, Icons, Confirm } from "../components/ui.jsx";
 
 const VERSION_COLOR = {
   IPv4: { bg:"var(--surface-2)", color:"var(--text-muted)", border:"var(--border-soft)" },
@@ -158,26 +158,6 @@ function BlockFormModal({ block, sites, onClose, onSaved }) {
           <button onClick={save} disabled={saving} className="btn btn-primary">
             {saving ? "Saving…" : isEdit ? "Save Changes" : "Add Block"}
           </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ConfirmModal({ message, onConfirm, onCancel }) {
-  return (
-    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onCancel()}>
-      <div className="modal" style={{maxWidth:400}}>
-        <div className="modal-header">
-          <div style={{fontWeight:700,fontSize:15,color:"var(--text)"}}>Confirm Delete</div>
-          <button onClick={onCancel} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-muted)",fontSize:18,padding:4}}>✕</button>
-        </div>
-        <div className="modal-body">
-          <p style={{fontSize:13,color:"var(--text-muted)",lineHeight:1.6}}>{message}</p>
-        </div>
-        <div className="modal-footer">
-          <button onClick={onCancel}  className="btn btn-secondary">Cancel</button>
-          <button onClick={onConfirm} className="btn btn-danger">Delete</button>
         </div>
       </div>
     </div>
@@ -457,7 +437,7 @@ export default function Blocks({ ipVersion="", onSelectBlock, initialStatus="" }
         />
       )}
       {confirm && (
-        <ConfirmModal
+        <Confirm
           message={`Are you sure you want to delete block "${confirm.prefix}"? This will also delete all allocations within this block.`}
           onConfirm={()=>handleDelete(confirm)}
           onCancel={()=>setConfirm(null)}

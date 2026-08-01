@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect } from "react";
+import { createContext, useContext, useState, useCallback } from "react";
 
 // ── CONTEXT ──────────────────────────────────────────────
 const ToastCtx = createContext(null);
@@ -17,10 +17,10 @@ export function ToastProvider({ children }) {
   }, []);
 
   const TYPES = {
-    success: { bg:"#1a3a2a", border:"#22c55e", icon:"✓", color:"#22c55e" },
-    error:   { bg:"#3a1a1a", border:"#ef4444", icon:"✕", color:"#ef4444" },
-    info:    { bg:"#1a2a3a", border:"#3b82f6", icon:"ℹ", color:"#3b82f6" },
-    warning: { bg:"#3a2a1a", border:"#f59e0b", icon:"⚠", color:"#f59e0b" },
+    success: { bg:"var(--success-surface)", border:"var(--success-border)", icon:"✓", color:"var(--success)" },
+    error:   { bg:"var(--danger-surface)",  border:"var(--danger-border)",  icon:"✕", color:"var(--danger)" },
+    info:    { bg:"var(--info-surface)",    border:"var(--info-border)",    icon:"ℹ", color:"var(--info)" },
+    warning: { bg:"var(--warning-surface)", border:"var(--warning-border)", icon:"⚠", color:"var(--warning)" },
   };
 
   const TOAST_STYLE = {
@@ -28,11 +28,11 @@ export function ToastProvider({ children }) {
     display:"flex", flexDirection:"column-reverse", gap:8,
   };
   const T_STYLE = (t) => ({
-    background:TYPES[t.type]?.bg||TYPES.info.bg, color:"#e2e8f0",
+    background:TYPES[t.type]?.bg||TYPES.info.bg, color:"var(--text)",
     border:`1px solid ${TYPES[t.type]?.border||TYPES.info.border}`,
     borderRadius:8, padding:"10px 14px", minWidth:280, maxWidth:400,
     display:"flex", alignItems:"center", gap:10,
-    boxShadow:"0 4px 20px rgba(0,0,0,0.3)", cursor:"pointer",
+    boxShadow:"var(--shadow-lg)", cursor:"pointer",
     fontSize:13, fontWeight:500, lineHeight:"1.4",
     animation:"slideInRight 0.3s ease",
     backdropFilter:"blur(8px)",
@@ -51,7 +51,7 @@ export function ToastProvider({ children }) {
                   {TYPES[t.type]?.icon||"ℹ"}
                 </span>
                 <span style={{flex:1}}>{t.msg}</span>
-                <span style={{color:"#64748b", fontSize:11, cursor:"pointer", flexShrink:0}}>✕</span>
+                <span style={{color:"var(--text-dim)", fontSize:11, cursor:"pointer", flexShrink:0}}>✕</span>
               </div>
             ))}
           </div>

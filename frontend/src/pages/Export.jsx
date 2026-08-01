@@ -1,33 +1,8 @@
 import { useState, useEffect } from "react";
 import { getBlocks, authFetch} from "../api.js";
 import { Btn, SearchBar, Loading, EmptyState, PageHeader, Icons, Alert, Card } from "../components/ui.jsx";
-
-function ipToInt(ip) {
-  const p = ip.split(".").map(Number);
-  return ((p[0]<<24)|(p[1]<<16)|(p[2]<<8)|p[3])>>>0;
-}
-function intToIp(n) {
-  return [(n>>>24)&255,(n>>>16)&255,(n>>>8)&255,n&255].join(".");
-}
-function calcUsable(prefix) {
-  try {
-    const [addr, plen] = prefix.split("/");
-    const p = parseInt(plen);
-    const base = ipToInt(addr);
-    const size = Math.pow(2, 32-p);
-    if (size <= 2) return `${intToIp(base)} — ${intToIp((base+size-1)>>>0)}`;
-    return `${intToIp((base+1)>>>0)} — ${intToIp((base+size-2)>>>0)}`;
-  } catch { return ""; }
-}
-
-const OWNER_COLOR = {
-  customer:"#3b82f6", internal:"#22c55e", ptp:"#f59e0b",
-  peering:"#a855f7", management:"#0ea5e9", reserved:"#71717a",
-};
-const OWNER_LABEL = {
-  customer:"Customer", internal:"Internal", ptp:"PTP",
-  peering:"Peering", management:"Mgmt", reserved:"Reserved",
-};
+import { ipToInt, intToIp, calcUsable } from "../utils/ip.js";
+import { OWNER_COLORS, OWNER_LABEL } from "../utils/statusColors.js";
 const STATUS_COLOR = {
   active:"var(--success)", reserved:"#71717a",
   available:"var(--accent)", deprecated:"var(--danger)",
@@ -145,7 +120,7 @@ export default function Export({ dark }) {
   // Owner breakdown
   const ownerBreakdown = Object.entries(
     allocs.reduce((acc,a)=>{ acc[a.owner_type]=(acc[a.owner_type]||0)+1; return acc; }, {})
-  ).map(([k,v])=>({ label:OWNER_LABEL[k]||k, value:v, color:OWNER_COLOR[k]||"#94a3b8" }));
+  ).map(([k,v])=>({ label:OWNER_LABEL[k]||k, value:v, color:OWNER_COLORS[k]||"#94a3b8" }));
 
   // IP usage breakdown for donut
   const ipBreakdown = [
@@ -351,7 +326,7 @@ export default function Export({ dark }) {
                           <td style={{padding:"5px 10px",fontFamily:"var(--font-mono)",fontWeight:600,color:"var(--accent)",whiteSpace:"nowrap"}}>{a.prefix}</td>
                           <td style={{padding:"5px 10px",fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text-dim)",whiteSpace:"nowrap"}}>{calcUsable(a.prefix)}</td>
                           <td style={{padding:"5px 10px"}}>
-                            <span style={{fontSize:10,fontWeight:600,color:OWNER_COLOR[a.owner_type]||"var(--text-muted)"}}>
+                            <span style={{fontSize:10,fontWeight:600,color:OWNER_COLORS[a.owner_type]||"var(--text-muted)"}}>
                               {OWNER_LABEL[a.owner_type]||a.owner_type}
                             </span>
                           </td>

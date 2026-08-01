@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ipToInt, intToIp, calcUsable } from "../utils/ip.js";
 
 // Theme-aware colors — dark=true: redup gelap, light: redup soft
 function getOwnerColors(dark) {
@@ -21,24 +22,6 @@ function getOwnerColors(dark) {
     reserved:       { bg:"rgba(148,163,184,0.25)", border:"#cbd5e1", dot:"#94a3b8", label:"Reserved"       },
     free:           { bg:"rgba(37,99,235,0.15)",   border:"#3b82f6", dot:"#2563eb", label:"Free"           },
   };
-}
-
-function ipToInt(ip) {
-  const p = ip.split(".").map(Number);
-  return ((p[0]<<24)|(p[1]<<16)|(p[2]<<8)|p[3])>>>0;
-}
-function intToIp(n) {
-  return [(n>>>24)&255,(n>>>16)&255,(n>>>8)&255,n&255].join(".");
-}
-function calcUsable(prefix) {
-  try {
-    const [addr, plen] = prefix.split("/");
-    const p    = parseInt(plen);
-    const base = ipToInt(addr);
-    const size = Math.pow(2, 32-p);
-    if (size <= 2) return `${intToIp(base)} — ${intToIp((base+size-1)>>>0)}`;
-    return `${intToIp((base+1)>>>0)} — ${intToIp((base+size-2)>>>0)}`;
-  } catch { return ""; }
 }
 
 const SLOT_SIZES = [

@@ -67,9 +67,9 @@ export function Mono({ children, color=C.blue, size=13 }) {
 
 // ── BUTTON ───────────────────────────────────────────────────
 const BTN_VARIANTS = {
-  primary: { bg:"#1d4ed8", text:"#fff",     hoverBg:"#2563eb" },
-  success: { bg:"#15803d", text:"#fff",     hoverBg:"#16a34a" },
-  danger:  { bg:"#991b1b", text:"#fca5a5",  hoverBg:"#dc2626" },
+  primary: { bg:"var(--accent)", text:"#fff",     hoverBg:"var(--accent-hover, var(--accent))" },
+  success: { bg:"var(--success)", text:"#fff",     hoverBg:"var(--success-hover, var(--success))" },
+  danger:  { bg:"var(--danger)", text:"#fff",  hoverBg:"var(--danger-hover, var(--danger))" },
   ghost:   { bg:C.bg3,     text:C.text1,    hoverBg:"#1e3a5f" },
   outline: { bg:"transparent", text:C.blue, hoverBg:C.bg2, border:`1px solid ${C.blue}` },
 };
@@ -254,14 +254,20 @@ export function Modal({ title, onClose, children, width=520 }) {
 }
 
 // ── CONFIRM DIALOG ───────────────────────────────────────────
-export function Confirm({ message, onConfirm, onCancel }) {
+export function Confirm({ message, onConfirm, onCancel, title="Confirm Delete", cancelLabel="Cancel", confirmLabel="Delete" }) {
   return (
-    <div style={{ position:"fixed", inset:0, background:"#000c", zIndex:300, display:"flex", alignItems:"center", justifyContent:"center" }}>
-      <div style={{ background:C.bg2, border:`1px solid ${C.red}44`, borderRadius:8, padding:28, maxWidth:360, textAlign:"center" }}>
-        <div style={{ color:C.text0, marginBottom:20, fontSize:14, lineHeight:1.6 }}>{message}</div>
-        <div style={{ display:"flex", gap:10, justifyContent:"center" }}>
-          <Btn variant="ghost" onClick={onCancel}>Cancel</Btn>
-          <Btn variant="danger" onClick={onConfirm}>Delete</Btn>
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onCancel()}>
+      <div className="modal" style={{maxWidth:380}}>
+        <div className="modal-header">
+          <div style={{fontWeight:700,fontSize:15,color:"var(--text)"}}>{title}</div>
+          <button onClick={onCancel} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-muted)",fontSize:18,padding:4}}>✕</button>
+        </div>
+        <div className="modal-body">
+          <p style={{fontSize:13,color:"var(--text-muted)",lineHeight:1.6,margin:0}}>{message}</p>
+        </div>
+        <div className="modal-footer">
+          <button onClick={onCancel}  className="btn btn-secondary">{cancelLabel}</button>
+          <button onClick={onConfirm} className="btn btn-danger">{confirmLabel}</button>
         </div>
       </div>
     </div>

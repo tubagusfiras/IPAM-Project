@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { createAllocation, updateAllocation, getBlock, updateBlock, authFetch} from "../api.js";
 import { OWNER_TYPES as OWNER_TYPE_VALUES, ALLOC_STATUS_OPTS } from "../constants.js";
+import { Confirm } from "../components/ui.jsx";
 
 // ── CONSTANTS ────────────────────────────────────────────────────────────────
 const OWNER_TYPE_STYLE = {
@@ -718,27 +719,6 @@ function AllocModal({ alloc, blockId, blockPrefix, prefillPrefix, customers, vla
   );
 }
 
-// ── CONFIRM MODAL ────────────────────────────────────────────────────────────
-function ConfirmModal({ message, onConfirm, onCancel }) {
-  return (
-    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onCancel()}>
-      <div className="modal" style={{maxWidth:380}}>
-        <div className="modal-header">
-          <div style={{fontWeight:700,fontSize:15,color:"var(--text)"}}>Confirm Delete</div>
-          <button onClick={onCancel} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-muted)",fontSize:18,padding:4}}>✕</button>
-        </div>
-        <div className="modal-body">
-          <p style={{fontSize:13,color:"var(--text-muted)",lineHeight:1.6,margin:0}}>{message}</p>
-        </div>
-        <div className="modal-footer">
-          <button onClick={onCancel}  className="btn btn-secondary">Cancel</button>
-          <button onClick={onConfirm} className="btn btn-danger">Delete</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── BLOCK EDIT MODAL ─────────────────────────────────────────────────────────
 function BlockEditField({label, k, placeholder, mono, form, set}) {
   return (
@@ -930,5 +910,5 @@ function SubnetCalc({ blockPrefix, allocations, onSelect }) {
     </div>
   );
 }
-export { BlockEditModal, ConfirmModal, SubnetCalc };
+export { BlockEditModal, SubnetCalc };
 export default AllocModal;

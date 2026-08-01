@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, memo } from "react";
-import AllocModal, { BlockEditModal, ConfirmModal, SubnetCalc } from "./AllocModal.jsx";
+import AllocModal, { BlockEditModal, SubnetCalc } from "./AllocModal.jsx";
+import { Confirm } from "../components/ui.jsx";
 import { OWNER_TYPES as OWNER_TYPE_VALUES, ALLOC_STATUS_OPTS } from "../constants.js";
 import IPGrid from "./IPGrid.jsx";
 import { createPortal } from "react-dom";
@@ -1320,7 +1321,7 @@ export default function BlockDetail({ blockId, onBack, dark }) {
         document.body
       )}
       {confirm && (
-        <ConfirmModal
+        <Confirm
           message={confirm.bulk ? confirm.message : `Delete allocation ${confirm.prefix}?`}
           onConfirm={async()=>{
             // Optimistic delete: remove from local state first, no page refresh

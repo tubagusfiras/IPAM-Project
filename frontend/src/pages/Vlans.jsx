@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { getVlans, getSites, createVlan, updateVlan, deleteVlan, getAllocationsByVlanIds } from "../api.js";
 import { VLAN_STATUS_OPTS } from "../constants.js";
-import { Btn, SearchBar, Loading, EmptyState, PageHeader, Icons, Badge, StatusBadge, Tag } from "../components/ui.jsx";
+import { Btn, SearchBar, Loading, EmptyState, PageHeader, Icons, Badge, StatusBadge, Tag, Confirm } from "../components/ui.jsx";
 
 const STATUS_STYLE = {
   active:     { color:"var(--success)", bg:"var(--success-surface)", border:"var(--success-border)" },
@@ -99,27 +99,6 @@ function VlanModal({ vlan, sites, onClose, onSaved }) {
           <button onClick={save} disabled={saving} className="btn btn-primary">
             {saving?"Saving…":isEdit?"Save Changes":"Add VLAN"}
           </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ConfirmModal({ message, onConfirm, onCancel }) {
-  return (
-    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onCancel()}>
-      <div className="modal" style={{maxWidth:380}}>
-        <div className="modal-header">
-          <div style={{fontWeight:700,fontSize:15,color:"var(--text)"}}>Confirm Delete</div>
-          <button onClick={onCancel} style={{background:"none",border:"none",cursor:"pointer",
-            color:"var(--text-muted)",fontSize:18,padding:4}}>✕</button>
-        </div>
-        <div className="modal-body">
-          <p style={{fontSize:13,color:"var(--text-muted)",lineHeight:1.6,margin:0}}>{message}</p>
-        </div>
-        <div className="modal-footer">
-          <button onClick={onCancel} className="btn btn-secondary">Cancel</button>
-          <button onClick={onConfirm} className="btn btn-danger">Delete</button>
         </div>
       </div>
     </div>
@@ -372,7 +351,7 @@ export default function Vlans({ onNavigate }) {
 
       {modal&&<VlanModal vlan={modal==="add"?null:modal} sites={sites}
         onClose={()=>setModal(null)} onSaved={()=>{setModal(null);load();}}/>}
-      {confirm&&<ConfirmModal
+      {confirm&&<Confirm
         message={allocCountMap[confirm.id]>0
           ? `Delete VLAN ${confirm.vid}${confirm.name?` (${confirm.name})`:""}? This VLAN has ${allocCountMap[confirm.id]} allocation(s) linked. Deleting may orphan or unlink those allocations. This action cannot be undone.`
           : `Delete VLAN ${confirm.vid}${confirm.name?` (${confirm.name})`:""}? This action cannot be undone.`}
