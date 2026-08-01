@@ -587,23 +587,18 @@
 
 /* iOS Safe Area Insets - untuk iPhone notch/home indicator */
 @supports (padding: max(0px)) {
-  body {
-    padding-left: env(safe-area-inset-left);
-    padding-right: env(safe-area-inset-right);
+  @media (max-width: 768px) {
+    body {
+      padding-left: env(safe-area-inset-left);
+      padding-right: env(safe-area-inset-right);
+    }
+    .sidebar {
+      padding-bottom: max(16px, env(safe-area-inset-bottom));
+    }
+    .main-content {
+      padding-bottom: max(16px, env(safe-area-inset-bottom));
+    }
   }
-  .sidebar {
-    padding-bottom: max(16px, env(safe-area-inset-bottom));
-  }
-  .main-content {
-    padding-bottom: max(16px, env(safe-area-inset-bottom));
-  }
-}
-
-/* Touch Targets - Minimum 44px untuk Apple HIG */
-button, .btn, a.nav-item, .table-row {
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
 }
 
 /* Tablet Breakpoint (768px - 1024px) */
