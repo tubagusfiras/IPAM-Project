@@ -294,7 +294,7 @@ export default function App() {
           onNavigate={navigate}
           onToggle={()=>setCollapsed(v=>!v)}
         />
-        <main style={{
+        <main className="app-main" style={{
           paddingTop:"var(--topbar-h)",
           marginLeft: collapsed ? "var(--sidebar-collapsed)" : "var(--sidebar-w)",
           transition:"margin-left var(--transition)",

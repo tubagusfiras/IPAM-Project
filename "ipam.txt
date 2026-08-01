@@ -1,0 +1,23 @@
+╭─── Claude Code v2.1.198 ─────────────────────────────────────────────────────╮
+│                                             │ Tips for getting started       │
+│                Welcome back!                │ Run /init to create a CLAUDE.… │
+│                                             │ ────────────────────────────── │
+│                   ▐▛███▜▌                   │ What's new                     │
+│                  ▝▜█████▛▘                  │ Claude in Chrome is now gener… │
+│                    ▘▘ ▝▝                    │ Added background agent notifi… │
+│                                             │ Added `/dataviz` skill for ch… │
+│   gpt-oss-120b-medium · API Usage Billing   │ /release-notes for more        │
+│          /opt/database-ipaddresses          │                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+
+❯ /model                                                                        
+  ⎿  Set model to devops-2 and saved as your default for new sessions
+
+❯ test model, jawab singkat                                                     
+
+  Thought for 20s (ctrl+o to expand)
+
+● Model devops-2 aktif.
+
+✻ Crunched for 20s
