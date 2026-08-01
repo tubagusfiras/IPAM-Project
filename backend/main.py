@@ -1671,12 +1671,12 @@ async def _ping_scheduler():
         # Retention: keep ping_history for 30 days, and drop ping_results
         # rows whose IP no longer belongs to any active allocation.
         try:
-            await pool.execute("DELETE FROM ping_history WHERE checked_at < NOW() - INTERVAL '"'"'30 days'"'"'")
+            await pool.execute("DELETE FROM ping_history WHERE checked_at < NOW() - INTERVAL '30 days'")
             await pool.execute("""
                 DELETE FROM ping_results pr
                 WHERE NOT EXISTS (
                     SELECT 1 FROM allocations a
-                    WHERE a.status = '"'"'active'"'"' AND pr.ip::inet <<= a.prefix::cidr
+                    WHERE a.status = 'active' AND pr.ip::inet <<= a.prefix::cidr
                 )
             """)
         except Exception:
