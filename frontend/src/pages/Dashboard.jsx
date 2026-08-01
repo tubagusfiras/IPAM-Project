@@ -44,12 +44,13 @@ function MiniSpark({ used, total }) {
   );
 }
 
-function StatCard({ icon, label, value, sub, pct, color }) {
+function StatCard({ icon, label, value, sub, pct, color, onClick }) {
   return (
     <div style={{
       background:CARD,border:`1px solid ${BORDER}`,borderRadius:10,padding:"14px 16px",
       transition:"all 0.15s",cursor:"pointer",
     }}
+      onClick={onClick}
       onMouseEnter={e=>{e.currentTarget.style.borderColor=color;e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow=`0 4px 20px rgba(0,0,0,0.3)`}}
       onMouseLeave={e=>{e.currentTarget.style.borderColor=BORDER;e.currentTarget.style.transform="";e.currentTarget.style.boxShadow=""}}>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
@@ -163,14 +164,14 @@ export default function Dashboard({ onNavigate }) {
         {/* Stats Grid */}
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
           {[
-            { k:"networks", icon:"networks", label:"Networks", value:total_blocks, sub:`${ipv4_blocks} IPv4 · ${ipv6_blocks} IPv6`, color:ACCENT },
-            { k:"allocations", icon:"allocations", label:"Allocations", value:total_allocations, sub:`Active: ${alloc_by_status?.active||0}`, color:SUCCESS },
+            { k:"ipv4", icon:"networks", label:"Networks", value:total_blocks, sub:`${ipv4_blocks} IPv4 · ${ipv6_blocks} IPv6`, color:ACCENT },
+            { k:"ipv4", icon:"allocations", label:"Allocations", value:total_allocations, sub:`Active: ${alloc_by_status?.active||0}`, color:SUCCESS },
             { k:"customers", icon:"customers", label:"Customers", value:total_customers, sub:"Active clients", color:"#f97316" },
             { k:"vlans", icon:"vlans", label:"VLANs", value:total_vlans, sub:"Configured", color:"#a855f7" },
             { k:"sites", icon:"sites", label:"Sites", value:total_sites, sub:"Locations", color:"#06b6d4" },
-            { label:"Utilization", icon:"allocations", value:`${utilPct}%`, sub:`IPv4: ${v4Pct}% · IPv6: ${v6Pct}%`, color:utilPct>85?DANGER:SUCCESS, pct:utilPct },
+            { k:"ipv4", icon:"allocations", label:"Utilization", value:`${utilPct}%`, sub:`IPv4: ${v4Pct}% · IPv6: ${v6Pct}%`, color:utilPct>85?DANGER:SUCCESS, pct:utilPct },
           ].map((c,i)=>(
-            <StatCard key={i} {...c} onClick={()=>onNavigate?.(c.k==="networks"?"ipv4":c.k==="allocations"?"ipv4":c.k==="customers"?"customers":c.k==="vlans"?"vlans":"sites")}/>
+            <StatCard key={i} {...c} onClick={()=>onNavigate?.(c.k)}/>
           ))}
         </div>
       </div>
@@ -194,7 +195,10 @@ export default function Dashboard({ onNavigate }) {
               </div>
               <div style={{width:"100%",marginTop:12,display:"flex",flexDirection:"column",gap:6}}>
                 {pieData.map(d=>(
-                  <div key={d.name} style={{display:"flex",alignItems:"center",gap:6}}>
+                  <div key={d.name} style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",transition:"opacity 0.12s"}}
+                    onClick={()=>onNavigate?.("ipv4",{initialStatus:d.name})}
+                    onMouseEnter={e=>e.currentTarget.style.opacity="0.7"}
+                    onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
                     <div style={{width:8,height:8,borderRadius:"50%",background:d.color,flexShrink:0}}/>
                     <span style={{flex:1,fontSize:"11px",color:MUTED,textTransform:"capitalize"}}>{d.name}</span>
                     <span style={{fontSize:"11px",fontWeight:600,color:TEXT,fontVariantNumeric:"tabular-nums"}}>{d.value?.toLocaleString()}</span>
@@ -237,7 +241,10 @@ export default function Dashboard({ onNavigate }) {
           {Object.entries(alloc_by_status||{}).map(([k,v])=>{
             const pct = totalAlloc ? Math.round(v/totalAlloc*100) : 0;
             return (
-              <div key={k} style={{marginBottom:10}}>
+              <div key={k} style={{marginBottom:10,cursor:"pointer",transition:"opacity 0.12s"}}
+                onClick={()=>onNavigate?.("ipv4",{initialStatus:k})}
+                onMouseEnter={e=>e.currentTarget.style.opacity="0.7"}
+                onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
                   <span style={{fontSize:"11px",fontWeight:500,color:MUTED,textTransform:"capitalize"}}>{k}</span>
                   <span style={{fontSize:"11px",fontWeight:600,color:TEXT}}>{v} ({pct}%)</span>

@@ -74,7 +74,7 @@ export default function IPGrid({ blockPrefix, allocations, onAllocate, onEdit, d
   if (step > bSize) {
     return (
       <div style={{background:"var(--surface-1)",border:"1px solid var(--border-soft)",borderRadius:"var(--radius)",padding:24,textAlign:"center"}}>
-        <span style={{fontSize:12,color:"var(--text-muted)"}}>Slot size lebih besar dari block. Pilih slot yang lebih kecil.</span>
+        <span style={{fontSize:12,color:"var(--text-muted)"}}>Slot size is larger than the block. Choose a smaller slot.</span>
       </div>
     );
   }
@@ -103,7 +103,7 @@ export default function IPGrid({ blockPrefix, allocations, onAllocate, onEdit, d
       const aSize = a.aEnd - a.aStart + 1;
       // Full cover: alokasi mencakup seluruh slot
       if (a.aStart <= slotStart && a.aEnd >= slotEnd) {
-        // Pilih alokasi terkecil (paling spesifik)
+        // Pick the smallest (most specific) allocation
         if (aSize < bestMatchSize) { match = a; bestMatchSize = aSize; }
       } else if (a.aStart <= slotEnd && a.aEnd >= slotStart) {
         // Partial: overlap tapi tidak wrap penuh

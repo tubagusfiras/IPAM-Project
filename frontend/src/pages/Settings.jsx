@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { authFetch, getStoredUser } from "../api.js";
+import { useI18n } from "../i18n.jsx";
 import { Btn, Loading, PageHeader, Icons, Alert, Card, Badge, Toolbar } from "../components/ui.jsx";
 
 const ROLE_STYLE = {
@@ -8,6 +9,7 @@ const ROLE_STYLE = {
 };
 
 function UserModal({ user, onClose, onSaved, isNew }) {
+  const { t } = useI18n();
   const [form, setForm] = useState({
     username: user?.username || "",
     email: user?.email || "",
@@ -15,12 +17,12 @@ function UserModal({ user, onClose, onSaved, isNew }) {
     role: user?.role || "user",
   });
   const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState(null);
+  const [err,    setErr]    = useState(null);
   const set = k => v => setForm(f=>({...f,[k]:v}));
 
   const save = async () => {
     if (isNew && (!form.username.trim() || !form.email.trim() || !form.password)) {
-      return setErr("Username, email, dan password wajib diisi");
+      return setErr(t("settings.usernameRequired"));
     }
     setSaving(true); setErr(null);
     try {
@@ -47,7 +49,7 @@ function UserModal({ user, onClose, onSaved, isNew }) {
       <div className="modal" style={{maxWidth:420}}>
         <div className="modal-header">
           <div style={{fontWeight:700,fontSize:15,color:"var(--text)"}}>
-            {isNew ? "Add User" : `Edit ${user.username}`}
+            {isNew ? t("settings.createUser") : `Edit ${user.username}`}
           </div>
           <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",
             color:"var(--text-muted)",fontSize:18,padding:4}}>✕</button>
@@ -87,9 +89,9 @@ function UserModal({ user, onClose, onSaved, isNew }) {
           </div>
         </div>
         <div className="modal-footer">
-          <button onClick={onClose} className="btn btn-secondary">Cancel</button>
+          <button onClick={onClose} className="btn btn-secondary">{t("common.cancel")}</button>
           <button onClick={save} disabled={saving} className="btn btn-primary">
-            {saving ? "Saving…" : isNew ? "Create User" : "Save Changes"}
+            {saving ? t("common.saving") : isNew ? t("settings.createUser") : t("settings.saveChanges")}
           </button>
         </div>
       </div>
@@ -98,12 +100,13 @@ function UserModal({ user, onClose, onSaved, isNew }) {
 }
 
 function ResetPasswordModal({ user, onClose, onSaved }) {
+  const { t } = useI18n();
   const [password, setPassword] = useState("");
   const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState(null);
+  const [err,    setErr]    = useState(null);
 
   const save = async () => {
-    if (!password || password.length < 4) return setErr("Password minimal 4 karakter");
+    if (!password || password.length < 4) return setErr(t("settings.passwordMinLength"));
     setSaving(true); setErr(null);
     try {
       const res = await authFetch(`/api/v1/users/${user.id}/reset-password`, {
@@ -120,7 +123,7 @@ function ResetPasswordModal({ user, onClose, onSaved }) {
     <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div className="modal" style={{maxWidth:380}}>
         <div className="modal-header">
-          <div style={{fontWeight:700,fontSize:15,color:"var(--text)"}}>Reset Password</div>
+          <div style={{fontWeight:700,fontSize:15,color:"var(--text)"}}>{t("settings.resetPassword")}</div>
           <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",
             color:"var(--text-muted)",fontSize:18,padding:4}}>✕</button>
         </div>
@@ -130,15 +133,15 @@ function ResetPasswordModal({ user, onClose, onSaved }) {
               borderRadius:"var(--radius-sm)",padding:"10px 14px",color:"var(--danger)",fontSize:13}}>{err}</div>
           )}
           <p style={{fontSize:13,color:"var(--text-muted)",margin:0}}>
-            Set new password untuk <strong style={{color:"var(--text)"}}>{user.username}</strong>
+            {t("settings.setNewPasswordFor")} <strong style={{color:"var(--text)"}}>{user.username}</strong>
           </p>
           <input type="password" value={password} onChange={e=>setPassword(e.target.value)}
             className="input" placeholder="New password" autoFocus/>
         </div>
         <div className="modal-footer">
-          <button onClick={onClose} className="btn btn-secondary">Cancel</button>
+          <button onClick={onClose} className="btn btn-secondary">{t("common.cancel")}</button>
           <button onClick={save} disabled={saving} className="btn btn-primary">
-            {saving ? "Resetting…" : "Reset Password"}
+            {saving ? t("settings.resetting") : t("settings.resetPassword")}
           </button>
         </div>
       </div>
@@ -147,20 +150,20 @@ function ResetPasswordModal({ user, onClose, onSaved }) {
 }
 
 function ConfirmModal({ message, onConfirm, onCancel }) {
+  const { t } = useI18n();
   return (
     <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onCancel()}>
       <div className="modal" style={{maxWidth:380}}>
         <div className="modal-header">
           <div style={{fontWeight:700,fontSize:15,color:"var(--text)"}}>Confirm Delete</div>
-          <button onClick={onCancel} style={{background:"none",border:"none",cursor:"pointer",
-            color:"var(--text-muted)",fontSize:18,padding:4}}>✕</button>
+          <button onClick={onCancel} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-muted)",fontSize:18,padding:4}}>✕</button>
         </div>
         <div className="modal-body">
           <p style={{fontSize:13,color:"var(--text-muted)",lineHeight:1.6,margin:0}}>{message}</p>
         </div>
         <div className="modal-footer">
-          <button onClick={onCancel} className="btn btn-secondary">Cancel</button>
-          <button onClick={onConfirm} className="btn btn-danger">Delete</button>
+          <button onClick={onCancel}  className="btn btn-secondary">{t("common.cancel")}</button>
+          <button onClick={onConfirm} className="btn btn-danger">{t("confirm.delete")}</button>
         </div>
       </div>
     </div>
@@ -168,6 +171,7 @@ function ConfirmModal({ message, onConfirm, onCancel }) {
 }
 
 export default function Settings({ dark, onToggleDark }) {
+  const { t, lang, setLang } = useI18n();
   const currentUser = getStoredUser();
   const isAdmin = currentUser?.role === "admin";
 
@@ -197,8 +201,8 @@ export default function Settings({ dark, onToggleDark }) {
   useEffect(() => { if (tab==="users" && isAdmin) loadUsers(); }, [tab]);
 
   const handleChangePassword = async () => {
-    if (!oldPw || !newPw) return setPwMsg({type:"error", text:"Isi password lama dan baru"});
-    if (newPw.length < 4) return setPwMsg({type:"error", text:"Password baru minimal 4 karakter"});
+    if (!oldPw || !newPw) return setPwMsg({type:"error", text:t("settings.fillPasswords")});
+    if (newPw.length < 4) return setPwMsg({type:"error", text:t("settings.passwordMinLength")});
     setPwSaving(true); setPwMsg(null);
     try {
       const res = await authFetch("/api/v1/auth/change-password", {
@@ -206,7 +210,7 @@ export default function Settings({ dark, onToggleDark }) {
         body: JSON.stringify({ old_password: oldPw, new_password: newPw }),
       });
       if (!res.ok) throw new Error((await res.json()).detail || "Failed");
-      setPwMsg({type:"success", text:"Password berhasil diubah"});
+      setPwMsg({type:"success", text:t("settings.passwordChanged")});
       setOldPw(""); setNewPw("");
     } catch(e) {
       setPwMsg({type:"error", text: e.message});
@@ -218,7 +222,7 @@ export default function Settings({ dark, onToggleDark }) {
     try {
       const res = await authFetch(`/api/v1/users/${u.id}`, { method:"DELETE" });
       if (!res.ok) throw new Error((await res.json()).detail || "Failed");
-      setActionMsg({type:"success", text:`User ${u.username} dihapus`});
+      setActionMsg({type:"success", text:`${t("settings.userDeleted")}: ${u.username}`});
       loadUsers();
     } catch(e) {
       setActionMsg({type:"error", text: e.message});
@@ -229,14 +233,14 @@ export default function Settings({ dark, onToggleDark }) {
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:20}}>
-      <PageHeader title="Settings" />
+      <PageHeader title={t("settings.title")} />
 
       {/* Tabs */}
       <div style={{display:"flex",gap:2,background:"var(--surface-2)",borderRadius:"var(--radius-sm)",padding:3,width:"fit-content"}}>
         {[
-          ["profile","Profile"],
-          ...(isAdmin ? [["users","User Management"]] : []),
-          ["appearance","Appearance"],
+          ["profile", t("settings.profile")],
+          ...(isAdmin ? [["users", t("settings.userManagement")]] : []),
+          ["appearance", t("settings.appearanceOnly")],
         ].map(([key,label])=>(
           <button key={key} onClick={()=>setTab(key)}
             style={{
@@ -260,7 +264,7 @@ export default function Settings({ dark, onToggleDark }) {
       {tab === "profile" && (
         <div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:480}}>
           <div className="card" style={{padding:20}}>
-            <div style={{fontSize:13,fontWeight:600,color:"var(--text)",marginBottom:16}}>Account Information</div>
+            <div style={{fontSize:13,fontWeight:600,color:"var(--text)",marginBottom:16}}>{t("settings.accountInfo")}</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
               <div style={{background:"var(--surface-2)",borderRadius:"var(--radius-sm)",padding:"10px 14px",border:"1px solid var(--border-soft)"}}>
                 <div style={{fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",color:"var(--text-dim)",marginBottom:4}}>Username</div>
@@ -281,8 +285,8 @@ export default function Settings({ dark, onToggleDark }) {
           </div>
 
           <div className="card" style={{padding:20}}>
-            <div style={{fontSize:13,fontWeight:600,color:"var(--text)",marginBottom:4}}>Change Password</div>
-            <div style={{fontSize:12,color:"var(--text-muted)",marginBottom:16}}>Session akan berakhir 8 jam setelah login</div>
+            <div style={{fontSize:13,fontWeight:600,color:"var(--text)",marginBottom:4}}>{t("settings.changePassword")}</div>
+            <div style={{fontSize:12,color:"var(--text-muted)",marginBottom:16}}>{t("settings.sessionExpiry")}</div>
 
             {pwMsg && (
               <div style={{
@@ -296,27 +300,27 @@ export default function Settings({ dark, onToggleDark }) {
             <div style={{display:"flex",flexDirection:"column",gap:12}}>
               <div>
                 <label style={{display:"block",fontSize:10,fontWeight:600,textTransform:"uppercase",
-                  letterSpacing:"0.08em",color:"var(--text-dim)",marginBottom:6}}>Current Password</label>
+                  letterSpacing:"0.08em",color:"var(--text-dim)",marginBottom:6}}>{t("settings.currentPassword")}</label>
                 <input type="password" value={oldPw} onChange={e=>setOldPw(e.target.value)}
                   placeholder="Enter current password" className="input"
                   style={{borderColor: pwMsg?.type==="error" && !oldPw ? "var(--danger)" : ""}}/>
                 {pwMsg?.type==="error" && !oldPw && (
-                  <div style={{fontSize:10,color:"var(--danger)",marginTop:3}}>Current password required</div>
+                  <div style={{fontSize:10,color:"var(--danger)",marginTop:3}}>{t("settings.currentPasswordRequired")}</div>
                 )}
               </div>
               <div>
                 <label style={{display:"block",fontSize:10,fontWeight:600,textTransform:"uppercase",
-                  letterSpacing:"0.08em",color:"var(--text-dim)",marginBottom:6}}>New Password</label>
+                  letterSpacing:"0.08em",color:"var(--text-dim)",marginBottom:6}}>{t("settings.newPassword")}</label>
                 <input type="password" value={newPw} onChange={e=>setNewPw(e.target.value)}
                   placeholder="Min 4 characters" className="input"
                   style={{borderColor: pwMsg?.type==="error" && newPw && newPw.length < 4 ? "var(--danger)" : ""}}/>
                 {pwMsg?.type==="error" && newPw && newPw.length < 4 && (
-                  <div style={{fontSize:10,color:"var(--danger)",marginTop:3}}>Minimum 4 characters</div>
+                  <div style={{fontSize:10,color:"var(--danger)",marginTop:3}}>{t("settings.min4Chars")}</div>
                 )}
               </div>
               <button onClick={handleChangePassword} disabled={pwSaving}
                 className="btn btn-primary" style={{alignSelf:"flex-start",marginTop:4}}>
-                {pwSaving ? "Updating…" : "Update Password"}
+                {pwSaving ? t("settings.updating") : t("settings.updatePassword")}
               </button>
             </div>
           </div>
@@ -328,8 +332,8 @@ export default function Settings({ dark, onToggleDark }) {
         <div className="card" style={{overflow:"hidden"}}>
           <div style={{padding:"14px 16px",borderBottom:"1px solid var(--border-medium)",
             display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <span style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>Users</span>
-            <button onClick={()=>setUserModal("new")} className="btn btn-primary btn-sm">+ Add User</button>
+            <span style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>{t("settings.users")}</span>
+            <button onClick={()=>setUserModal("new")} className="btn btn-primary btn-sm">{t("settings.addUser")}</button>
           </div>
           <table style={{width:"100%",borderCollapse:"collapse"}}>
             <thead>
@@ -367,7 +371,7 @@ export default function Settings({ dark, onToggleDark }) {
                   </td>
                   <td className="table-cell">
                     <span style={{fontSize:11,color:"var(--text-dim)"}}>
-                      {u.last_login_at ? new Date(u.last_login_at).toLocaleString("id-ID", {day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}) : "Never"}
+                      {u.last_login_at ? new Date(u.last_login_at).toLocaleDateString("en-US",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}) : "Never"}
                     </span>
                   </td>
                   <td className="table-cell" onClick={e=>e.stopPropagation()}>
@@ -377,7 +381,7 @@ export default function Settings({ dark, onToggleDark }) {
                       {u.id !== currentUser?.id && (
                         <button onClick={()=>setConfirmDel(u)} className="btn btn-sm"
                           style={{fontSize:11,padding:"3px 8px",background:"var(--danger-surface)",
-                            color:"var(--danger)",border:"1px solid var(--danger-border)"}}>Delete</button>
+                            color:"var(--danger)",border:"1px solid var(--danger-border)"}}>{t("common.delete")}</button>
                       )}
                     </div>
                   </td>
@@ -390,20 +394,41 @@ export default function Settings({ dark, onToggleDark }) {
 
       {/* Appearance tab */}
       {tab === "appearance" && (
-        <div className="card" style={{padding:20,maxWidth:480}}>
-          <div style={{fontSize:13,fontWeight:600,color:"var(--text)",marginBottom:4}}>Theme</div>
-          <div style={{fontSize:12,color:"var(--text-muted)",marginBottom:16}}>Pilih tampilan terang atau gelap</div>
-          <div style={{display:"flex",gap:10}}>
-            {[["light","Light"],["dark","Dark"]].map(([key,label])=>(
-              <button key={key} onClick={()=>{ if ((key==="dark")!==dark) onToggleDark(); }}
-                style={{
-                  flex:1,padding:"14px",borderRadius:"var(--radius-sm)",cursor:"pointer",
-                  border: `2px solid ${((key==="dark")===dark) ? "var(--accent)" : "var(--border-soft)"}`,
-                  background: ((key==="dark")===dark) ? "var(--accent-dim)" : "var(--surface-2)",
-                  fontSize:13,fontWeight:600,
-                  color: ((key==="dark")===dark) ? "var(--accent)" : "var(--text-muted)",
-                }}>{label}</button>
-            ))}
+        <div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:480}}>
+          {/* Language */}
+          <div className="card" style={{padding:20}}>
+            <div style={{fontSize:13,fontWeight:600,color:"var(--text)",marginBottom:4}}>{t("settings.language")}</div>
+            <div style={{fontSize:12,color:"var(--text-muted)",marginBottom:16}}>{t("settings.chooseLanguage")}</div>
+            <div style={{display:"flex",gap:10}}>
+              {[["en","English"],["id","Indonesia"]].map(([key,label])=>(
+                <button key={key} onClick={()=>setLang(key)}
+                  style={{
+                    flex:1,padding:"14px",borderRadius:"var(--radius-sm)",cursor:"pointer",
+                    border: `2px solid ${lang===key ? "var(--accent)" : "var(--border-soft)"}`,
+                    background: lang===key ? "var(--accent-dim)" : "var(--surface-2)",
+                    fontSize:13,fontWeight:600,
+                    color: lang===key ? "var(--accent)" : "var(--text-muted)",
+                  }}>{label}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* Theme */}
+          <div className="card" style={{padding:20}}>
+            <div style={{fontSize:13,fontWeight:600,color:"var(--text)",marginBottom:4}}>{t("settings.appearanceOnly")}</div>
+            <div style={{fontSize:12,color:"var(--text-muted)",marginBottom:16}}>{t("settings.chooseTheme")}</div>
+            <div style={{display:"flex",gap:10}}>
+              {[["light","Light"],["dark","Dark"]].map(([key,label])=>(
+                <button key={key} onClick={()=>{ if ((key==="dark")!==dark) onToggleDark(); }}
+                  style={{
+                    flex:1,padding:"14px",borderRadius:"var(--radius-sm)",cursor:"pointer",
+                    border: `2px solid ${((key==="dark")===dark) ? "var(--accent)" : "var(--border-soft)"}`,
+                    background: ((key==="dark")===dark) ? "var(--accent-dim)" : "var(--surface-2)",
+                    fontSize:13,fontWeight:600,
+                    color: ((key==="dark")===dark) ? "var(--accent)" : "var(--text-muted)",
+                  }}>{label}</button>
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -415,10 +440,10 @@ export default function Settings({ dark, onToggleDark }) {
       )}
       {resetModal && (
         <ResetPasswordModal user={resetModal} onClose={()=>setResetModal(null)}
-          onSaved={()=>{ setResetModal(null); setActionMsg({type:"success",text:"Password reset"}); setTimeout(()=>setActionMsg(null),3000); }}/>
+          onSaved={()=>{ setResetModal(null); setActionMsg({type:"success",text:t("settings.passwordReset")}); setTimeout(()=>setActionMsg(null),3000); }}/>
       )}
       {confirmDel && (
-        <ConfirmModal message={`Hapus user "${confirmDel.username}"? Tindakan ini tidak dapat dibatalkan.`}
+        <ConfirmModal message={`${t("settings.deleteUser")} "${confirmDel.username}"? ${t("settings.cannotUndo")}`}
           onConfirm={()=>handleDeleteUser(confirmDel)} onCancel={()=>setConfirmDel(null)}/>
       )}
     </div>
