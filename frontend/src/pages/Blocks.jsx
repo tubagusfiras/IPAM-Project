@@ -196,17 +196,20 @@ function SkeletonRow() {
   );
 }
 
-export default function Blocks({ ipVersion="", onSelectBlock }) {
+export default function Blocks({ ipVersion="", onSelectBlock, initialStatus="" }) {
   const [items,     setItems]     = useState([]);
   const [total,     setTotal]     = useState(0);
   const [search,    setSearch]    = useState("");
   const [siteFilter,setSiteFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState(initialStatus);
   const [loading,   setLoading]   = useState(true);
   const [modal,     setModal]     = useState(null);
   const [confirm,   setConfirm]   = useState(null);
   const [sites,     setSites]     = useState([]);
   const [selected,  setSelected]  = useState(new Set());
   const [selectAll, setSelectAll] = useState(false);
+
+  useEffect(() => { setStatusFilter(initialStatus||""); }, [initialStatus]);
 
   const toggleSelect = (id) => {
     setSelected(p => {
@@ -238,14 +241,15 @@ export default function Blocks({ ipVersion="", onSelectBlock }) {
   const load = useCallback(() => {
     setLoading(true);
     const p = { limit:100 };
-    if (search)    p.search     = search;
-    if (ipVersion) p.ip_version = ipVersion;
+    if (search)     p.search     = search;
+    if (ipVersion)  p.ip_version = ipVersion;
     if (siteFilter) p.site_id   = siteFilter;
+    if (statusFilter) p.status  = statusFilter;
     getBlocks(p)
       .then(d => { setItems(d.items||[]); setTotal(d.total||0); })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [search, ipVersion, siteFilter]);
+  }, [search, ipVersion, siteFilter, statusFilter]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { getSites().then(setSites); }, []);
@@ -289,11 +293,18 @@ export default function Blocks({ ipVersion="", onSelectBlock }) {
           </select>
         </div>
 
-        {/* Row 2: Stats */}
+        {/* Row 2: Stats + Status filter */}
         <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",fontSize:12}}>
           <Badge label={`${total} blocks`} style={{background:"var(--surface-2)",color:"var(--text-muted)",border:"1px solid var(--border-soft)"}}/>
           <Badge label={`${items.filter(b=>b.ip_version==='IPv4').length} IPv4`} style={{background:"var(--accent-dim)",color:"var(--accent)",border:"1px solid var(--accent-border)"}}/>
           <Badge label={`${items.filter(b=>b.ip_version==='IPv6').length} IPv6`} style={{background:"var(--success-surface)",color:"var(--success)",border:"1px solid var(--success-border)"}}/>
+          <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}
+            className="select" style={{height:32,fontSize:12,minWidth:120,marginLeft:"auto"}}>
+            <option value="">All Statuses</option>
+            {["active","reserved","deprecated"].map(s=>(
+              <option key={s} value={s} style={{textTransform:"capitalize"}}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>
+            ))}
+          </select>
         </div>
       </div>
 

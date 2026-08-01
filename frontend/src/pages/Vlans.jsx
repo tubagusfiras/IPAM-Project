@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { getVlans, getSites, createVlan, updateVlan, deleteVlan, getAllocationsByVlanIds } from "../api.js";
 import { VLAN_STATUS_OPTS } from "../constants.js";
-import { Btn, SearchBar, Loading, EmptyState, PageHeader, Icons, Badge, StatusBadge } from "../components/ui.jsx";
+import { Btn, SearchBar, Loading, EmptyState, PageHeader, Icons, Badge, StatusBadge, Tag } from "../components/ui.jsx";
 
 const STATUS_STYLE = {
   active:     { color:"var(--success)", bg:"var(--success-surface)", border:"var(--success-border)" },
@@ -127,7 +127,7 @@ function ConfirmModal({ message, onConfirm, onCancel }) {
 }
 
 
-export default function Vlans() {
+export default function Vlans({ onNavigate }) {
   const [items,     setItems]     = useState([]);
   const [total,     setTotal]     = useState(0);
   const [sites,     setSites]     = useState([]);
@@ -139,6 +139,7 @@ export default function Vlans() {
   const [modal,     setModal]     = useState(null);
   const [confirm,   setConfirm]   = useState(null);
   const [allocCountMap, setAllocCountMap] = useState({});
+  const [customerMap, setCustomerMap] = useState({}); // customer_name → customer_id
   const LIMIT = 100;
 
   const load = useCallback(() => {
@@ -163,12 +164,15 @@ export default function Vlans() {
       .then(d=>{
         const allocs = d.items || [];
         const countMap = {};
+        const cMap = {};
         ids.forEach(id=>{ countMap[id] = 0; });
         allocs.forEach(a=>{
           if (!a.vlan_id) return;
           countMap[a.vlan_id] = (countMap[a.vlan_id]||0) + 1;
+          if (a.customer_id && a.customer_name) cMap[a.customer_name] = a.customer_id;
         });
         setAllocCountMap(countMap);
+        setCustomerMap(cMap);
       })
       .catch(()=>{});
   }, [items]);
@@ -246,10 +250,13 @@ export default function Vlans() {
 
                   {/* VLAN ID */}
                   <td className="table-cell">
-                    <span style={{fontFamily:"var(--font-mono)",fontSize:15,fontWeight:700,
-                      color:"var(--accent)",fontVariantNumeric:"tabular-nums"}}>
+                    <a href="#" onClick={e=>{e.preventDefault();e.stopPropagation();onNavigate&&onNavigate("vlan-detail",{id:v.id,from:"vlans"});}}
+                      style={{textDecoration:"none",fontFamily:"var(--font-mono)",fontSize:15,fontWeight:700,
+                        color:"var(--accent)",fontVariantNumeric:"tabular-nums",cursor:"pointer",transition:"opacity 0.12s"}}
+                      onMouseEnter={e=>e.currentTarget.style.opacity="0.7"}
+                      onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
                       {v.vid}
-                    </span>
+                    </a>
                   </td>
 
                   {/* Name */}
@@ -294,9 +301,17 @@ export default function Vlans() {
                       <span style={{color:"var(--text-dim)",fontSize:11}}>—</span>
                     ) : (
                       <div style={{display:"flex",flexDirection:"column",gap:2}}>
-                        {v.customer_names.slice(0,2).map((name,i)=>(
-                          <span key={i} style={{fontSize:11,color:"var(--text-muted)"}}>{name}</span>
-                        ))}
+                        {v.customer_names.slice(0,2).map((name,i)=>{
+                          const cid = customerMap[name];
+                          return cid ? (
+                            <a key={i} href="#" onClick={e=>{e.preventDefault();e.stopPropagation();onNavigate&&onNavigate("customer-detail",{id:cid,from:"vlans"});}}
+                              style={{fontSize:11,color:"var(--text-muted)",textDecoration:"none",cursor:"pointer",transition:"color 0.12s"}}
+                              onMouseEnter={e=>e.currentTarget.style.color="var(--accent)"}
+                              onMouseLeave={e=>e.currentTarget.style.color="var(--text-muted)"}>
+                              {name}
+                            </a>
+                          ) : <span key={i} style={{fontSize:11,color:"var(--text-muted)"}}>{name}</span>;
+                        })}
                         {v.customer_names.length>2 && (
                           <span style={{fontSize:10,color:"var(--text-dim)"}}>+{v.customer_names.length-2} more</span>
                         )}

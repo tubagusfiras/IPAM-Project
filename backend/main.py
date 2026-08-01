@@ -1664,10 +1664,23 @@ import asyncio
 
 # ── Global Ping Scheduler ──
 async def _ping_scheduler():
-    """Auto-scan every 6 hours"""
+    """Auto-scan every 6 hours, plus retention cleanup"""
     global PING_IS_RUNNING, pool
     while True:
         await asyncio.sleep(21600)  # 6 jam
+        # Retention: keep ping_history for 30 days, and drop ping_results
+        # rows whose IP no longer belongs to any active allocation.
+        try:
+            await pool.execute("DELETE FROM ping_history WHERE checked_at < NOW() - INTERVAL '"'"'30 days'"'"'")
+            await pool.execute("""
+                DELETE FROM ping_results pr
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM allocations a
+                    WHERE a.status = '"'"'active'"'"' AND pr.ip::inet <<= a.prefix::cidr
+                )
+            """)
+        except Exception:
+            pass
         if PING_IS_RUNNING:
             continue
         try:
@@ -1698,7 +1711,7 @@ PING_SOURCE = platform.node() or "ipam-server"
 
 @app.get("/api/v1/ping/status", summary="Global Ping — latest scan results", tags=["Global Ping"])
 async def get_ping_status(
-    status: Optional[str] = Query(None, regex="^(online|offline|error|all)$"),
+    status: Optional[str] = Query(None, regex="^(online|offline|error|pending|all)$"),
     search: Optional[str] = Query(None),
     sort_by: str = Query("scanned_at", regex="^(ip|icmp_status|http_status|customer_name|scanned_at|icmp_rtt)$"),
     sort_dir: str = Query("DESC", regex="^(ASC|DESC)$"),

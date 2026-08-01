@@ -12,6 +12,7 @@ async def list_blocks(
     search: Optional[str]=Query(None),
     ip_version: Optional[str]=Query(None),
     site_id: Optional[str]=Query(None),
+    status: Optional[str]=Query(None),
     limit: int=Query(50,ge=1,le=500),
     offset: int=Query(0,ge=0),
     db=Depends(get_db)
@@ -26,6 +27,9 @@ async def list_blocks(
     if site_id:
         params.append(site_id)
         conditions.append(f"b.site_id = ${len(params)}::uuid")
+    if status:
+        params.append(status)
+        conditions.append(f"b.status = ${len(params)}::block_status_t")
     where = " AND ".join(conditions)
     params.extend([limit, offset])
     rows = await db.fetch(f"""

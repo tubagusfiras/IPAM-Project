@@ -138,7 +138,7 @@ function RouterTags({ routers }) {
   );
 }
 
-export default function Customers() {
+export default function Customers({ onNavigate }) {
   const [items,      setItems]      = useState([]);
   const [total,      setTotal]      = useState(0);
   const [search,     setSearch]     = useState("");
@@ -148,6 +148,7 @@ export default function Customers() {
   const [confirm,    setConfirm]    = useState(null);
   const [page,       setPage]       = useState(0);
   const [routerMap,  setRouterMap]  = useState({});  // customer_id → [router, ...]
+  const [vlanMap,    setVlanMap]    = useState({});  // vid → vlan_id
   const LIMIT = 50;
 
   const load = useCallback(() => {
@@ -174,14 +175,17 @@ export default function Customers() {
       .then(d=>{
         const allocs = d.items || [];
         const map = {};
+        const vMap = {};
         ids.forEach(id=>{ map[id] = []; });
         allocs.forEach(a=>{
+          if (a.vlan_id && a.vlan_vid) vMap[a.vlan_vid] = a.vlan_id;
           if (!a.customer_id || !a.block_router) return;
           if (!map[a.customer_id]) map[a.customer_id] = [];
           if (!map[a.customer_id].includes(a.block_router)) map[a.customer_id].push(a.block_router);
         });
         Object.keys(map).forEach(id=>map[id].sort());
         setRouterMap(map);
+        setVlanMap(vMap);
       })
       .catch(()=>setRouterMap({}));
   }, [items]);
@@ -266,7 +270,10 @@ export default function Customers() {
                     </div>
                     <div>
                       <div style={{fontSize:13,fontWeight:600,color:"var(--text)",display:"flex",alignItems:"center",gap:6}}>
-{c.name}
+                        <a onClick={e=>{e.preventDefault();e.stopPropagation();onNavigate&&onNavigate("customer-detail",{id:c.id,from:"customers"});}}
+                          href="#" style={{textDecoration:"none",color:"var(--text)",cursor:"pointer"}}
+                          onMouseEnter={e=>e.currentTarget.style.color="var(--accent)"}
+                          onMouseLeave={e=>e.currentTarget.style.color="var(--text)"}>{c.name}</a>
                       </div>
                       {c.description && (
                         <div style={{fontSize:11,color:"var(--text-dim)",marginTop:1,
@@ -318,14 +325,27 @@ export default function Customers() {
                     <span style={{color:"var(--text-dim)",fontSize:11}}>—</span>
                   ) : (
                     <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
-                      {c.vlan_ids.slice(0,3).map(vid=>(
-                        <span key={vid} style={{
-                          fontFamily:"var(--font-mono)",fontSize:10,fontWeight:500,
-                          padding:"2px 7px",borderRadius:4,
-                          background:"var(--surface-3)",color:"var(--text-muted)",
-                          border:"1px solid var(--border-soft)",
-                        }}>{vid}</span>
-                      ))}
+                      {c.vlan_ids.slice(0,3).map(vid=>{
+                        const vlanId = vlanMap[vid];
+                        const tag = (
+                          <span key={vid} style={{
+                            fontFamily:"var(--font-mono)",fontSize:10,fontWeight:500,
+                            padding:"2px 7px",borderRadius:4,
+                            background:"var(--surface-3)",color:"var(--text-muted)",
+                            border:"1px solid var(--border-soft)",
+                            cursor:vlanId?"pointer":"default",
+                            transition:"all 0.12s",
+                          }}>{vid}</span>
+                        );
+                        return vlanId ? (
+                          <a key={vid} onClick={e=>{e.preventDefault();e.stopPropagation();onNavigate&&onNavigate("vlan-detail",{id:vlanId,from:"customers"});}}
+                            href="#" style={{textDecoration:"none"}}
+                            onMouseEnter={e=>e.currentTarget.querySelector("span").style.color="var(--accent)"}
+                            onMouseLeave={e=>e.currentTarget.querySelector("span").style.color="var(--text-muted)"}>
+                            {tag}
+                          </a>
+                        ) : tag;
+                      })}
                       {c.vlan_ids.length>3 && (
                         <span style={{fontSize:10,color:"var(--text-dim)"}}>+{c.vlan_ids.length-3}</span>
                       )}

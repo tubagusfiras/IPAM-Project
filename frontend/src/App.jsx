@@ -1,6 +1,7 @@
 import { useState, useEffect, Suspense, lazy } from "react";
 import { getToken, getStoredUser, clearToken } from "./api.js";
 import { useToast } from "./components/Toast.jsx";
+import { I18nProvider } from "./i18n.jsx";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary.jsx";
 import Login from "./pages/Login.jsx";
 import { Sidebar } from "./components/Sidebar.jsx";
@@ -21,6 +22,8 @@ const SettingsPage = lazy(()=>import("./pages/Settings.jsx"));
 const SubnetCalc = lazy(()=>import("./pages/SubnetCalc.jsx"));
 const GlobalPing = lazy(()=>import("./pages/GlobalPing.jsx"));
 const GlobalPingDetail = lazy(()=>import("./pages/GlobalPingDetail.jsx"));
+const VlanDetail = lazy(()=>import("./pages/VlanDetail.jsx"));
+const CustomerDetail = lazy(()=>import("./pages/CustomerDetail.jsx"));
 
 const NAV_GROUPS = [
   {
@@ -102,15 +105,18 @@ export default function App() {
   const parseHash = () => {
     const h = window.location.hash.replace("#","");
     if (h.startsWith("block-detail/")) return { page:"block-detail", id:h.split("/")[1] };
+    if (h.startsWith("vlan-detail/")) return { page:"vlan-detail", id:h.split("/")[1] };
+    if (h.startsWith("customer-detail/")) return { page:"customer-detail", id:h.split("/")[1] };
     if (h.startsWith("global-ping-detail/")) return { active:"global-ping-detail", page:"global-ping-detail", id:h.split("/")[1] };
     if (h) return { active: h };
     return null;
   };
   const [active,    setActive]    = useState(()=>{ const p=parseHash(); return p?.active||"dashboard"; });
-  const [route,     setRoute]     = useState(()=>{ const p=parseHash(); return p?.page==="block-detail"?p:null; });
+  const [route,     setRoute]     = useState(()=>{ const p=parseHash(); return p?.page?p:null; });
   const [dark,      setDark]      = useState(()=>document.documentElement.classList.contains("dark"));
   const [collapsed, setCollapsed] = useState(false);
   const [user, setUser] = useState(() => getStoredUser());
+  const [pageParams, setPageParams] = useState({});
   const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
@@ -152,17 +158,19 @@ export default function App() {
   };
 
   const navigate = (page, params={}) => {
-    if (page === "block-detail") {
-      window.location.hash = "block-detail/" + params.id;
+    if (["block-detail","vlan-detail","customer-detail"].includes(page)) {
+      window.location.hash = page + "/" + params.id;
       setRoute({ page, ...params });
     } else {
       window.location.hash = page;
       setRoute(null); setActive(page);
+      if (Object.keys(params).length) setPageParams(p => ({...p, [page]: params}));
+      else setPageParams(p => { const n={...p}; delete n[page]; return n; });
     }
   };
 
   const goBack = () => {
-    const from = route?.from || "ipv4";
+    const from = route?.from || "dashboard";
     window.location.hash = from;
     setActive(from); setRoute(null);
   };
@@ -170,7 +178,7 @@ export default function App() {
   useEffect(()=>{
     const onHash = () => {
       const p = parseHash();
-      if (p?.page==="block-detail") setRoute(p);
+      if (p?.page) setRoute(p);
       else if (p?.active) { setRoute(null); setActive(p.active); }
     };
     window.addEventListener("hashchange", onHash);
@@ -205,20 +213,22 @@ export default function App() {
   }, []);
 
   const allItems = NAV_GROUPS.flatMap(g=>g.items);
-  const pageTitle = route?.page === "block-detail"
-    ? (route.prefix || "Block Detail")
+  const pageTitle = ["block-detail","vlan-detail","customer-detail"].includes(route?.page)
+    ? (route.prefix || (route.page === "vlan-detail" ? "VLAN Detail" : route.page === "customer-detail" ? "Customer Detail" : "Block Detail"))
     : allItems.find(n=>n.id===active)?.label || "IPAM";
   const pageSubtitle = null;
 
   const renderPage = () => {
-    if (route?.page === "block-detail")
-      return <BlockDetail blockId={route.id} onBack={goBack} dark={dark}/>;
+    if (route?.page === "block-detail") return <BlockDetail blockId={route.id} onBack={goBack} dark={dark}/>;
+    if (route?.page === "vlan-detail") return <VlanDetail vlanId={route.id} onBack={goBack} />;
+    if (route?.page === "customer-detail") return <CustomerDetail customerId={route.id} onBack={goBack} />;
+    if (route?.page === "global-ping-detail") return <GlobalPingDetail onBack={goBack} />;
     switch(active) {
       case "dashboard": return <Dashboard onNavigate={navigate}/>;
-      case "ipv4":      return <Blocks ipVersion="IPv4" onSelectBlock={id=>navigate("block-detail",{id,from:"ipv4"})} dark={dark}/>;
-      case "ipv6":      return <Blocks ipVersion="IPv6" onSelectBlock={id=>navigate("block-detail",{id,from:"ipv6"})} dark={dark}/>;
-      case "customers": return <Customers/>;
-      case "vlans":     return <Vlans/>;
+      case "ipv4":      return <Blocks ipVersion="IPv4" {...pageParams.ipv4} onSelectBlock={id=>navigate("block-detail",{id,from:"ipv4"})} dark={dark}/>;
+      case "ipv6":      return <Blocks ipVersion="IPv6" {...pageParams.ipv6} onSelectBlock={id=>navigate("block-detail",{id,from:"ipv6"})} dark={dark}/>;
+      case "customers": return <Customers onNavigate={navigate}/>;
+      case "vlans":     return <Vlans onNavigate={navigate}/>;
       case "sites":     return <Sites/>;
       case "export":    return <Export dark={dark}/>;
       case "scan":      return <IPScan/>;
@@ -248,13 +258,14 @@ export default function App() {
     );
   }
 
-  // Belum login -> tampilkan Login page
+  // Not logged in -> show Login page
   if (!user) {
     return <Login dark={dark} onLoginSuccess={(u)=>setUser(u)}/>;
   }
 
   return (
-    <div style={{minHeight:"100vh",background:"var(--bg)"}}>
+    <I18nProvider>
+      <div style={{minHeight:"100vh",background:"var(--bg)"}}>
         {/* Mobile overlay when sidebar open */}
         {!collapsed && (
           <div onClick={()=>setCollapsed(true)} className="mobile-overlay" />
@@ -293,5 +304,6 @@ export default function App() {
           </div>
         </main>
       </div>
+    </I18nProvider>
   );
 }

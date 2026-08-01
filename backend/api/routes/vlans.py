@@ -61,6 +61,19 @@ async def create_vlan(body: VlanIn, request: Request, db=Depends(get_db), curren
         vlan_id=str(row["id"]))
     return dict(row)
 
+@router.get("/api/v1/vlans/{vlan_id}")
+async def get_vlan(vlan_id: str, db=Depends(get_db)):
+    row = await db.fetchrow(
+        "SELECT v.*, s.name AS site_name FROM vlans v LEFT JOIN sites s ON v.site_id=s.id WHERE v.id=$1::uuid",
+        vlan_id
+    )
+    if not row: raise HTTPException(404, "VLAN not found")
+    allocs = await db.fetch(
+        "SELECT * FROM v_allocation_detail WHERE vlan_id=$1::uuid ORDER BY prefix::inet",
+        vlan_id
+    )
+    return {**dict(row), "allocations": [dict(a) for a in allocs]}
+
 @router.put("/api/v1/vlans/{vlan_id}")
 async def update_vlan(vlan_id: str, body: VlanIn, request: Request, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     old_row = await db.fetchrow("SELECT * FROM vlans WHERE id=$1::uuid", vlan_id)

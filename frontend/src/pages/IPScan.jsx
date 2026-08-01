@@ -41,6 +41,7 @@ export default function IPScan() {
   const [actionMsg,   setActionMsg]   = useState(null);
   const [filterType,  setFilterType]  = useState("all");
   const [confirmDel,  setConfirmDel]  = useState(null);
+  const [bulkDel,     setBulkDel]     = useState([]);
   const pollRef = useRef(null);
 
   useEffect(() => {
@@ -136,6 +137,50 @@ export default function IPScan() {
     setConfirmDel(null);
   };
 
+  // Bulk delete helpers — only active when filterType==="ghost"
+  const toggleGhostAlloc = (prefix) => {
+    setBulkDel(prev => {
+      const s = new Set(prev);
+      if (s.has(prefix)) s.delete(prefix); else s.add(prefix);
+      return Array.from(s);
+    });
+  };
+
+  const toggleGhostPrefix = (prefix) => {
+    toggleGhostAlloc(prefix);
+  };
+
+  const selectAllGhosts = () => {
+    const allPrefixes = [...new Set(ghosts.map(g => g.alloc_prefix))];
+    setBulkDel(prev => {
+      const s = new Set(prev);
+      const allSelected = allPrefixes.every(p => s.has(p));
+      if (allSelected) allPrefixes.forEach(p => s.delete(p));
+      else allPrefixes.forEach(p => s.add(p));
+      return Array.from(s);
+    });
+  };
+
+  const doBulkDelete = async () => {
+    if (!bulkDel.length) return;
+    if (!confirm(`Delete ${bulkDel.length} ghost allocation(s)? This cannot be undone.`)) return;
+    for (const prefix of bulkDel) {
+      const allocs = ghosts.filter(g => g.alloc_prefix === prefix);
+      for (const alloc of allocs) {
+        try {
+          await authFetch("/api/v1/scan/action", {
+            method: "POST", headers: {"Content-Type":"application/json"},
+            body: JSON.stringify({action:"delete", alloc_id: alloc.alloc_id}),
+          });
+        } catch(e) { console.error(e); }
+      }
+    }
+    setActionMsg({type:"delete", text:`Deleted ${bulkDel.length} allocation(s)`});
+    setTimeout(() => setActionMsg(null), 3500);
+    setBulkDel([]);
+    pollStatus(scanData.scan_id);
+  };
+
   const ghosts        = scanData?.ghost_allocs || [];
   const unregistered  = scanData?.unregistered_ips || [];
   const allResults     = scanData?.results || [];
@@ -155,6 +200,7 @@ export default function IPScan() {
     return status === filterType;
   });
   const idleCount = allResults.filter(r=>getRowStatus(r)==="idle").length;
+  const allUniquePrefixes = [...new Set(ghosts.map(g => g.alloc_prefix).filter(Boolean))];
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:20}}>
@@ -331,9 +377,28 @@ export default function IPScan() {
                     </button>
                   )}
                 </div>
+                {filterType==="ghost" && bulkDel.length > 0 && (
+                  <div style={{padding:"8px 12px",background:"rgba(239,68,68,0.08)",borderTop:"1px solid var(--danger-border)",display:"flex",alignItems:"center",gap:10,fontSize:12}}>
+                    <span style={{color:"var(--danger)",fontWeight:600}}>{bulkDel.length} selected</span>
+                    <button onClick={selectAllGhosts} className="btn btn-ghost btn-sm" style={{fontSize:11}}>
+                      {bulkDel.length === [...new Set(ghosts.map(g=>g.alloc_prefix))].length ? "Deselect All" : "Select All"}
+                    </button>
+                    <button onClick={doBulkDelete} className="btn btn-sm"
+                      style={{background:"rgba(239,68,68,0.15)",color:"rgb(239,68,68)",border:"1px solid rgba(239,68,68,0.3)",padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer"}}>
+                      Delete {bulkDel.length > 1 ? `(${bulkDel.length})` : ""}
+                    </button>
+                  </div>
+                )}
                 <table style={{width:"100%",borderCollapse:"collapse"}}>
                   <thead>
                     <tr>
+                      {filterType==="ghost" && (
+                        <th className="table-header" style={{width:36,textAlign:"center"}}>
+                          <input type="checkbox" checked={bulkDel.length===allUniquePrefixes.length && allUniquePrefixes.length>0}
+                            onChange={selectAllGhosts}
+                            style={{cursor:"pointer",accentColor:"var(--accent)",width:13,height:13}}/>
+                        </th>
+                      )}
                       {["IP","Status","Owner Type","Customer","Action"].map(h=>(
                         <th key={h} className="table-header">{h}</th>
                       ))}
@@ -343,14 +408,25 @@ export default function IPScan() {
                     {visibleRows.map((r,i)=>{
                       const status = getRowStatus(r);
                       const style = ROW_STATUS_STYLE[status];
-                      const ghostAlloc = status==="ghost" ? ghosts.find(g=>g.alloc_prefix===r.alloc_prefix) : null;
+                      const ghostPrefix = r.alloc_prefix;
+                      const ghostItem = status==="ghost" && ghostPrefix ? ghosts.find(g=>g.alloc_prefix===ghostPrefix) : null;
+                      const isChecked = ghostPrefix ? bulkDel.includes(ghostPrefix) : false;
                       return (
                         <tr key={r.ip} className="table-row"
                           style={{background:i%2===0?"var(--surface-1)":"var(--surface-2)"}}>
+                          {filterType==="ghost" && (
+                            <td className="table-cell" style={{width:36,textAlign:"center"}}>
+                              <input type="checkbox" checked={isChecked}
+                                onChange={()=>{if(ghostPrefix)toggleGhostAlloc(ghostPrefix)}}
+                                style={{cursor:"pointer",accentColor:"var(--accent)",width:13,height:13}}/>
+                            </td>
+                          )}
                           <td className="table-cell">
                             <div style={{display:"flex",alignItems:"center",gap:8}}>
                               <div style={{width:3,height:24,borderRadius:2,background:style.color,flexShrink:0}}/>
-                              <span style={{fontFamily:"var(--font-mono)",fontSize:12,fontWeight:600,color:"var(--text)"}}>
+                              <span style={{fontFamily:"var(--font-mono)",fontSize:12,fontWeight:600,color:"var(--text)",
+                                textDecoration:isChecked?"line-through":"none",
+                                opacity:isChecked?0.5:1}}>
                                 {r.ip}
                               </span>
                             </div>
@@ -361,7 +437,7 @@ export default function IPScan() {
                               background:style.bg, color:style.color,
                               border:`1px solid ${style.border}`,
                             }}>
-                              {status==="ghost" && ghostAlloc?.likely_firewall ? "LIKELY FIREWALL" : style.label.toUpperCase()}
+                              {status==="ghost" && ghostItem?.likely_firewall ? "LIKELY FIREWALL" : style.label.toUpperCase()}
                             </span>
                           </td>
                           <td className="table-cell">
@@ -375,13 +451,13 @@ export default function IPScan() {
                             </span>
                           </td>
                           <td className="table-cell" onClick={e=>e.stopPropagation()}>
-                            {status==="ghost" && ghostAlloc && (
+                            {status==="ghost" && ghostItem && (
                               <div style={{display:"flex",gap:4}}>
-                                <button onClick={()=>doAction("mark_deprecated", ghostAlloc.alloc_id, ghostAlloc.alloc_prefix)}
+                                <button onClick={()=>doAction("mark_deprecated", ghostItem.alloc_id, ghostItem.alloc_prefix)}
                                   className="btn btn-ghost btn-sm" style={{fontSize:11,padding:"3px 8px"}}>
                                   Mark Deprecated
                                 </button>
-                                <button onClick={()=>setConfirmDel(ghostAlloc)} className="btn btn-sm"
+                                <button onClick={()=>setConfirmDel(ghostItem)} className="btn btn-sm"
                                   style={{fontSize:11,padding:"3px 8px",background:"var(--danger-surface)",
                                     color:"var(--danger)",border:"1px solid var(--danger-border)"}}>
                                   Delete
@@ -411,10 +487,10 @@ export default function IPScan() {
             <div className="card" style={{padding:48,textAlign:"center"}}>
               <div style={{fontSize:24,fontWeight:700}}>OK</div>
               <div style={{fontSize:15,fontWeight:600,color:"var(--text)",marginBottom:4}}>
-                Tidak ada discrepancy ditemukan
+                No discrepancies found
               </div>
               <div style={{fontSize:12,color:"var(--text-muted)"}}>
-                Semua alokasi dalam block <span style={{fontFamily:"var(--font-mono)",color:"var(--accent)"}}>{scanData.prefix}</span> sesuai kondisi real network
+                All allocations in block <span style={{fontFamily:"var(--font-mono)",color:"var(--accent)"}}>{scanData.prefix}</span> match the live network state
               </div>
             </div>
           )}
@@ -432,9 +508,9 @@ export default function IPScan() {
             </div>
             <div className="modal-body">
               <p style={{fontSize:13,color:"var(--text-muted)",lineHeight:1.6,margin:0}}>
-                Hapus alokasi <strong style={{fontFamily:"var(--font-mono)",color:"var(--accent)"}}>{confirmDel.alloc_prefix}</strong>
-                {confirmDel.customer_name && ` (${confirmDel.customer_name})`} dari IPAM?
-                <br/><br/>Tindakan ini tidak dapat dibatalkan dan akan tercatat di Audit Logs.
+                Delete allocation <strong style={{fontFamily:"var(--font-mono)",color:"var(--accent)"}}>{confirmDel.alloc_prefix}</strong>
+                {confirmDel.customer_name && ` (${confirmDel.customer_name})`} from IPAM?
+                <br/><br/>This action cannot be undone and will be recorded in Audit Logs.
               </p>
             </div>
             <div className="modal-footer">
