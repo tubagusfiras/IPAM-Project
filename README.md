@@ -369,6 +369,112 @@ docker exec ipam-redis redis-cli FLUSHDB
 
 ---
 
-**Last Updated:** 2026-06-22  
-**Version:** 2.0.0  
+**Last Updated:** 2026-08-02  
+**Version:** 2.1.0  
 **License:** Internal Use Only
+
+---
+
+## 📱 Mobile Responsive (v2.1.0)
+
+### Supported Devices
+- **Android** — Chrome, Samsung Internet, Firefox
+- **iOS** — Safari, Chrome
+- **Tablet** — iPad, Android tablets
+- **Desktop** — Chrome, Firefox, Safari, Edge
+
+### Mobile Features
+- **Sidebar drawer** — Hidden by default, hamburger menu to open
+- **Touch targets** — Minimum 44px (Apple HIG compliant)
+- **Safe area insets** — iPhone notch/home indicator support
+- **Input zoom prevention** — 16px font-size prevents iOS auto-zoom
+- **Modal fullscreen** — Modals take full screen on mobile
+- **Horizontal scroll** — Tables scroll horizontally on mobile
+- **Grid collapse** — Dashboard grids stack vertically on mobile
+
+### Responsive Breakpoints
+- **Mobile:** ≤ 768px
+- **Tablet:** 768px — 1024px
+- **Desktop:** > 1024px
+
+---
+
+## 🔒 Security Headers (v2.1.0)
+
+### HTTP Response Headers
+```
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+X-XSS-Protection: 1; mode=block
+Referrer-Policy: strict-origin-when-cross-origin
+Permissions-Policy: camera=(), microphone=(), geolocation=()
+```
+
+### Purpose
+| Header | Prevents |
+|--------|----------|
+| X-Content-Type-Options | MIME sniffing attacks |
+| X-Frame-Options | Clickjacking via iframes |
+| X-XSS-Protection | Cross-site scripting (legacy browsers) |
+| Referrer-Policy | URL path leakage to third parties |
+| Permissions-Policy | Camera/microphone/geolocation abuse |
+
+---
+
+## 🛠️ Development with ECC (Everything Claude Code)
+
+### Installed Skills (50 total)
+**Core Skills:** api-design, backend-patterns, coding-standards, e2e-testing, error-handling, eval-harness, frontend-patterns, security-review, strategic-compact, tdd-workflow, verification-loop, etc.
+
+**Niche Skills:** python-patterns, python-testing, django-patterns, django-security, postgres-patterns, continuous-learning, continuous-learning-v2, iterative-retrieval, deep-research, exa-search, etc.
+
+**Rules:** common (10 files), python (6 files)
+
+### AI Assistant Workflow
+1. **Planning:** Use `planner` agent for complex features
+2. **TDD:** Write tests first with `tdd-guide` agent
+3. **Code Review:** Use `code-reviewer` agent after writing code
+4. **Security:** Use `security-reviewer` agent for auth/input handling
+5. **Verification:** Run `verification-loop` before commits
+
+---
+
+## 🔧 Recent Changes (v2.1.0)
+
+### 2026-08-02
+- ✅ Security headers middleware (X-Content-Type-Options, X-Frame-Options, etc.)
+- ✅ Mobile responsive overhaul (sidebar drawer, grid collapse, touch targets)
+- ✅ Header full-width on mobile (fixed left offset)
+- ✅ Viewport meta tags for iOS/Android
+- ✅ Safe area insets for iPhone notch
+- ✅ Modal fullscreen on mobile
+- ✅ Touch targets 44px minimum (Apple HIG)
+- ✅ ECC skills installation (50 skills, 3 rule dirs)
+
+### 2026-06-24
+- ✅ All 21 improvements completed
+- ✅ Security audit (30 findings, 11 critical fixed)
+- ✅ Code refactoring (main.py 1994→1412 lines)
+- ✅ Unit tests (44 tests passing)
+- ✅ CI/CD pipeline (GitHub Actions)
+
+---
+
+## 📊 Project Metrics
+
+### Codebase
+- **Backend:** 1,412 lines (modular — api/, core/, models/, services/)
+- **Frontend:** ~20 pages (React components with lazy loading)
+- **Database:** 9 tables, 3 views, 30 indexes
+- **Docker:** 6 services, 1 network, 3 volumes
+
+### Security Audit
+- **Total findings:** 30
+- **Critical fixed:** 11/11
+- **Security headers:** 5 implemented
+- **Rate limiting:** 5 attempts/min on login
+
+### Test Coverage
+- **Current:** 44 tests (CSV parser, auth, validation)
+- **Framework:** pytest + asyncpg + httpx
+- **Target:** 80%+ coverage
