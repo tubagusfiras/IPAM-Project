@@ -158,6 +158,11 @@ export default function App() {
   };
 
   const navigate = (page, params={}) => {
+    // Auto-close sidebar di mobile setelah navigate
+    if (window.innerWidth <= 768) {
+      setCollapsed(true);
+    }
+    
     if (["block-detail","vlan-detail","customer-detail"].includes(page)) {
       window.location.hash = page + "/" + params.id;
       setRoute({ page, ...params });

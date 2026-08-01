@@ -153,6 +153,17 @@ async def metrics_middleware(request: Request, call_next):
     REQUEST_LATENCY.labels(request.method, request.url.path).observe(time_module.time() - start)
     return response
 
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    """Tambah security headers untuk mencegah serangan umum."""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    return response
+
 async def get_db():
     async with pool.acquire() as conn:
         yield conn
