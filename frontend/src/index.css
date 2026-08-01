@@ -607,6 +607,11 @@
 
 /* Mobile (max-width: 768px) */
 @media (max-width: 768px) {
+  /* Header full width, no sidebar offset */
+  header {
+    left: 0 !important;
+  }
+
   /* Sidebar jadi drawer */
   .mobile-overlay {
     display: block;
