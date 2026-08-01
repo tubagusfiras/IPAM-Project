@@ -60,15 +60,17 @@ function Icon({ id, size=16 }) {
 }
 
 export function Sidebar({ active, onNavigate, collapsed, onToggle, user }) {
+  const isMobile = typeof window !== "undefined" && window.innerWidth <= 768;
   return (
-    <aside style={{
+    <aside className="sidebar" style={{
       position:"fixed", left:0, top:0, height:"100%", zIndex:30,
-      width: collapsed ? "60px" : "220px",
+      width: isMobile ? (collapsed ? "0px" : "260px") : (collapsed ? "60px" : "220px"),
       background:"var(--bg-secondary, var(--bg))",
       borderRight:"1px solid var(--border-soft)",
       display:"flex", flexDirection:"column",
       transition:"width var(--transition)",
       overflow:"hidden",
+      ...(isMobile && collapsed ? { border:"none" } : {}),
     }}>
       {/* Logo */}
       <div style={{

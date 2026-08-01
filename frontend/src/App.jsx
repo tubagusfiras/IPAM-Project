@@ -114,7 +114,7 @@ export default function App() {
   const [active,    setActive]    = useState(()=>{ const p=parseHash(); return p?.active||"dashboard"; });
   const [route,     setRoute]     = useState(()=>{ const p=parseHash(); return p?.page?p:null; });
   const [dark,      setDark]      = useState(()=>document.documentElement.classList.contains("dark"));
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(()=> window.innerWidth <= 768);
   const [user, setUser] = useState(() => getStoredUser());
   const [pageParams, setPageParams] = useState({});
   const [authChecked, setAuthChecked] = useState(false);
