@@ -183,7 +183,7 @@ export default function App() {
   useEffect(()=>{
     const onHash = () => {
       const p = parseHash();
-      if (p?.page) setRoute(p);
+      if (p?.page) setRoute(prev => ({ ...p, from: prev?.from || prev?.page || "dashboard" }));
       else if (p?.active) { setRoute(null); setActive(p.active); }
     };
     window.addEventListener("hashchange", onHash);
