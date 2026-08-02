@@ -218,8 +218,8 @@ export default function IPScan() {
           <div style={{
             width:44,height:44,borderRadius:10,flexShrink:0,
             background:"var(--accent-dim)",border:"1px solid var(--border-soft)",
-            display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,
-          }}>📡</div>
+            display:"flex",alignItems:"center",justifyContent:"center",
+          }}><svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.8" width="22" height="22"><path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2"/><rect x="7" y="7" width="10" height="10" rx="1"/></svg></div>
 
           <div style={{flex:1,minWidth:220}}>
             <label style={{display:"block",fontSize:10,fontWeight:700,textTransform:"uppercase",
