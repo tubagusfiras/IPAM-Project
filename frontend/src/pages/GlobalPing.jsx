@@ -129,7 +129,7 @@ export default function GlobalPing({ onNavigate }) {
 
   useEffect(() => {
     if (autoLoad) { loadResults(); loadSummary(); }
-  }, [autoLoad]);
+  }, [autoLoad, search, statusFilter]);
 
   // ── Polling background ──
   useEffect(() => {
@@ -286,8 +286,12 @@ export default function GlobalPing({ onNavigate }) {
               const status = row.icmp_status || "pending";
               const isOnline = status === "online";
               const isOffline = status === "offline";
-              const statusColor = isOnline ? "var(--success)" : isOffline ? "var(--danger)" : "var(--text-dim)";
-              const statusDot = isOnline ? "🟢" : isOffline ? "🔴" : "⚪";
+              const statusColor = isOnline ? "var(--success)" : isOffline ? "var(--danger)" : "var(--warning)";
+              const statusDot = isOnline
+                ? <svg viewBox="0 0 24 24" fill="var(--success)" width="10" height="10"><circle cx="12" cy="12" r="10"/></svg>
+                : isOffline
+                ? <svg viewBox="0 0 24 24" fill="var(--danger)" width="10" height="10"><circle cx="12" cy="12" r="10"/></svg>
+                : <svg viewBox="0 0 24 24" fill="var(--warning)" width="10" height="10"><circle cx="12" cy="12" r="10"/></svg>;
 
               return (
                 <tr key={row.id || i} className="table-row"
