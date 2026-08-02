@@ -21,7 +21,7 @@ const OWNER_COLOR = {
   peering:"#a78bfa", management:"#f472b6", reserved:"var(--text-muted)",
 };
 
-export default function VlanDetail({ vlanId, onBack }) {
+export default function VlanDetail({ vlanId, onBack, onNavigate }) {
   const [data, setData]     = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr]       = useState(null);
@@ -120,7 +120,7 @@ export default function VlanDetail({ vlanId, onBack }) {
                 ? <span style={{color:"var(--text-dim)"}}>—</span>
                 : <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
                     {customers.map(c => (
-                      <a key={c.id} onClick={e=>{e.preventDefault();window.location.hash=`customer-detail/${c.id}`;}}
+                      <a key={c.id} onClick={e=>{e.preventDefault();onNavigate?.("customer-detail", {id:c.id});}}
                         href="#" style={{textDecoration:"none"}}>
                         <Tag color="var(--accent)">{c.name}</Tag>
                       </a>
@@ -198,7 +198,7 @@ export default function VlanDetail({ vlanId, onBack }) {
                       </td>
                       <td style={{padding:"7px 12px"}}>
                         {a.customer_id ? (
-                          <a onClick={e=>{e.preventDefault();window.location.hash=`customer-detail/${a.customer_id}`;}}
+                          <a onClick={e=>{e.preventDefault();onNavigate?.("customer-detail", {id:a.customer_id});}}
                             href="#" style={{textDecoration:"none"}}>
                             <span style={{color:"var(--accent)",cursor:"pointer"}}>{a.customer_name}</span>
                           </a>

@@ -21,7 +21,7 @@ const OWNER_COLOR = {
   peering:"#a78bfa", management:"#f472b6", reserved:"var(--text-muted)",
 };
 
-export default function CustomerDetail({ customerId, onBack }) {
+export default function CustomerDetail({ customerId, onBack, onNavigate }) {
   const [data, setData]     = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr]       = useState(null);
@@ -155,7 +155,7 @@ export default function CustomerDetail({ customerId, onBack }) {
                 </div>
                 <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
                   {vlans.map(v => (
-                    <a key={v.id} onClick={e=>{e.preventDefault();window.location.hash=`vlan-detail/${v.id}`;}}
+                    <a key={v.id} onClick={e=>{e.preventDefault();onNavigate?.("vlan-detail", {id:v.id});}}
                       href="#" style={{textDecoration:"none"}}>
                       <Tag color="var(--accent)" mono>
                         {v.vid}{v.name ? ` — ${v.name}` : ""}
@@ -201,7 +201,7 @@ export default function CustomerDetail({ customerId, onBack }) {
                       </td>
                       <td style={{padding:"7px 12px"}}>
                         {a.vlan_id ? (
-                          <a onClick={e=>{e.preventDefault();window.location.hash=`vlan-detail/${a.vlan_id}`;}}
+                          <a onClick={e=>{e.preventDefault();onNavigate?.("vlan-detail", {id:a.vlan_id});}}
                             href="#" style={{textDecoration:"none"}}>
                             <span style={{fontFamily:"var(--font-mono)",fontWeight:600,color:"var(--accent)",cursor:"pointer"}}>
                               {a.vlan_vid}{a.vlan_name ? ` — ${a.vlan_name}` : ""}

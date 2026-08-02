@@ -296,12 +296,6 @@ export default function IPScan() {
                 animation: isRunning ? "shimmer 2s linear infinite" : undefined,
               }}/>
             </div>
-            <style>{`
-              @keyframes shimmer {
-                0% { background-position: -200% 0; }
-                100% { background-position: 200% 0; }
-              }
-            `}</style>
 
             {/* Summary cards */}
             {(isDone || scanData.scanned > 0) && (
@@ -520,13 +514,6 @@ export default function IPScan() {
           </div>
         </div>
       )}
-
-      <style>{`
-        @keyframes pulse-scan {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.4; transform: scale(0.8); }
-        }
-      `}</style>
     </div>
   );
 }

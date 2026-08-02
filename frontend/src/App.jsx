@@ -224,26 +224,26 @@ export default function App() {
   const pageSubtitle = null;
 
   const renderPage = () => {
-    if (route?.page === "block-detail") return <BlockDetail blockId={route.id} onBack={goBack} dark={dark}/>;
-    if (route?.page === "vlan-detail") return <VlanDetail vlanId={route.id} onBack={goBack} />;
-    if (route?.page === "customer-detail") return <CustomerDetail customerId={route.id} onBack={goBack} />;
-    if (route?.page === "global-ping-detail") return <GlobalPingDetail onBack={goBack} />;
+    if (route?.page === "block-detail") return <BlockDetail blockId={route.id} onBack={goBack} dark={dark} onNavigate={navigate}/>;
+    if (route?.page === "vlan-detail") return <VlanDetail vlanId={route.id} onBack={goBack} onNavigate={navigate}/>;
+    if (route?.page === "customer-detail") return <CustomerDetail customerId={route.id} onBack={goBack} onNavigate={navigate}/>;
+    if (route?.page === "global-ping-detail") return <GlobalPingDetail onBack={goBack} onNavigate={navigate}/>;
     switch(active) {
       case "dashboard": return <Dashboard onNavigate={navigate}/>;
       case "ipv4":      return <Blocks ipVersion="IPv4" {...pageParams.ipv4} onSelectBlock={id=>navigate("block-detail",{id,from:"ipv4"})} dark={dark}/>;
       case "ipv6":      return <Blocks ipVersion="IPv6" {...pageParams.ipv6} onSelectBlock={id=>navigate("block-detail",{id,from:"ipv6"})} dark={dark}/>;
       case "customers": return <Customers onNavigate={navigate}/>;
       case "vlans":     return <Vlans onNavigate={navigate}/>;
-      case "sites":     return <Sites/>;
-      case "export":    return <Export dark={dark}/>;
-      case "scan":      return <IPScan/>;
-      case "audit":     return <AuditLogs/>;
-      case "ping":      return <PingTrace/>;
-      case "import":    return <ImportPage/>;
-      case "subnet":    return <SubnetCalc/>;
-      case "global-ping": return <GlobalPing/>;
-      case "global-ping-detail": return <GlobalPingDetail/>;
-      case "settings":  return <SettingsPage dark={dark} onToggleDark={toggleDark}/>;
+      case "sites":     return <Sites onNavigate={navigate}/>;
+      case "export":    return <Export dark={dark} onNavigate={navigate}/>;
+      case "scan":      return <IPScan onNavigate={navigate}/>;
+      case "audit":     return <AuditLogs onNavigate={navigate}/>;
+      case "ping":      return <PingTrace onNavigate={navigate}/>;
+      case "import":    return <ImportPage onNavigate={navigate}/>;
+      case "subnet":    return <SubnetCalc onNavigate={navigate}/>;
+      case "global-ping": return <GlobalPing onNavigate={navigate}/>;
+      case "global-ping-detail": return <GlobalPingDetail onNavigate={navigate}/>;
+      case "settings":  return <SettingsPage dark={dark} onToggleDark={toggleDark} onNavigate={navigate}/>;
       default:          return <Dashboard onNavigate={navigate}/>;
     }
   };

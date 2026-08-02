@@ -139,8 +139,6 @@ export default function Dashboard({ onNavigate }) {
         <a href="http://103.10.120.11:3100" target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",gap:4,padding:"4px 10px",background:CARD,border:`1px solid ${BORDER}`,borderRadius:6,fontSize:"11px",color:ACCENT,textDecoration:"none"}}>Grafana ↗</a>
       </div>
 
-      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}`}</style>
-
       {/* ── UTILIZATION GAUGE + STATS ── */}
       <div style={{display:"grid",gridTemplateColumns:"200px 1fr",gap:16}}>
         {/* Gauge */}

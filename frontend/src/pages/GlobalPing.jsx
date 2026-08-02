@@ -46,7 +46,7 @@ function HistorySparkline({ data }) {
 const STORAGE_KEY = "ipam_globalping_data";
 const POLL_INTERVAL = 2000;
 
-export default function GlobalPing() {
+export default function GlobalPing({ onNavigate }) {
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
   const [summary, setSummary] = useState(null);
@@ -299,7 +299,7 @@ export default function GlobalPing() {
                     </span>
                   </td>
                   <td className="table-cell">
-                    <span onClick={() => window.location.hash = "global-ping-detail/" + (row.ip || row.prefix?.split("/")?.[0])}
+                    <span onClick={() => onNavigate?.("global-ping-detail", {id: row.ip || row.prefix?.split("/")?.[0]})}
                       style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "var(--accent)", cursor: "pointer", textDecoration: "underline", textDecorationColor: "var(--accent-dim)" }}>
                       {row.ip || row.prefix?.split("/")?.[0] || "—"}
                     </span>

@@ -7,7 +7,7 @@ function formatTime(ts) {
   return new Date(ts).toLocaleString("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-export default function GlobalPingDetail() {
+export default function GlobalPingDetail({ onNavigate }) {
   // Parse IP from hash: #global-ping-detail/1.2.3.4
   const ip = window.location.hash.replace("#global-ping-detail/", "").split("/")[0];
   const [data, setData] = useState(null);
@@ -41,7 +41,7 @@ export default function GlobalPingDetail() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 900, margin: "0 auto" }}>
       <PageHeader title={`IP: ${data.ip || ip}`}>
-        <Btn variant="secondary" size="sm" icon={Icons.arrowLeft} onClick={() => window.location.hash = "global-ping"}>Back</Btn>
+        <Btn variant="secondary" size="sm" icon={Icons.arrowLeft} onClick={() => onNavigate?.("global-ping")}>Back</Btn>
       </PageHeader>
 
       {/* Status Cards */}
