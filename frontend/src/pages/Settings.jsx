@@ -106,7 +106,7 @@ function ResetPasswordModal({ user, onClose, onSaved }) {
   const [err,    setErr]    = useState(null);
 
   const save = async () => {
-    if (!password || password.length < 4) return setErr(t("settings.passwordMinLength"));
+    if (!password || password.length < 8) return setErr(t("settings.passwordMinLength"));
     setSaving(true); setErr(null);
     try {
       const res = await authFetch(`/api/v1/users/${user.id}/reset-password`, {
@@ -181,7 +181,7 @@ export default function Settings({ dark, onToggleDark }) {
 
   const handleChangePassword = async () => {
     if (!oldPw || !newPw) return setPwMsg({type:"error", text:t("settings.fillPasswords")});
-    if (newPw.length < 4) return setPwMsg({type:"error", text:t("settings.passwordMinLength")});
+    if (newPw.length < 8) return setPwMsg({type:"error", text:t("settings.passwordMinLength")});
     setPwSaving(true); setPwMsg(null);
     try {
       const res = await authFetch("/api/v1/auth/change-password", {
@@ -292,8 +292,8 @@ export default function Settings({ dark, onToggleDark }) {
                   letterSpacing:"0.08em",color:"var(--text-dim)",marginBottom:6}}>{t("settings.newPassword")}</label>
                 <input type="password" value={newPw} onChange={e=>setNewPw(e.target.value)}
                   placeholder="Min 4 characters" className="input"
-                  style={{borderColor: pwMsg?.type==="error" && newPw && newPw.length < 4 ? "var(--danger)" : ""}}/>
-                {pwMsg?.type==="error" && newPw && newPw.length < 4 && (
+                  style={{borderColor: pwMsg?.type==="error" && newPw && newPw.length < 8 ? "var(--danger)" : ""}}/>
+                {pwMsg?.type==="error" && newPw && newPw.length < 8 && (
                   <div style={{fontSize:10,color:"var(--danger)",marginTop:3}}>{t("settings.min4Chars")}</div>
                 )}
               </div>
