@@ -1821,6 +1821,19 @@ async def get_ping_history(ip: str, days: int = Query(7, ge=1, le=90), db=Depend
     """, ip, days)
     return {"items": [dict(r) for r in rows]}
 
+@app.get("/api/v1/ping/active-ips", summary="Global Ping — list active IPs for agents", tags=["Global Ping"])
+async def get_active_ips(db=Depends(get_db)):
+    """Return list of active allocation IPs for remote agents to ping.
+    Used by Oracle Cloud SG/US agents to know which IPs to check."""
+    rows = await db.fetch("""
+        SELECT DISTINCT a.prefix::text AS ip, b.name AS block_name, b.site_name
+        FROM allocations a
+        JOIN ip_blocks b ON a.block_id = b.id
+        WHERE a.status = 'active'
+        ORDER BY a.prefix
+    """)
+    return {"items": [dict(r) for r in rows], "total": len(rows)}
+
 async def _run_scan_and_save_with_pool(ips: list[str]):
     global pool
     """Background task: scan + save + update history — pakai pool sendiri"""
@@ -1896,24 +1909,54 @@ async def _run_scan_and_save_with_pool(ips: list[str]):
 
 @app.post("/api/v1/ping/report", summary="Global Ping — receive agent report", tags=["Global Ping"])
 async def receive_ping_report(body: dict, db=Depends(get_db)):
-    """Receive ping results from Oracle Cloud agents"""
+    """Receive ping results from Oracle Cloud agents (SG/US) or other remote sources.
+    
+    Body: { "results": [{"ip": "x.x.x.x", "status": "online", "rtt_ms": 12.3}], "source": "oracle_sg" }
+    Source values: oracle_sg, oracle_us, http_global, icmp_local
+    """
     results = body.get("results", [])
     source = body.get("source", "unknown")
+    
+    # Map source ke kolom yang sesuai di ping_results
+    source_column_map = {
+        "oracle_sg": "oracle_sg_status",
+        "oracle_us": "oracle_us_status",
+    }
+    oracle_col = source_column_map.get(source)
+    
+    updated = 0
     for r in results:
         ip = r.get("ip")
         status = r.get("status")
         rtt = r.get("rtt_ms")
-        if ip and status:
+        if not ip or not status:
+            continue
+        
+        # Insert/update ping_results — update kolom oracle jika source = oracle_sg/us
+        if oracle_col:
+            await db.execute(f"""
+                INSERT INTO ping_results (ip, prefix, icmp_status, icmp_rtt, icmp_at, scanned_at, {oracle_col})
+                VALUES ($1::inet, ($1 || '/32')::cidr, $2, $3, NOW(), NOW(), $2)
+                ON CONFLICT (ip) DO UPDATE SET 
+                    {oracle_col} = $2,
+                    scanned_at = NOW()
+            """, ip, status, rtt)
+        else:
+            # Fallback: update icmp_status seperti sebelumnya
             await db.execute("""
                 INSERT INTO ping_results (ip, prefix, icmp_status, icmp_rtt, icmp_at, scanned_at)
                 VALUES ($1::inet, ($1 || '/32')::cidr, $2, $3, NOW(), NOW())
                 ON CONFLICT (ip) DO UPDATE SET icmp_status=$2, icmp_rtt=$3, icmp_at=NOW(), scanned_at=NOW()
             """, ip, status, rtt)
-            await db.execute("""
-                INSERT INTO ping_history (ip, status, rtt_ms, source, checked_at)
-                VALUES ($1::inet, $2, $3, $4, NOW())
-            """, ip, status, rtt, f"icmp_{source}")
-    return {"received": len(results), "source": source}
+        
+        # Selalu insert ke ping_history untuk history tracking
+        await db.execute("""
+            INSERT INTO ping_history (ip, status, rtt_ms, source, checked_at)
+            VALUES ($1::inet, $2, $3, $4, NOW())
+        """, ip, status, rtt, source)
+        updated += 1
+    
+    return {"received": len(results), "updated": updated, "source": source}
 
 @app.get("/api/v1/ping/summary", summary="Global Ping — summary dashboard", tags=["Global Ping"])
 async def get_ping_summary(db=Depends(get_db)):

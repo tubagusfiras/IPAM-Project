@@ -168,6 +168,38 @@ export default function GlobalPing({ onNavigate }) {
     ? Math.min(100, Math.round((scanProgress.scanned / scanProgress.total) * 100))
     : 0;
 
+  // Render status untuk region column (Oracle SG/US)
+  // "pending" = belum pernah lapor (agent belum jalan)
+  // "offline" = agent jalan tapi ping gagal
+  // "online" = agent jalan dan ping berhasil
+  const renderRegionStatus = (regionStatus) => {
+    if (!regionStatus || regionStatus === "pending") {
+      return (
+        <span style={{ fontSize: 10, color: "var(--text-dim)", fontStyle: "italic", display: "flex", alignItems: "center", gap: 4 }}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="2" width="12" height="12"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          N/A
+        </span>
+      );
+    }
+    if (regionStatus === "online") {
+      return (
+        <span style={{ fontSize: 11, fontWeight: 600, color: "var(--success)", display: "inline-flex", alignItems: "center", gap: 4 }}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="2.5" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>
+          Online
+        </span>
+      );
+    }
+    if (regionStatus === "offline") {
+      return (
+        <span style={{ fontSize: 11, fontWeight: 600, color: "var(--danger)", display: "inline-flex", alignItems: "center", gap: 4 }}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="var(--danger)" strokeWidth="2.5" width="14" height="14"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          Offline
+        </span>
+      );
+    }
+    return <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{regionStatus}</span>;
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <PageHeader title="Global Ping Visibility">
@@ -269,16 +301,16 @@ export default function GlobalPing({ onNavigate }) {
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
-              {["Status", "IP", "Customer / Desc", "Block / Site", "ICMP", "HTTP", "History", "Last Seen"].map(h => (
+              {["Status", "IP", "Customer / Desc", "Block / Site", "ICMP Local", "HTTP Global", "Oracle SG", "Oracle US", "Last Seen"].map(h => (
                 <th key={h} className="table-header">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={8} style={{ padding: 0 }}><Loading message="Loading ping results..." /></td></tr>
+              <tr><td colSpan={9} style={{ padding: 0 }}><Loading message="Loading ping results..." /></td></tr>
             ) : items.length === 0 ? (
-              <tr><td colSpan={8}>
+              <tr><td colSpan={9}>
                 <EmptyState icon={Icons.globe} title="No results yet"
                   message="Run a scan to check IP visibility from global internet" />
               </td></tr>
@@ -340,8 +372,13 @@ export default function GlobalPing({ onNavigate }) {
                       {row.http_status === "online" ? <span style={{display:"inline-flex",alignItems:"center",gap:4}}><svg viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="1.8" width="16" height="16"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>Online</span> : row.http_status === "offline" ? <span style={{display:"inline-flex",alignItems:"center",gap:4}}><svg viewBox="0 0 24 24" fill="none" stroke="var(--danger)" strokeWidth="2.5" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Offline</span> : "—"}
                     </span>
                   </td>
-                  <td className="table-cell" style={{ minWidth: 100 }}>
-                    <HistorySparkline data={row.history} />
+                  {/* Oracle SG */}
+                  <td className="table-cell">
+                    {renderRegionStatus(row.oracle_sg_status)}
+                  </td>
+                  {/* Oracle US */}
+                  <td className="table-cell">
+                    {renderRegionStatus(row.oracle_us_status)}
                   </td>
                   <td className="table-cell">
                     <span style={{ fontSize: 11, color: "var(--text-dim)" }}>

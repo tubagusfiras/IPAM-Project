@@ -1,0 +1,20 @@
+[Unit]
+Description=IPAM Global Ping Agent (Multi-Region)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/database-ipaddresses/scripts
+Environment=IPAM_SERVER=http://103.10.120.11:8101
+Environment=IPAM_API_KEY=CHANGE_ME
+Environment=AGENT_SOURCE=oracle_sg
+Environment=INTERVAL=300
+ExecStart=/usr/bin/python3 /opt/database-ipaddresses/scripts/ping_agent.py --interval 300
+Restart=always
+RestartSec=30
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
