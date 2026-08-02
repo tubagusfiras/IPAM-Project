@@ -343,16 +343,16 @@ export default function Dashboard({ onNavigate }) {
             </div>
             <div style={{display:"flex",gap:6}}>
               <a href="http://103.10.120.11:3100" target="_blank" rel="noreferrer" style={{fontSize:"10px",color:ACCENT,textDecoration:"none",borderBottom:"1px dashed",padding:"2px 4px"}}>Open Grafana →</a>
-              <button onClick={()=>setShowGrafana(false)} style={{fontSize:"14px",cursor:"pointer",background:"none",border:"none",color:DIM,lineHeight:1}}>✕</button>
+              <button onClick={()=>setShowGrafana(false)} style={{fontSize:"14px",cursor:"pointer",background:"none",border:"none",color:DIM,lineHeight:1}}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
           </div>
           <iframe src={"http://103.10.120.11:3100/d-solo/ipam-overview?orgId=1&from=now-1h&to=now&panelId=6&theme=" + gTheme}
             width="100%" height="260" frameborder="0" style={{display:"block"}}/>
           {/* Explanation */}
           <div style={{display:"flex",gap:12,padding:"10px 14px",borderTop:`1px solid ${BORDER}`,flexWrap:"wrap",fontSize:"11px",color:MUTED}}>
-            <span>📊 <b>Request Rate</b> — API requests per second</span>
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" width="12" height="12" style={{marginRight:4,verticalAlign:"middle"}}><path d="M18 20V10M12 20V4M6 20v-6"/></svg><b>Request Rate</b> — API requests per second</span>
             <span>⏱ <b>Latency</b> — p95 response time</span>
-            <span>⚠ <b>Errors</b> — 4xx/5xx rate</span>
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" width="12" height="12" style={{marginRight:4,verticalAlign:"middle"}}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><b>Errors</b> — 4xx/5xx rate</span>
             <span>💾 <b>DB Pool</b> — Database connection usage</span>
             <span style={{fontSize:"10px",color:DIM}}>Data from Prometheus · 1h window</span>
           </div>

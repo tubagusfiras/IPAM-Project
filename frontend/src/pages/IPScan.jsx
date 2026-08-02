@@ -245,7 +245,7 @@ export default function IPScan() {
             ) : (
               <button onClick={cancelScan} className="btn btn-secondary"
                 style={{height:38,color:"var(--danger)",borderColor:"var(--danger-border)"}}>
-                ✕ Cancel
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="12" height="12" style={{marginRight:4}}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Cancel
               </button>
             )}
             {isDone && (
@@ -301,7 +301,7 @@ export default function IPScan() {
             {(isDone || scanData.scanned > 0) && (
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginTop:16}}>
                 {[
-                  {key:"active",       label:"Responding",    val:scanData.responding_count,   icon:"✓", color:"var(--success)", bg:"var(--success-surface)", border:"var(--success-border)"},
+                  {key:"active",       label:"Responding",    val:scanData.responding_count,   icon:"check", color:"var(--success)", bg:"var(--success-surface)", border:"var(--success-border)"},
                   {key:"ghost",        label:"Ghost",         val:scanData.ghost_count,         icon:"ghost", color:"#ef4444",         bg:"rgba(239,68,68,0.08)",   border:"rgba(239,68,68,0.22)"},
                   {key:"unregistered", label:"Unregistered",  val:scanData.unregistered_count,  icon:"warn",  color:"#f59e0b",         bg:"rgba(245,158,11,0.08)", border:"rgba(245,158,11,0.22)"},
                   {key:"idle",         label:"Idle",          val:idleCount,                    icon:"○",   color:"var(--text-dim)", bg:"var(--surface-2)",      border:"var(--border-soft)"},
@@ -336,7 +336,7 @@ export default function IPScan() {
           color: actionMsg.type==="error" || actionMsg.type==="delete" ? "var(--danger)" : "var(--success)",
           border: `1px solid ${actionMsg.type==="error" || actionMsg.type==="delete" ? "var(--danger-border)" : "var(--success-border)"}`,
         }}>
-          <span>{actionMsg.type==="error" ? "✕" : "✓"}</span>
+          <span>{actionMsg.type==="error" ? <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> : <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>}</span>
           {actionMsg.text}
         </div>
       )}
@@ -498,7 +498,7 @@ export default function IPScan() {
             <div className="modal-header">
               <div style={{fontWeight:700,fontSize:15,color:"var(--text)"}}>Confirm Delete</div>
               <button onClick={()=>setConfirmDel(null)}
-                style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-muted)",fontSize:18}}>✕</button>
+                style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-muted)",fontSize:18}}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
             <div className="modal-body">
               <p style={{fontSize:13,color:"var(--text-muted)",lineHeight:1.6,margin:0}}>

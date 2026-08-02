@@ -320,7 +320,7 @@ export default function GlobalPing({ onNavigate }) {
                       fontSize: 11, fontWeight: 600,
                       color: isOnline ? "var(--success)" : "var(--text-dim)",
                     }}>
-                      {isOnline ? "✅ Online" : isOffline ? "❌ Offline" : "—"}
+                      {isOnline ? <span style={{display:"inline-flex",alignItems:"center",gap:4}}><svg viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="2.5" width="16" height="16"><polyline points="20 6 9 17 4 12"/></svg>Online</span> : isOffline ? <span style={{display:"inline-flex",alignItems:"center",gap:4}}><svg viewBox="0 0 24 24" fill="none" stroke="var(--danger)" strokeWidth="2.5" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Offline</span> : "—"}
                     </span>
                     {row.icmp_rtt != null && (
                       <span style={{ fontSize: 10, color: "var(--text-dim)", marginLeft: 4 }}>
@@ -333,7 +333,7 @@ export default function GlobalPing({ onNavigate }) {
                       fontSize: 11, fontWeight: 600,
                       color: row.http_status === "online" ? "var(--success)" : row.http_status === "offline" ? "var(--danger)" : "var(--text-dim)",
                     }}>
-                      {row.http_status === "online" ? "🌍 Online" : row.http_status === "offline" ? "❌ Offline" : "—"}
+                      {row.http_status === "online" ? <span style={{display:"inline-flex",alignItems:"center",gap:4}}><svg viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="1.8" width="16" height="16"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>Online</span> : row.http_status === "offline" ? <span style={{display:"inline-flex",alignItems:"center",gap:4}}><svg viewBox="0 0 24 24" fill="none" stroke="var(--danger)" strokeWidth="2.5" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Offline</span> : "—"}
                     </span>
                   </td>
                   <td className="table-cell" style={{ minWidth: 100 }}>

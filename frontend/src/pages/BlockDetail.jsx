@@ -704,11 +704,11 @@ export default function BlockDetail({ blockId, onBack, dark }) {
           <div style={{display:"flex",gap:8}}>
             <button onClick={()=>setShowGrid(v=>!v)}
               className={`btn ${showGrid?"btn-primary":"btn-secondary"} btn-sm`}>
-              🗺 IP Map
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" width="14" height="14" style={{marginRight:4}}><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg> IP Map
             </button>
             <button onClick={()=>setShowCalc(v=>!v)}
               className={`btn ${showCalc?"btn-primary":"btn-secondary"} btn-sm`}>
-              🧮 Subnet Calc
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" width="14" height="14" style={{marginRight:4}}><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="8" y2="10.01"/><line x1="12" y1="10" x2="12" y2="10.01"/><line x1="16" y1="10" x2="16" y2="10.01"/><line x1="8" y1="14" x2="8" y2="14.01"/><line x1="12" y1="14" x2="12" y2="14.01"/><line x1="16" y1="14" x2="16" y2="14.01"/><line x1="8" y1="18" x2="16" y2="18"/></svg> Subnet Calc
             </button>
             <button onClick={()=>setEditModal(true)} className="btn btn-secondary btn-sm">
               Edit Block
@@ -953,9 +953,9 @@ export default function BlockDetail({ blockId, onBack, dark }) {
             <tbody>
               {allocs.length===0 ? (
                 <tr><td colSpan={11}>
-                  <div style={{display:"flex",flexDirection:"column",alignItems:"center",
+                    <div style={{display:"flex",flexDirection:"column",alignItems:"center",
                     justifyContent:"center",padding:"48px 0",gap:8}}>
-                    <div style={{fontSize:28}}>📋</div>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="1.5" width="32" height="32"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
                     <div style={{fontSize:13,color:"var(--text-muted)"}}>No allocations found</div>
                   </div>
                 </td></tr>
@@ -1208,7 +1208,7 @@ export default function BlockDetail({ blockId, onBack, dark }) {
                 {allocs.length===0 ? (
                   <tr><td colSpan={9}>
                     <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"48px 0",gap:8}}>
-                      <div style={{fontSize:28}}>📋</div>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="1.5" width="32" height="32"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
                       <div style={{fontSize:13,color:"var(--text-muted)"}}>No allocations found</div>
                     </div>
                   </td></tr>

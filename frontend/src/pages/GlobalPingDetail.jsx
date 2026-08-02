@@ -49,14 +49,14 @@ export default function GlobalPingDetail({ onNavigate }) {
         <Card accent={data.icmp_status === "online" ? "#22c55e" : "#ef4444"} padding={16}>
           <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>ICMP (Server)</div>
           <div style={{ fontSize: 22, fontWeight: 700, color: data.icmp_status === "online" ? "var(--success)" : "var(--danger)" }}>
-            {data.icmp_status === "online" ? "✅ Online" : "❌ Offline"}
+            {data.icmp_status === "online" ? <span style={{display:"inline-flex",alignItems:"center",gap:4}}><svg viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="2.5" width="16" height="16"><polyline points="20 6 9 17 4 12"/></svg>Online</span> : <span style={{display:"inline-flex",alignItems:"center",gap:4}}><svg viewBox="0 0 24 24" fill="none" stroke="var(--danger)" strokeWidth="2.5" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Offline</span>}
           </div>
           <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 2 }}>{formatRtt(data.icmp_rtt)}</div>
         </Card>
         <Card accent={data.http_status === "online" ? "#22c55e" : data.http_status === "offline" ? "#ef4444" : "#f59e0b"} padding={16}>
           <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>HTTP (Singapore)</div>
           <div style={{ fontSize: 22, fontWeight: 700, color: data.http_status === "online" ? "var(--success)" : data.http_status === "offline" ? "var(--danger)" : "var(--text-dim)" }}>
-            {data.http_status === "online" ? "🌍 Online" : data.http_status === "offline" ? "❌ Offline" : "— Pending"}
+            {data.http_status === "online" ? <span style={{display:"inline-flex",alignItems:"center",gap:4}}><svg viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="1.8" width="16" height="16"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>Online</span> : data.http_status === "offline" ? <span style={{display:"inline-flex",alignItems:"center",gap:4}}><svg viewBox="0 0 24 24" fill="none" stroke="var(--danger)" strokeWidth="2.5" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Offline</span> : "— Pending"}
           </div>
           {data.http_rtt && <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 2 }}>{data.http_rtt}ms</div>}
         </Card>

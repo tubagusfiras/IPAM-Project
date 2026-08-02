@@ -430,7 +430,7 @@ function SubnetCalc({ blockPrefix, allocations, onSelect }) {
     }}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
         <div style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>
-          🧮 Subnet Calculator
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" width="14" height="14" style={{marginRight:4}}><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="8" y2="10.01"/><line x1="12" y1="10" x2="12" y2="10.01"/><line x1="16" y1="10" x2="16" y2="10.01"/><line x1="8" y1="14" x2="8" y2="14.01"/><line x1="12" y1="14" x2="12" y2="14.01"/><line x1="16" y1="14" x2="16" y2="14.01"/><line x1="8" y1="18" x2="16" y2="18"/></svg> Subnet Calculator
           <span style={{fontSize:11,color:"var(--text-muted)",fontWeight:400,marginLeft:8}}>
             find available space in {blockPrefix}
           </span>
@@ -453,7 +453,7 @@ function SubnetCalc({ blockPrefix, allocations, onSelect }) {
         <div style={{fontSize:12,paddingBottom:4}}>
           {slots.length===0
             ? <span style={{color:"var(--warning)"}}>! No available slots</span>
-            : <span style={{color:"var(--success)"}}>✓ {slots.length} slot{slots.length>1?"s":""} available</span>
+            : <span style={{color:"var(--success)",display:"inline-flex",alignItems:"center",gap:4}}><svg viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="2.5" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>{slots.length} slot{slots.length>1?"s":""} available</span>
           }
         </div>
       </div>
