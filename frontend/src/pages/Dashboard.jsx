@@ -309,7 +309,7 @@ export default function Dashboard({ onNavigate }) {
             <svg viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="1.8" width="20" height="20"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
             <span style={{fontSize:13,fontWeight:600,color:TEXT}}>Global Ping</span>
           </div>
-          <div onClick={()=>window.location.hash="global-ping"} style={{cursor:"pointer",display:"flex",gap:16}}>
+          <div onClick={()=>onNavigate?.("global-ping")} style={{cursor:"pointer",display:"flex",gap:16}}>
             <span style={{fontSize:12,color:MUTED}}>Total: <b style={{color:TEXT}}>{pingSummary.total_active_ips||0}</b></span>
             <span style={{fontSize:12,color:MUTED}}>Online: <b style={{color:"var(--success)"}}>{pingSummary.online||0}</b></span>
             <span style={{fontSize:12,color:MUTED}}>Offline: <b style={{color:"var(--danger)"}}>{pingSummary.offline||0}</b></span>

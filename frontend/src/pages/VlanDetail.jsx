@@ -120,7 +120,7 @@ export default function VlanDetail({ vlanId, onBack, onNavigate }) {
                 ? <span style={{color:"var(--text-dim)"}}>—</span>
                 : <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
                     {customers.map(c => (
-                      <a key={c.id} onClick={e=>{e.preventDefault();onNavigate?.("customer-detail", {id:c.id});}}
+                      <a key={c.id} onClick={e=>{e.preventDefault();onNavigate?.("customer-detail", {id:c.id, from:"vlan-detail"});}}
                         href="#" style={{textDecoration:"none"}}>
                         <Tag color="var(--accent)">{c.name}</Tag>
                       </a>
@@ -198,7 +198,7 @@ export default function VlanDetail({ vlanId, onBack, onNavigate }) {
                       </td>
                       <td style={{padding:"7px 12px"}}>
                         {a.customer_id ? (
-                          <a onClick={e=>{e.preventDefault();onNavigate?.("customer-detail", {id:a.customer_id});}}
+                          <a onClick={e=>{e.preventDefault();onNavigate?.("customer-detail", {id:a.customer_id, from:"vlan-detail"});}}
                             href="#" style={{textDecoration:"none"}}>
                             <span style={{color:"var(--accent)",cursor:"pointer"}}>{a.customer_name}</span>
                           </a>

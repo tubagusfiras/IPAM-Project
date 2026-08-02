@@ -1078,7 +1078,7 @@ export default function BlockDetail({ blockId, onBack, dark }) {
                             onCreate={v=>saveField(row.id,"customer_name",v)}
                             onSave={v=>saveField(row.id,"customer_name",v)}/>
                           {row.customer_name && row.customer_id && (
-                            <a onClick={e=>{e.preventDefault();e.stopPropagation();window.location.hash=`customer-detail/${row.customer_id}`;}}
+                            <a onClick={e=>{e.preventDefault();e.stopPropagation();onNavigate?.("customer-detail",{id:row.customer_id,from:"block-detail"});}}
                               href="#" title="View customer"
                               style={{fontSize:9,color:"var(--text-dim)",flexShrink:0,cursor:"pointer",
                                 padding:"1px 2px",lineHeight:1,opacity:0.5,transition:"opacity 0.12s"}}
@@ -1104,7 +1104,7 @@ export default function BlockDetail({ blockId, onBack, dark }) {
                           suggestions={vlanVids} mono
                           onSave={v=>saveField(row.id,"vlan_vid",v)}/>
                         {row.vlan_vid && row.vlan_id && (
-                          <a onClick={e=>{e.preventDefault();e.stopPropagation();window.location.hash=`vlan-detail/${row.vlan_id}`;}}
+                          <a onClick={e=>{e.preventDefault();e.stopPropagation();onNavigate?.("vlan-detail",{id:row.vlan_id,from:"block-detail"});}}
                             href="#" title="View VLAN"
                             style={{fontSize:9,color:"var(--text-dim)",flexShrink:0,cursor:"pointer",
                               padding:"1px 2px",lineHeight:1,opacity:0.5,transition:"opacity 0.12s"}}
