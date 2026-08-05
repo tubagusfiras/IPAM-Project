@@ -1,7 +1,6 @@
 import { useState, useEffect, Suspense, lazy } from "react";
 import { getToken, getStoredUser, clearToken } from "./api.js";
 import { useToast } from "./components/Toast.jsx";
-import { I18nProvider } from "./i18n.jsx";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary.jsx";
 import Login from "./pages/Login.jsx";
 import { Sidebar } from "./components/Sidebar.jsx";
@@ -163,9 +162,9 @@ export default function App() {
       setCollapsed(true);
     }
     
-    if (["block-detail","vlan-detail","customer-detail"].includes(page)) {
+    if (["block-detail","vlan-detail","customer-detail","global-ping-detail"].includes(page)) {
       window.location.hash = page + "/" + params.id;
-      setRoute({ page, ...params });
+      setRoute({ page, from: params.from || active, ...params });
     } else {
       window.location.hash = page;
       setRoute(null); setActive(page);
@@ -227,7 +226,7 @@ export default function App() {
     if (route?.page === "block-detail") return <BlockDetail blockId={route.id} onBack={goBack} dark={dark} onNavigate={navigate}/>;
     if (route?.page === "vlan-detail") return <VlanDetail vlanId={route.id} onBack={goBack} onNavigate={navigate}/>;
     if (route?.page === "customer-detail") return <CustomerDetail customerId={route.id} onBack={goBack} onNavigate={navigate}/>;
-    if (route?.page === "global-ping-detail") return <GlobalPingDetail onBack={goBack} onNavigate={navigate}/>;
+    if (route?.page === "global-ping-detail") return <GlobalPingDetail ip={route.id} onBack={goBack} onNavigate={navigate}/>;
     switch(active) {
       case "dashboard": return <Dashboard onNavigate={navigate}/>;
       case "ipv4":      return <Blocks ipVersion="IPv4" {...pageParams.ipv4} onSelectBlock={id=>navigate("block-detail",{id,from:"ipv4"})} dark={dark}/>;
@@ -269,46 +268,44 @@ export default function App() {
   }
 
   return (
-    <I18nProvider>
-      <div style={{minHeight:"100vh",background:"var(--bg)"}}>
-        {/* Mobile overlay when sidebar open */}
-        {!collapsed && (
-          <div onClick={()=>setCollapsed(true)} className="mobile-overlay" />
-        )}
-        <Sidebar
-          active={route ? "" : active}
-          onNavigate={navigate}
-          collapsed={collapsed}
-          onToggle={()=>setCollapsed(v=>!v)}
-          user={user}
-        />
-        <Header
-          title={pageTitle}
-          subtitle={pageSubtitle}
-          onBack={route ? goBack : null}
-          dark={dark}
-          onToggleDark={toggleDark}
-          collapsed={collapsed}
-          user={user}
-          onLogout={handleLogout}
-          onNavigate={navigate}
-          onToggle={()=>setCollapsed(v=>!v)}
-        />
-        <main className="app-main" style={{
-          paddingTop:"var(--topbar-h)",
-          marginLeft: collapsed ? "var(--sidebar-collapsed)" : "var(--sidebar-w)",
-          transition:"margin-left var(--transition)",
-          minHeight:"100vh",
-        }}>
-          <div style={{padding:24}} className="main-content">
-            <ErrorBoundary>
-              <Suspense fallback={<Loading/>}>
-                {renderPage()}
-              </Suspense>
-            </ErrorBoundary>
-          </div>
-        </main>
-      </div>
-    </I18nProvider>
+    <div style={{minHeight:"100vh",background:"var(--bg)"}}>
+      {/* Mobile overlay when sidebar open */}
+      {!collapsed && (
+        <div onClick={()=>setCollapsed(true)} className="mobile-overlay" />
+      )}
+      <Sidebar
+        active={route ? "" : active}
+        onNavigate={navigate}
+        collapsed={collapsed}
+        onToggle={()=>setCollapsed(v=>!v)}
+        user={user}
+      />
+      <Header
+        title={pageTitle}
+        subtitle={pageSubtitle}
+        onBack={route ? goBack : null}
+        dark={dark}
+        onToggleDark={toggleDark}
+        collapsed={collapsed}
+        user={user}
+        onLogout={handleLogout}
+        onNavigate={navigate}
+        onToggle={()=>setCollapsed(v=>!v)}
+      />
+      <main className="app-main" style={{
+        paddingTop:"var(--topbar-h)",
+        marginLeft: collapsed ? "var(--sidebar-collapsed)" : "var(--sidebar-w)",
+        transition:"margin-left var(--transition)",
+        minHeight:"100vh",
+      }}>
+        <div style={{padding:24}} className="main-content">
+          <ErrorBoundary>
+            <Suspense fallback={<Loading/>}>
+              {renderPage()}
+            </Suspense>
+          </ErrorBoundary>
+        </div>
+      </main>
+    </div>
   );
 }

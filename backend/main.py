@@ -958,7 +958,8 @@ async def _log_audit(db, action: str, entity_type: str, entity_id, entity_prefix
         logger.error("Audit log error: {}", e)
 
 @app.post("/api/v1/scan/start", summary="Start IP scan for a block", tags=["IP Scan"])
-async def start_scan(body: dict, db=Depends(get_db)):
+@limiter.limit("3/minute")
+async def start_scan(request: Request, body: dict, db=Depends(get_db)):
     """Start background scan for a block."""
     block_id = body.get("block_id")
     if not block_id:
@@ -1147,7 +1148,8 @@ async def clear_scan(scan_id: str):
     return {"status": "cleared"}
 
 @app.post("/api/v1/scan/action", summary="Take action on scan result", tags=["IP Scan"])
-async def scan_action(body: dict, request: Request, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
+@limiter.limit("10/minute")
+async def scan_action(request: Request, body: dict, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     """Perform action on scan result — mark or delete allocation."""
     action = body.get("action")  # "delete" | "mark_deprecated"
     alloc_id = body.get("alloc_id")
@@ -1309,7 +1311,8 @@ async def _stream_command(cmd: list):
             except: pass
 
 @app.get("/api/v1/ping-trace/ping", summary="Ping target (SSE stream)", tags=["Ping & Trace"])
-async def stream_ping(target: str = Query(...), count: int = Query(4, ge=1, le=20)):
+@limiter.limit("10/minute")
+async def stream_ping(request: Request, target: str = Query(...), count: int = Query(4, ge=1, le=20)):
     if not _validate_target(target):
         raise HTTPException(400, "Invalid target format")
     cmd = ["ping", "-c", str(count), target]
@@ -1317,7 +1320,8 @@ async def stream_ping(target: str = Query(...), count: int = Query(4, ge=1, le=2
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 @app.get("/api/v1/ping-trace/traceroute", summary="Traceroute target (SSE stream)", tags=["Ping & Trace"])
-async def stream_traceroute(target: str = Query(...), max_hops: int = Query(30, ge=1, le=64)):
+@limiter.limit("5/minute")
+async def stream_traceroute(request: Request, target: str = Query(...), max_hops: int = Query(30, ge=1, le=64)):
     if not _validate_target(target):
         raise HTTPException(400, "Invalid target format")
     cmd = ["traceroute", "-m", str(max_hops), "-w", "2", target]
@@ -1370,7 +1374,9 @@ async def _stream_mtr(target: str, max_hops: int, interval: float, dns_enabled: 
         await asyncio.sleep(interval)
 
 @app.get("/api/v1/ping-trace/mtr", summary="MTR realtime (SSE stream)", tags=["Ping & Trace"])
+@limiter.limit("3/minute")
 async def stream_mtr(
+    request: Request,
     target: str = Query(...),
     max_hops: int = Query(30, ge=1, le=64),
     interval: float = Query(2.0, ge=1.0, le=10.0),
@@ -1465,7 +1471,8 @@ async def list_users(current_user: dict = Depends(require_admin), db=Depends(get
     return {"items": [dict(r) for r in rows]}
 
 @app.post("/api/v1/users", status_code=201, summary="Create user (admin)", tags=["User Management"])
-async def create_user(body: UserIn, current_user: dict = Depends(require_admin), db=Depends(get_db)):
+@limiter.limit("3/minute")
+async def create_user(request: Request, body: UserIn, current_user: dict = Depends(require_admin), db=Depends(get_db)):
     existing = await db.fetchrow("SELECT id FROM users WHERE username=$1 OR email=$2", body.username, body.email)
     if existing:
         raise HTTPException(409, "Username or email already exists")
@@ -1533,7 +1540,8 @@ import io, csv
 from fastapi import UploadFile, File, Form
 
 @app.post("/api/v1/import/preview", summary="Preview CSV import", tags=["Import"])
-async def preview_import(file: UploadFile = File(...), db=Depends(get_db)):
+@limiter.limit("10/minute")
+async def preview_import(request: Request, file: UploadFile = File(...), db=Depends(get_db)):
     if not file.filename.lower().endswith((".csv", ".xls", ".xlsx", ".txt")):
         raise HTTPException(400, "Hanya file CSV yang didukung")
     content = await file.read()
@@ -1547,9 +1555,11 @@ async def preview_import(file: UploadFile = File(...), db=Depends(get_db)):
     # Pass filename untuk fallback prefix extraction dari filename
     meta, allocs = parse_ipv6_csv(text, filename=file.filename) if is_ipv6 else parse_ipv4_csv(text, filename=file.filename)
 
-    # Validasi overlap
+    # Validasi overlap + range
     import ipaddress as ip_mod
     overlaps = []
+    out_of_range = []
+    block_warnings = []
     sorted_a = sorted(allocs, key=lambda a: ip_mod.ip_network(a["prefix"], strict=False))
     for i in range(len(sorted_a)):
         for j in range(i + 1, len(sorted_a)):
@@ -1564,6 +1574,26 @@ async def preview_import(file: UploadFile = File(...), db=Depends(get_db)):
                 })
                 break
 
+    # Validasi range: pastikan semua allocation dalam block prefix
+    if meta.get("prefix"):
+        try:
+            block_net = ip_mod.ip_network(meta["prefix"], strict=False)
+            block_capacity = 2 ** (32 - block_net.prefixlen) if block_net.version == 4 else 2 ** (128 - block_net.prefixlen)
+            for a in allocs:
+                try:
+                    a_net = ip_mod.ip_network(a["prefix"], strict=False)
+                    if a_net.version != block_net.version:
+                        out_of_range.append(f"{a['prefix']} (IPv{a_net.version} vs IPv{block_net.version})")
+                    elif not (a_net.network_address >= block_net.network_address and
+                              a_net.broadcast_address <= block_net.broadcast_address):
+                        out_of_range.append(a["prefix"])
+                except ValueError:
+                    pass
+            if len(allocs) > block_capacity:
+                block_warnings.append(f"Jumlah allocation ({len(allocs)}) melebihi kapasitas block (max {block_capacity})")
+        except ValueError:
+            pass
+
     return {
         "meta": meta,
         "allocations": allocs,
@@ -1571,10 +1601,15 @@ async def preview_import(file: UploadFile = File(...), db=Depends(get_db)):
         "format": "ipv6" if is_ipv6 else "ipv4",
         "overlaps": overlaps,
         "has_overlaps": len(overlaps) > 0,
+        "out_of_range": out_of_range,
+        "has_out_of_range": len(out_of_range) > 0,
+        "block_warnings": block_warnings,
+        "has_block_warnings": len(block_warnings) > 0,
     }
 
 @app.post("/api/v1/import/confirm", summary="Confirm CSV import", tags=["Import"])
-async def confirm_import(body: dict, db=Depends(get_db)):
+@limiter.limit("5/minute")
+async def confirm_import(request: Request, body: dict, db=Depends(get_db)):
     meta = body.get("meta", {})
     allocs = body.get("allocations", [])
     site_id = body.get("site_id")
@@ -1584,6 +1619,39 @@ async def confirm_import(body: dict, db=Depends(get_db)):
     if not allocs:
         raise HTTPException(400, "No allocations to import")
 
+    # Validasi block prefix capacity
+    try:
+        block_net = ipaddress.ip_network(meta["prefix"], strict=False)
+    except ValueError:
+        raise HTTPException(400, f"Invalid block prefix: {meta['prefix']}")
+    block_capacity = 2 ** (32 - block_net.prefixlen) if block_net.version == 4 else 2 ** (128 - block_net.prefixlen)
+
+    # Validasi setiap allocation berada dalam range block + capacity check
+    valid_allocs = []
+    out_of_range = []
+    for alloc in allocs:
+        if not alloc.get("prefix"):
+            continue
+        try:
+            alloc_net = ipaddress.ip_network(alloc["prefix"], strict=False)
+        except ValueError:
+            continue
+        if alloc_net.version != block_net.version:
+            out_of_range.append(f"{alloc['prefix']} (IPv{alloc_net.version} vs IPv{block_net.version})")
+            continue
+        if not (alloc_net.network_address >= block_net.network_address and
+                alloc_net.broadcast_address <= block_net.broadcast_address):
+            out_of_range.append(alloc["prefix"])
+            continue
+        valid_allocs.append(alloc)
+
+    if out_of_range:
+        raise HTTPException(400, f"{len(out_of_range)} allocation(s) di luar range block {meta['prefix']}: {', '.join(out_of_range[:10])}{'...' if len(out_of_range) > 10 else ''}")
+
+    if len(valid_allocs) > block_capacity:
+        raise HTTPException(400, f"Jumlah allocation ({len(valid_allocs)}) melebihi kapasitas block {meta['prefix']} (max {block_capacity})")
+
+    allocs = valid_allocs
     imported = 0
     skipped = 0
     block_id = None
@@ -1660,10 +1728,33 @@ async def confirm_import(body: dict, db=Depends(get_db)):
             )
             imported += 1
 
-    # Log
-    await _log_audit(db, "import", "block", block_id, None,
-        description=f"CSV import: {imported} allocation(s) imported, {skipped} skipped",
-        new_data={"imported": imported, "skipped": skipped}, changed_by="csv_import")
+    # Log — enriched with import details
+    block_row = await db.fetchrow("SELECT prefix::text, name FROM ip_blocks WHERE id=$1::uuid", block_id)
+    block_prefix = block_row["prefix"] if block_row else str(meta.get("prefix",""))
+    block_name = block_row["name"] if block_row else meta.get("name","")
+
+    # Collect imported allocation summaries (prefix + customer)
+    alloc_summary = []
+    for a in allocs[:200]:  # limit 200 entries in log
+        if not a.get("prefix"):
+            continue
+        alloc_summary.append({
+            "prefix": a["prefix"],
+            "customer": a.get("customer") or None,
+            "vlan": a.get("vlan"),
+            "status": a.get("status", "active"),
+        })
+
+    await _log_audit(db, "import", "block", block_id, block_prefix,
+        description=f"CSV import ke {block_prefix} ({block_name}): {imported} alokasi di-import, {skipped} di-skip",
+        new_data={
+            "imported": imported,
+            "skipped": skipped,
+            "block_prefix": block_prefix,
+            "block_name": block_name,
+            "site_id": site_id,
+            "allocations": alloc_summary,
+        }, changed_by="csv_import")
 
     return {"block_id": str(block_id), "imported": imported, "skipped": skipped}
 
@@ -1718,6 +1809,7 @@ PING_SCHEDULER_LOCK = asyncio.Lock()
 PING_IS_RUNNING = False
 PING_LAST_SCAN = None
 PING_PROGRESS = {"scanned": 0, "total": 0, "eta": None}
+PING_CANCEL = False
 PING_SOURCE = platform.node() or "ipam-server"
 
 @app.get("/api/v1/ping/status", summary="Global Ping — latest scan results", tags=["Global Ping"])
@@ -1731,28 +1823,77 @@ async def get_ping_status(
     db=Depends(get_db)
 ):
     """Get latest ping results, filter by status and search IP"""
-    global PING_IS_RUNNING, PING_LAST_SCAN
+    global PING_IS_RUNNING, PING_LAST_SCAN, PING_PROGRESS
+
+    if PING_IS_RUNNING and PING_PROGRESS.get("scanned", 0) == 0:
+        try:
+            stored = await redis_client.get("ping:progress")
+            if stored:
+                import json as _json
+                PING_PROGRESS = _json.loads(stored)
+        except: pass
 
     params = []
-    conditions = ["1=1"]
+    conditions = ["al.status = 'active'", "family(al.prefix) = 4", "masklen(al.prefix) >= 24"]
     if status and status != "all":
-        params.append(status)
-        conditions.append(f"pr.icmp_status = CAST(${len(params)} AS text)")
+        if status == "pending":
+            conditions.append("(pr.icmp_status IS NULL OR pr.scanned_at < NOW() - INTERVAL '1 day')")
+        else:
+            params.append(status)
+            conditions.append(f"COALESCE(pr.icmp_status, 'pending') = CAST(${len(params)} AS text)")
 
     if search:
         params.append(f"%{search}%")
-        conditions.append(f"pr.ip::text ILIKE CAST(${len(params)} AS text)")
+        conditions.append(f"(host((al.prefix::cidr - 1 + 2))::text ILIKE CAST(${len(params)} AS text) OR al.prefix::text ILIKE CAST(${len(params)} AS text) OR c.name ILIKE CAST(${len(params)} AS text) OR b.name ILIKE CAST(${len(params)} AS text))")
 
     where = " AND ".join(conditions)
-    order_col = f"pr.{sort_by}" if sort_by != "scanned_at" else "pr.scanned_at"
+    sort_map = {
+        "ip": "host_ip",
+        "icmp_status": "icmp_status",
+        "http_status": "http_status",
+        "customer_name": "c_name",
+        "scanned_at": "pr.scanned_at",
+        "icmp_rtt": "pr.icmp_rtt",
+    }
+    order_col = sort_map.get(sort_by, "host_ip")
+    order_nulls = " NULLS LAST" if order_col in ("pr.scanned_at", "pr.icmp_rtt") else ""
     query = f"""
-        SELECT pr.*
-        FROM ping_results pr
+        SELECT host_ip, pr.icmp_status, pr.icmp_rtt, pr.icmp_at, pr.http_status, pr.http_rtt, pr.http_at,
+            pr.scanned_at,
+            c.name AS customer_name, b.name AS block_name, s.name AS site_name,
+            al.prefix::text AS alloc_prefix, al.status AS alloc_status,
+            (CASE WHEN b.prefix IS NOT NULL THEN
+                (CASE WHEN family(b.prefix) = 4 THEN power(2, 32 - masklen(b.prefix))::int
+                      ELSE power(2, 128 - masklen(b.prefix))::bigint END)
+            ELSE NULL END) AS block_total_ips,
+            (SELECT COUNT(*) FROM ping_region_details prd WHERE prd.ip = host_ip AND prd.status = 'online') as regions_online,
+            (SELECT COUNT(*) FROM ping_region_details prd WHERE prd.ip = host_ip) as regions_total
+        FROM (
+            SELECT DISTINCT ON (al.id)
+                host((al.prefix::cidr - 1 + 2))::inet AS host_ip,
+                al.id AS alloc_id, al.block_id
+            FROM allocations al
+            WHERE al.status = 'active' AND family(al.prefix) = 4 AND masklen(al.prefix) >= 24
+        ) sub
+        JOIN allocations al ON al.id = sub.alloc_id
+        LEFT JOIN ip_blocks b ON al.block_id = b.id
+        LEFT JOIN sites s ON b.site_id = s.id
+        LEFT JOIN customers c ON al.customer_id = c.id
+        LEFT JOIN ping_results pr ON pr.ip = sub.host_ip
         WHERE {where}
-        ORDER BY {order_col} {sort_dir} LIMIT ${len(params)+1} OFFSET ${len(params)+2}
+        ORDER BY {order_col} {sort_dir}{order_nulls} LIMIT ${len(params)+1} OFFSET ${len(params)+2}
     """
     rows = await db.fetch(query, *params, limit, offset)
-    total = await db.fetchval(f"SELECT COUNT(*) FROM ping_results pr WHERE {where}", *params)
+    total = await db.fetchval(f"""
+        SELECT COUNT(*) FROM (
+            SELECT DISTINCT ON (al.id) al.id AS alloc_id
+            FROM allocations al
+            LEFT JOIN ping_results pr ON pr.ip = host((al.prefix::cidr - 1 + 2))::inet
+            LEFT JOIN ip_blocks b ON al.block_id = b.id
+            LEFT JOIN customers c ON al.customer_id = c.id
+            WHERE {where}
+        ) cnt
+    """, *params)
 
     return {
         "items": [dict(r) for r in rows],
@@ -1765,7 +1906,9 @@ async def get_ping_status(
     }
 
 @app.post("/api/v1/ping/run", summary="Global Ping — trigger scan semua active IP", tags=["Global Ping"])
+@limiter.limit("2/minute")
 async def run_ping_scan(
+    request: Request,
     background_tasks: BackgroundTasks,
     target_ip: Optional[str] = Query(None, description="Scan specific IP only (optional)"),
     db=Depends(get_db)
@@ -1804,6 +1947,11 @@ async def run_ping_scan(
 
     # Set progress awal segera
     PING_PROGRESS = {"scanned": 0, "total": len(ips), "eta": None}
+    global PING_CANCEL
+    PING_CANCEL = False
+    try:
+        await redis_client.set("ping:progress", json.dumps(PING_PROGRESS, default=str), ex=3600)
+    except: pass
 
     # Jalankan scan di background — pakai connection pool baru
     pool_copy = pool  # Ambil pool dari module scope
@@ -1811,12 +1959,21 @@ async def run_ping_scan(
 
     return {"status": "started", "total": len(ips), "message": f"Scanning {len(ips)} IPs in background"}
 
+@app.post("/api/v1/ping/cancel", summary="Global Ping — cancel running scan", tags=["Global Ping"])
+async def cancel_ping_scan():
+    """Cancel scan yang sedang berjalan"""
+    global PING_CANCEL, PING_IS_RUNNING
+    if not PING_IS_RUNNING:
+        return {"status": "no_scan_running"}
+    PING_CANCEL = True
+    return {"status": "cancelling"}
+
 @app.get("/api/v1/ping/history/{ip}", summary="Global Ping — history IP", tags=["Global Ping"])
 async def get_ping_history(ip: str, days: int = Query(7, ge=1, le=90), db=Depends(get_db)):
     """Get ping history untuk specific IP"""
     rows = await db.fetch("""
         SELECT * FROM ping_history
-        WHERE ip::text = $1 AND checked_at > NOW() - INTERVAL '1 day' * $2
+        WHERE ip = $1::inet AND checked_at > NOW() - INTERVAL '1 day' * $2
         ORDER BY checked_at DESC LIMIT 500
     """, ip, days)
     return {"items": [dict(r) for r in rows]}
@@ -1826,18 +1983,21 @@ async def get_active_ips(db=Depends(get_db)):
     """Return list of active allocation IPs for remote agents to ping.
     Used by Oracle Cloud SG/US agents to know which IPs to check."""
     rows = await db.fetch("""
-        SELECT DISTINCT a.prefix::text AS ip, b.name AS block_name, b.site_name
-        FROM allocations a
-        JOIN ip_blocks b ON a.block_id = b.id
-        WHERE a.status = 'active'
-        ORDER BY a.prefix
+        SELECT ip, block_name, site_name FROM (
+            SELECT DISTINCT a.prefix::text AS ip, b.name AS block_name, s.name AS site_name
+            FROM allocations a
+            JOIN ip_blocks b ON a.block_id = b.id
+            LEFT JOIN sites s ON b.site_id = s.id
+            WHERE a.status = 'active'
+        ) sub
+        ORDER BY ip
     """)
     return {"items": [dict(r) for r in rows], "total": len(rows)}
 
 async def _run_scan_and_save_with_pool(ips: list[str]):
     global pool
     """Background task: scan + save + update history — pakai pool sendiri"""
-    global PING_IS_RUNNING, PING_LAST_SCAN, PING_PROGRESS
+    global PING_IS_RUNNING, PING_LAST_SCAN, PING_PROGRESS, PING_CANCEL
     import time
     from datetime import datetime, timezone
 
@@ -1845,10 +2005,12 @@ async def _run_scan_and_save_with_pool(ips: list[str]):
     start_time = time.monotonic()
 
     async with pool.acquire() as db:
+        results = []
         try:
             batch_size = 50
-            results = []
             for i in range(0, len(ips), batch_size):
+                if PING_CANCEL:
+                    break
                 batch = ips[i:i + batch_size]
                 icmp = await icmp_ping_batch(batch)
 
@@ -1880,15 +2042,15 @@ async def _run_scan_and_save_with_pool(ips: list[str]):
                     """, ip, status, rtt, http_status, http_rtt, cust_name, blk_name, sit_name)
 
                     await db.execute("""
-                        INSERT INTO ping_history (ip, status, rtt_ms, source, checked_at)
-                        VALUES ($1::inet, $2, $3, 'icmp_local', NOW())
-                    """, ip, status, rtt)
+                        INSERT INTO ping_history (ip, status, source, checked_at)
+                        VALUES ($1::inet, $2, 'icmp_local', NOW())
+                    """, ip, status)
 
                     if http_status == "online":
                         await db.execute("""
-                            INSERT INTO ping_history (ip, status, rtt_ms, source, checked_at)
-                            VALUES ($1::inet, 'online', $2, 'http_global', NOW())
-                        """, ip, http_rtt)
+                            INSERT INTO ping_history (ip, status, source, checked_at)
+                            VALUES ($1::inet, 'online', 'http_global', NOW())
+                        """, ip)
 
                     results.append(r)
 
@@ -1897,81 +2059,217 @@ async def _run_scan_and_save_with_pool(ips: list[str]):
                 rate = scanned / elapsed if elapsed > 0 else 0
                 eta = int((len(ips) - scanned) / rate) if rate > 0 else None
                 PING_PROGRESS = {"scanned": scanned, "total": len(ips), "eta": eta}
+                try:
+                    await redis_client.set("ping:progress", json.dumps(PING_PROGRESS, default=str), ex=3600)
+                except: pass
 
-            PING_LAST_SCAN = datetime.now(timezone.utc).isoformat()
         except Exception as e:
             print(f"[PingScan] Error: {e}")
             import traceback
             traceback.print_exc()
+
+        # ── Phase 2: check-host.net region data untuk IP online ──
+        try:
+            online_ips = [r["ip"] for r in results if r.get("status") == "online"]
+            if online_ips:
+                print(f"[PingScan] check-host.net: fetching region data untuk {len(online_ips)} online IPs...")
+                _CH_CONCURRENT = asyncio.Semaphore(5)
+                _ch_results_ok = 0
+                _ch_results_fail = 0
+
+                async def _fetch_ch_region(ip):
+                    nonlocal _ch_results_ok, _ch_results_fail
+                    async with _CH_CONCURRENT:
+                        try:
+                            from services.ping_service import check_host_ping
+                            ch_result = await check_host_ping(ip, timeout=15)
+                            regions = ch_result.get("regions", [])
+                            if regions:
+                                for reg in regions:
+                                    cc = reg.get("country_code", "??").lower()
+                                    cn = reg.get("country_name", cc)
+                                    st = reg.get("status", "unknown")
+                                    await db.execute("""
+                                        INSERT INTO ping_region_details (ip, country_code, country_name, status, checked_at)
+                                        VALUES ($1::inet, $2, $3, $4, NOW())
+                                        ON CONFLICT (ip, country_code) DO UPDATE SET status=$4, country_name=$3, checked_at=NOW()
+                                    """, ip, cc, cn, st)
+                                _ch_results_ok += 1
+                            else:
+                                _ch_results_fail += 1
+                        except Exception as e2:
+                            _ch_results_fail += 1
+                            print(f"[PingScan] check-host.net error {ip}: {e2}")
+
+                ch_tasks = [_fetch_ch_region(ip) for ip in online_ips]
+                await asyncio.gather(*ch_tasks)
+                print(f"[PingScan] check-host.net selesai: {_ch_results_ok} OK, {_ch_results_fail} fail")
+        except Exception as e:
+            print(f"[PingScan] check-host.net phase error: {e}")
+
+        try:
+            PING_LAST_SCAN = datetime.now(timezone.utc).isoformat()
+        except: pass
         finally:
             PING_IS_RUNNING = False
+            PING_CANCEL = False
             PING_PROGRESS = {"scanned": 0, "total": 0, "eta": None}
+            try:
+                await redis_client.delete("ping:progress")
+            except: pass
+
+COUNTRY_NAMES = {
+    "sg":"Singapore","jp":"Japan","hk":"Hong Kong","tw":"Taiwan","kr":"South Korea",
+    "id":"Indonesia","my":"Malaysia","th":"Thailand","ph":"Philippines","vn":"Vietnam",
+    "in":"India","au":"Australia","nz":"New Zealand","us":"United States","ca":"Canada",
+    "gb":"United Kingdom","de":"Germany","fr":"France","nl":"Netherlands","it":"Italy",
+    "es":"Spain","pt":"Portugal","se":"Sweden","no":"Norway","fi":"Finland","dk":"Denmark",
+    "pl":"Poland","cz":"Czech Republic","at":"Austria","ch":"Switzerland","be":"Belgium",
+    "ie":"Ireland","ru":"Russia","ua":"Ukraine","tr":"Turkey","il":"Israel","ae":"UAE",
+    "sa":"Saudi Arabia","br":"Brazil","mx":"Mexico","ar":"Argentina","cl":"Chile",
+    "co":"Colombia","za":"South Africa","eg":"Egypt","ng":"Nigeria","ke":"Kenya",
+    "ir":"Iran","pk":"Pakistan","bd":"Bangladesh","lk":"Sri Lanka","np":"Nepal",
+    "ro":"Romania","bg":"Bulgaria","hr":"Croatia","rs":"Serbia","hu":"Hungary",
+    "sk":"Slovakia","si":"Slovenia","lt":"Lithuania","lv":"Latvia","ee":"Estonia",
+    "md":"Moldova","by":"Belarus","cy":"Cyprus","mt":"Malta","lu":"Luxembourg","is":"Iceland",
+}
 
 @app.post("/api/v1/ping/report", summary="Global Ping — receive agent report", tags=["Global Ping"])
 async def receive_ping_report(body: dict, db=Depends(get_db)):
-    """Receive ping results from Oracle Cloud agents (SG/US) or other remote sources.
-    
-    Body: { "results": [{"ip": "x.x.x.x", "status": "online", "rtt_ms": 12.3}], "source": "oracle_sg" }
-    Source values: oracle_sg, oracle_us, http_global, icmp_local
+    """Receive ping results from agents.
+    Body: { "results": [{"ip": "x.x.x.x", "status": "online", "rtt_ms": 12.3}],
+            "source": "icmp_local"|"http_global",
+            "region_details": {"sg":"online","us":"offline",...} }
     """
     results = body.get("results", [])
-    source = body.get("source", "unknown")
-    
-    # Map source ke kolom yang sesuai di ping_results
-    source_column_map = {
-        "oracle_sg": "oracle_sg_status",
-        "oracle_us": "oracle_us_status",
-    }
-    oracle_col = source_column_map.get(source)
-    
+    region_details = body.get("region_details", {})
+
+    pfx = "(split_part($1::text, '/', 1) || '/32')::cidr"
+
+    all_ips = []
+    for r in results:
+        ip_raw = r.get("ip", "")
+        if ip_raw:
+            all_ips.append(ip_raw.split("/")[0] if "/" in ip_raw else ip_raw)
+    alloc_map = {}
+    if all_ips:
+        placeholders = ", ".join(f"${i+1}" for i in range(len(all_ips)))
+        alloc_rows = await db.fetch(f"""
+            SELECT DISTINCT ON (pr2.ip) pr2.ip,
+                COALESCE(c.name, '') AS c_name,
+                COALESCE(b.name, '') AS b_name,
+                COALESCE(s.name, '') AS s_name,
+                b.prefix::text AS block_prefix
+            FROM (SELECT unnest(ARRAY[{placeholders}])::inet AS ip) pr2
+            JOIN allocations a ON pr2.ip <<= a.prefix::cidr AND a.status = 'active'
+            LEFT JOIN customers c ON a.customer_id = c.id
+            LEFT JOIN ip_blocks b ON a.block_id = b.id
+            LEFT JOIN sites s ON b.site_id = s.id
+        """, *all_ips)
+        for ar in alloc_rows:
+            alloc_map[str(ar["ip"])] = ar
+
     updated = 0
     for r in results:
-        ip = r.get("ip")
+        ip_raw = r.get("ip", "")
         status = r.get("status")
         rtt = r.get("rtt_ms")
-        if not ip or not status:
+        if not ip_raw or not status:
             continue
-        
-        # Insert/update ping_results — update kolom oracle jika source = oracle_sg/us
-        if oracle_col:
-            await db.execute(f"""
-                INSERT INTO ping_results (ip, prefix, icmp_status, icmp_rtt, icmp_at, scanned_at, {oracle_col})
-                VALUES ($1::inet, ($1 || '/32')::cidr, $2, $3, NOW(), NOW(), $2)
-                ON CONFLICT (ip) DO UPDATE SET 
-                    {oracle_col} = $2,
-                    scanned_at = NOW()
-            """, ip, status, rtt)
-        else:
-            # Fallback: update icmp_status seperti sebelumnya
-            await db.execute("""
-                INSERT INTO ping_results (ip, prefix, icmp_status, icmp_rtt, icmp_at, scanned_at)
-                VALUES ($1::inet, ($1 || '/32')::cidr, $2, $3, NOW(), NOW())
-                ON CONFLICT (ip) DO UPDATE SET icmp_status=$2, icmp_rtt=$3, icmp_at=NOW(), scanned_at=NOW()
-            """, ip, status, rtt)
-        
-        # Selalu insert ke ping_history untuk history tracking
-        await db.execute("""
-            INSERT INTO ping_history (ip, status, rtt_ms, source, checked_at)
-            VALUES ($1::inet, $2, $3, $4, NOW())
-        """, ip, status, rtt, source)
+        ip = ip_raw.split("/")[0] if "/" in ip_raw else ip_raw
+        alloc = alloc_map.get(ip)
+        c_name = alloc["c_name"] if alloc else None
+        b_name = alloc["b_name"] if alloc else None
+        s_name = alloc["s_name"] if alloc else None
+
+        await db.execute(f"""
+            INSERT INTO ping_results (ip, prefix, icmp_status, icmp_rtt, icmp_at, scanned_at, customer_name, block_name, site_name)
+            VALUES ($1::inet, {pfx}, $2, $3, NOW(), NOW(), $4, $5, $6)
+            ON CONFLICT (ip) DO UPDATE SET icmp_status=$2, icmp_rtt=$3, icmp_at=NOW(), scanned_at=NOW(),
+                customer_name = COALESCE(EXCLUDED.customer_name, ping_results.customer_name),
+                block_name = COALESCE(EXCLUDED.block_name, ping_results.block_name),
+                site_name = COALESCE(EXCLUDED.site_name, ping_results.site_name)
+        """, ip, status, rtt, c_name, b_name, s_name)
+
+        await db.execute(
+            "INSERT INTO ping_history (ip, status, source) VALUES ($1::inet, $2, $3)",
+            ip, status, body.get("source", "agent"))
         updated += 1
-    
+
+    # Region details (check-host.net per-country results)
+    if region_details and results:
+        first_ip = results[0].get("ip", "").split("/")[0]
+        if first_ip:
+            for cc, c_status in region_details.items():
+                await db.execute("""
+                    INSERT INTO ping_region_details (ip, country_code, country_name, status, checked_at)
+                    VALUES ($1::inet, $2, $3, $4, NOW())
+                    ON CONFLICT (ip, country_code) DO UPDATE SET status = $4, checked_at = NOW()
+                """, first_ip, cc, COUNTRY_NAMES.get(cc, cc.upper()), c_status)
+
     return {"received": len(results), "updated": updated, "source": source}
+
+
 
 @app.get("/api/v1/ping/summary", summary="Global Ping — summary dashboard", tags=["Global Ping"])
 async def get_ping_summary(db=Depends(get_db)):
     """Quick summary counts for dashboard widget"""
-    total = await db.fetchval("SELECT COUNT(*) FROM allocations WHERE status = 'active'")
-    # Latest scan counts
+    total = await db.fetchval("SELECT COUNT(*) FROM allocations WHERE status = 'active' AND family(prefix) = 4 AND masklen(prefix) >= 24")
+    # Count by status from ping_results (only recently scanned)
     latest = await db.fetch("""
         SELECT icmp_status, COUNT(*) as cnt FROM ping_results
         WHERE scanned_at > NOW() - INTERVAL '1 day'
         GROUP BY icmp_status
     """)
     counts = {r["icmp_status"]: r["cnt"] for r in latest}
+    online = counts.get("online", 0)
+    offline = counts.get("offline", 0)
+    scanned = online + offline
+    pending = total - scanned if total > scanned else 0
     return {
         "total_active_ips": total,
-        "online": counts.get("online", 0),
-        "offline": counts.get("offline", 0),
-        "pending": counts.get("pending", 0) or total - sum(counts.values()),
+        "online": online,
+        "offline": offline,
+        "pending": pending,
     }
+
+@app.get("/api/v1/ping/region-details/{ip}", summary="Global Ping — region details for one IP", tags=["Global Ping"])
+async def get_ping_region_details(ip: str, force: bool = Query(False), db=Depends(get_db)):
+    """Return per-country check-host.net results for a specific IP.
+    If force=true or data is stale (>1 hour), re-fetch from check-host.net."""
+    # Check if we have fresh data
+    if not force:
+        rows = await db.fetch("""
+            SELECT country_code, country_name, status, checked_at
+            FROM ping_region_details
+            WHERE ip = $1::inet AND checked_at > NOW() - INTERVAL '1 hour'
+            ORDER BY country_code
+        """, ip)
+        if rows:
+            return {"ip": ip, "regions": [dict(r) for r in rows], "source": "cache"}
+
+    # Fetch fresh data from check-host.net
+    from services.ping_service import check_host_ping
+    result = await check_host_ping(ip)
+
+    if result.get("regions"):
+        # Save to DB
+        async with db.transaction():
+            await db.execute("DELETE FROM ping_region_details WHERE ip = $1::inet", ip)
+            for r in result["regions"]:
+                await db.execute("""
+                    INSERT INTO ping_region_details (ip, country_code, country_name, status, checked_at)
+                    VALUES ($1::inet, $2, $3, $4, NOW())
+                    ON CONFLICT (ip, country_code) DO UPDATE SET
+                        country_name = EXCLUDED.country_name,
+                        status = EXCLUDED.status,
+                        checked_at = EXCLUDED.checked_at
+                """, ip, r["country_code"], r["country_name"], r["status"])
+
+    rows = await db.fetch("""
+        SELECT country_code, country_name, status, checked_at
+        FROM ping_region_details
+        WHERE ip = $1::inet
+        ORDER BY country_code
+    """, ip)
+    return {"ip": ip, "regions": [dict(r) for r in rows], "source": "check-host.net"}
