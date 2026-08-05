@@ -295,7 +295,10 @@ async def get_ping_status(
         LEFT JOIN customers c ON al.customer_id = c.id
         LEFT JOIN ping_results pr ON pr.ip = sub.host_ip
         WHERE {where}
-        ORDER BY {order_col} {sort_dir}{order_nulls} LIMIT ${len(params)+1} OFFSET ${len(params)+2}
+        ORDER BY 
+            (SELECT COUNT(*) FROM ping_region_details prd WHERE prd.ip = host_ip) DESC,
+            {order_col} {sort_dir}{order_nulls} 
+        LIMIT ${len(params)+1} OFFSET ${len(params)+2}
     """
     rows = await db.fetch(query, *params, limit, offset)
     total = await db.fetchval(f"""

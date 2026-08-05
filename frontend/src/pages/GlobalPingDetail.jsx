@@ -157,31 +157,78 @@ export default function GlobalPingDetail({ ip: ipProp, onNavigate }) {
       {/* Region Details */}
       {regionDetails.length > 0 && (
         <div className="card" style={{ padding: 16 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>
-              Region Details ({onlineRegions.length} online / {offlineRegions.length} offline)
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>
+              Multi-Region Ping Results
+              <span style={{ fontSize: 12, fontWeight: 500, color: "var(--text-dim)", marginLeft: 8 }}>
+                ({onlineRegions.length} online / {offlineRegions.length} offline)
+              </span>
             </div>
             <button onClick={refreshRegions} disabled={regionLoading}
-              style={{ fontSize: 11, color: "var(--accent)", background: "none", border: "none", cursor: regionLoading ? "wait" : "pointer", fontWeight: 600, opacity: regionLoading ? 0.5 : 1 }}>
-              {regionLoading ? "Checking..." : "Refresh"}
+              style={{ 
+                fontSize: 11, 
+                color: "var(--accent)", 
+                background: "rgba(59,130,246,0.1)", 
+                border: "1px solid rgba(59,130,246,0.2)", 
+                borderRadius: 6,
+                padding: "4px 12px",
+                cursor: regionLoading ? "wait" : "pointer", 
+                fontWeight: 600, 
+                opacity: regionLoading ? 0.5 : 1 
+              }}>
+              {regionLoading ? "Checking..." : "🔄 Refresh"}
             </button>
           </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {regionDetails.sort((a, b) => a.country_code.localeCompare(b.country_code)).map((r, i) => {
-              const flag = FLAGS[r.country_code] || "";
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 8 }}>
+            {regionDetails.sort((a, b) => {
+              // Sort: online first, then alphabetically
+              if (a.status !== b.status) return a.status === "online" ? -1 : 1;
+              return a.country_code.localeCompare(b.country_code);
+            }).map((r, i) => {
+              const flag = FLAGS[r.country_code] || "🏳️";
               const isOnline = r.status === "online";
               return (
                 <div key={i} style={{
-                  display: "inline-flex", alignItems: "center", gap: 4,
-                  padding: "4px 8px", borderRadius: 6, fontSize: 11,
-                  background: isOnline ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)",
-                  border: `1px solid ${isOnline ? "rgba(34,197,94,0.2)" : "rgba(239,68,68,0.2)"}`,
-                  color: isOnline ? "var(--success)" : "var(--danger)",
-                  fontWeight: 500,
+                  display: "flex", 
+                  alignItems: "center", 
+                  gap: 8,
+                  padding: "8px 12px", 
+                  borderRadius: 8, 
+                  background: isOnline ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)",
+                  border: `1.5px solid ${isOnline ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.25)"}`,
+                  transition: "all 0.15s ease",
                 }}>
-                  <span>{flag}</span>
-                  <span>{r.country_code.toUpperCase()}</span>
-                  <span style={{ fontSize: 10, color: "var(--text-dim)" }}>{r.country_name}</span>
+                  <span style={{ fontSize: 20 }}>{flag}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ 
+                      fontSize: 12, 
+                      fontWeight: 600, 
+                      color: isOnline ? "var(--success)" : "var(--danger)",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px"
+                    }}>
+                      {r.country_code}
+                    </div>
+                    <div style={{ 
+                      fontSize: 11, 
+                      color: "var(--text-dim)", 
+                      fontWeight: 500,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap"
+                    }}>
+                      {r.country_name}
+                    </div>
+                  </div>
+                  <div style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: isOnline ? "var(--success)" : "var(--danger)",
+                    textTransform: "uppercase",
+                    opacity: 0.7
+                  }}>
+                    {isOnline ? "✓" : "✗"}
+                  </div>
                 </div>
               );
             })}

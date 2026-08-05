@@ -194,16 +194,28 @@ async def check_host_ping(ip: str, timeout: int = 30) -> dict:
                 if not results:
                     continue
 
-                # Parse results: {node_name: [[time, status], ...]}
+                # Parse results: {node_name: [[[status, time, ip?], ...]], ...}
                 regions = []
                 for node_name, checks in results.items():
                     node_info = nodes.get(node_name, [])
                     country_code = node_info[0] if len(node_info) > 0 else "??"
                     country_name = node_info[1] if len(node_info) > 1 else "Unknown"
 
-                    # Status: any successful check = online
-                    statuses = [c[1] for c in checks if c] if isinstance(checks, list) else []
-                    is_online = any(s == 1 for s in statuses) if statuses else False
+                    # Status: check-host.net returns nested arrays like [[['OK', time, ip], ['OK', time], ...]]
+                    # Any 'OK' string in first element = online
+                    is_online = False
+                    if isinstance(checks, list) and len(checks) > 0:
+                        # Flatten nested structure: checks is [[inner_array]]
+                        inner = checks[0] if checks else []
+                        if isinstance(inner, list):
+                            # Each item in inner is like ['OK', time, ip?] or ['Error', ...]
+                            for item in inner:
+                                if isinstance(item, list) and len(item) > 0:
+                                    status_str = str(item[0]).lower()
+                                    if status_str == 'ok':
+                                        is_online = True
+                                        break
+                    
                     regions.append({
                         "country_code": country_code,
                         "country_name": country_name,
