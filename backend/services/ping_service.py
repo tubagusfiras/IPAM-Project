@@ -202,8 +202,9 @@ async def check_host_ping(ip: str, timeout: int = 30) -> dict:
                     country_name = node_info[1] if len(node_info) > 1 else "Unknown"
 
                     # Status: check-host.net returns nested arrays like [[['OK', time, ip], ['OK', time], ...]]
-                    # Any 'OK' string in first element = online
+                    # Any 'OK' string in first element = online, parse RTT from second element
                     is_online = False
+                    rtt_values = []
                     if isinstance(checks, list) and len(checks) > 0:
                         # Flatten nested structure: checks is [[inner_array]]
                         inner = checks[0] if checks else []
@@ -214,12 +215,22 @@ async def check_host_ping(ip: str, timeout: int = 30) -> dict:
                                     status_str = str(item[0]).lower()
                                     if status_str == 'ok':
                                         is_online = True
-                                        break
+                                        # Parse RTT (second element, in seconds)
+                                        if len(item) > 1:
+                                            try:
+                                                rtt_sec = float(item[1])
+                                                rtt_values.append(rtt_sec * 1000)  # convert to ms
+                                            except:
+                                                pass
+                    
+                    # Calculate average RTT if online
+                    avg_rtt = round(sum(rtt_values) / len(rtt_values), 1) if rtt_values else None
                     
                     regions.append({
                         "country_code": country_code,
                         "country_name": country_name,
                         "status": "online" if is_online else "offline",
+                        "rtt_ms": avg_rtt,
                     })
 
                 return {"regions": regions, "request_id": request_id}

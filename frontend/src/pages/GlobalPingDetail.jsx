@@ -179,59 +179,86 @@ export default function GlobalPingDetail({ ip: ipProp, onNavigate }) {
               {regionLoading ? "Checking..." : "🔄 Refresh"}
             </button>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 8 }}>
-            {regionDetails.sort((a, b) => {
-              // Sort: online first, then alphabetically
-              if (a.status !== b.status) return a.status === "online" ? -1 : 1;
-              return a.country_code.localeCompare(b.country_code);
-            }).map((r, i) => {
-              const flag = FLAGS[r.country_code] || "🏳️";
-              const isOnline = r.status === "online";
-              return (
-                <div key={i} style={{
-                  display: "flex", 
-                  alignItems: "center", 
-                  gap: 8,
-                  padding: "8px 12px", 
-                  borderRadius: 8, 
-                  background: isOnline ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)",
-                  border: `1.5px solid ${isOnline ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.25)"}`,
-                  transition: "all 0.15s ease",
-                }}>
-                  <span style={{ fontSize: 20 }}>{flag}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ 
-                      fontSize: 12, 
-                      fontWeight: 600, 
-                      color: isOnline ? "var(--success)" : "var(--danger)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.5px"
+          
+          {/* Table view dengan RTT */}
+          <div style={{ 
+            border: "1px solid var(--border)", 
+            borderRadius: 8, 
+            overflow: "hidden",
+            background: "var(--surface)"
+          }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ background: "var(--surface-hover)", borderBottom: "1px solid var(--border)" }}>
+                  <th style={{ padding: "10px 12px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Region</th>
+                  <th style={{ padding: "10px 12px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Country</th>
+                  <th style={{ padding: "10px 12px", textAlign: "center", fontSize: 11, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Status</th>
+                  <th style={{ padding: "10px 12px", textAlign: "right", fontSize: 11, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Latency</th>
+                </tr>
+              </thead>
+              <tbody>
+                {regionDetails.sort((a, b) => {
+                  // Sort: online first, then by latency (fastest first), then alphabetically
+                  if (a.status !== b.status) return a.status === "online" ? -1 : 1;
+                  if (a.status === "online" && b.status === "online") {
+                    const aRtt = a.rtt_ms || 9999;
+                    const bRtt = b.rtt_ms || 9999;
+                    if (aRtt !== bRtt) return aRtt - bRtt;
+                  }
+                  return a.country_code.localeCompare(b.country_code);
+                }).map((r, i) => {
+                  const flag = FLAGS[r.country_code] || "🏳️";
+                  const isOnline = r.status === "online";
+                  const latency = r.rtt_ms ? `${r.rtt_ms.toFixed(1)}ms` : "—";
+                  
+                  return (
+                    <tr key={i} style={{ 
+                      borderBottom: i < regionDetails.length - 1 ? "1px solid var(--border)" : "none",
+                      background: isOnline ? "rgba(34,197,94,0.03)" : "transparent"
                     }}>
-                      {r.country_code}
-                    </div>
-                    <div style={{ 
-                      fontSize: 11, 
-                      color: "var(--text-dim)", 
-                      fontWeight: 500,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap"
-                    }}>
-                      {r.country_name}
-                    </div>
-                  </div>
-                  <div style={{
-                    fontSize: 10,
-                    fontWeight: 700,
-                    color: isOnline ? "var(--success)" : "var(--danger)",
-                    textTransform: "uppercase",
-                    opacity: 0.7
-                  }}>
-                    {isOnline ? "✓" : "✗"}
-                  </div>
-                </div>
-              );
-            })}
+                      <td style={{ padding: "10px 12px", fontSize: 18 }}>
+                        {flag}
+                      </td>
+                      <td style={{ padding: "10px 12px" }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                          {r.country_code}
+                        </div>
+                        <div style={{ fontSize: 11, color: "var(--text-dim)", fontWeight: 500, marginTop: 2 }}>
+                          {r.country_name}
+                        </div>
+                      </td>
+                      <td style={{ padding: "10px 12px", textAlign: "center" }}>
+                        <span style={{
+                          display: "inline-block",
+                          padding: "3px 10px",
+                          borderRadius: 6,
+                          fontSize: 10,
+                          fontWeight: 700,
+                          textTransform: "uppercase",
+                          background: isOnline ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)",
+                          color: isOnline ? "var(--success)" : "var(--danger)",
+                          border: `1px solid ${isOnline ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.25)"}`
+                        }}>
+                          {isOnline ? "✓ Online" : "✗ Offline"}
+                        </span>
+                      </td>
+                      <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                        <span style={{
+                          fontSize: 13,
+                          fontWeight: 600,
+                          fontFamily: "var(--font-mono)",
+                          color: isOnline 
+                            ? (r.rtt_ms < 50 ? "var(--success)" : r.rtt_ms < 150 ? "var(--warning)" : "var(--text)")
+                            : "var(--text-dim)"
+                        }}>
+                          {latency}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
