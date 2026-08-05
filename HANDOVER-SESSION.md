@@ -172,17 +172,10 @@ errors on save. Fixed by:
   invalid data from ever being stored; the bug was 500-errors on save attempts, not bad data at rest
 - ~~Migrate Pydantic V1→V2 validators~~ ✅ DONE
 
-### Known data quality issue (NOT YET FIXED)
-- **Duplicate VLAN VID 3040**: two separate VLAN rows both have `vid=3040` — one has
-  `site_id` set (name "RO-MGMT"), the other doesn't (name "VLAN 3040", generic). This is why
-  the site-id backfill skipped 1 row (would have violated the `(vid, site_id)` UNIQUE
-  constraint). Needs a decision: merge the two VLAN rows, or is having duplicate VIDs across
-  different sites actually valid/intentional in this network? Investigate:
-  ```sql
-  SELECT id, vid, name, site_id FROM vlans WHERE vid=3040;
-  -- then check which allocations point to each of the two VLAN ids
-  SELECT * FROM allocations WHERE vlan_id IN ('5df09e44-c365-4520-baba-e474984bfa65', 'd80ff8fc-c9c2-4797-be58-1718cb958190');
-  ```
+### ~~Known data quality issue~~ RESOLVED
+- **Duplicate VLAN VID 3040**: ~~two separate VLAN rows both have `vid=3040`~~ — **NOT A BUG**. 
+  Duplicate VIDs across different sites are intentional (same VLAN name, different IP allocations).
+  Network design: VLAN name reuse per-site is valid.
 
 ### Medium priority / depends on new pages
 - **VlanDetail.jsx / CustomerDetail.jsx** (NEW pages, not yet started) — full detail view

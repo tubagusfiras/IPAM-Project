@@ -88,6 +88,86 @@ function summarizeData(data) {
     .map(([k,v]) => ({ key:k, value:v }));
 }
 
+function ImportDetail({ data, lookups }) {
+  const allocs = data.allocations || [];
+  const [showAll, setShowAll] = useState(false);
+  const displayed = showAll ? allocs : allocs.slice(0, 15);
+  const activeCount = allocs.filter(a => a.status === "active").length;
+  const availCount = allocs.filter(a => a.status !== "active").length;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {/* Summary row */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <span style={{ fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Import Summary</span>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <span style={{ padding: "2px 8px", borderRadius: 99, fontSize: 11, fontWeight: 600, background: "var(--success-surface)", color: "var(--success)", border: "1px solid var(--success-border)" }}>
+            {data.imported} imported
+          </span>
+          {data.skipped > 0 && (
+            <span style={{ padding: "2px 8px", borderRadius: 99, fontSize: 11, fontWeight: 600, background: "var(--warning-surface)", color: "var(--warning)", border: "1px solid var(--warning-border)" }}>
+              {data.skipped} skipped
+            </span>
+          )}
+          <span style={{ padding: "2px 8px", borderRadius: 99, fontSize: 11, background: "var(--surface-2)", color: "var(--text-muted)", border: "1px solid var(--border-soft)" }}>
+            {activeCount} active · {availCount} other
+          </span>
+        </div>
+      </div>
+
+      {/* Block info */}
+      {data.block_prefix && (
+        <div style={{ display: "flex", gap: 12, fontSize: 11, color: "var(--text-muted)" }}>
+          <span>Block: <span style={{ fontFamily: "var(--font-mono)", color: "var(--text)", fontWeight: 600 }}>{data.block_prefix}</span></span>
+          {data.block_name && data.block_name !== data.block_prefix && (
+            <span>({data.block_name})</span>
+          )}
+        </div>
+      )}
+
+      {/* Allocation table */}
+      {allocs.length > 0 && (
+        <div style={{ border: "1px solid var(--border-soft)", borderRadius: 6, overflow: "hidden" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+            <thead>
+              <tr>
+                {["Prefix", "Customer", "VLAN", "Status"].map(h => (
+                  <th key={h} style={{ padding: "5px 8px", textAlign: "left", fontSize: 9, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.06em", background: "var(--surface-2)", borderBottom: "1px solid var(--border-soft)" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {displayed.map((a, i) => (
+                <tr key={i} style={{ borderBottom: "1px solid var(--border-subtle)", background: i % 2 === 0 ? "transparent" : "var(--surface-2)" }}>
+                  <td style={{ padding: "4px 8px", fontFamily: "var(--font-mono)", fontWeight: 500 }}>{a.prefix}</td>
+                  <td style={{ padding: "4px 8px", color: a.customer ? "var(--text)" : "var(--text-dim)" }}>{a.customer || "—"}</td>
+                  <td style={{ padding: "4px 8px", fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}>{a.vlan || "—"}</td>
+                  <td style={{ padding: "4px 8px" }}>
+                    <span style={{
+                      fontSize: 9, fontWeight: 600, padding: "1px 6px", borderRadius: 99,
+                      background: a.status === "active" ? "var(--success-surface)" : "var(--surface-3)",
+                      color: a.status === "active" ? "var(--success)" : "var(--text-muted)",
+                      border: `1px solid ${a.status === "active" ? "var(--success-border)" : "var(--border-soft)"}`,
+                    }}>{a.status}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {allocs.length > 15 && (
+            <div style={{ padding: "6px 8px", textAlign: "center", borderTop: "1px solid var(--border-soft)" }}>
+              <button onClick={(e) => { e.stopPropagation(); setShowAll(!showAll); }}
+                style={{ background: "none", border: "none", color: "var(--accent)", fontSize: 11, cursor: "pointer", fontWeight: 600 }}>
+                {showAll ? "Show less" : `Show all ${allocs.length} allocations`}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AuditLogs() {
   const [items,      setItems]      = useState([]);
   const [total,      setTotal]      = useState(0);
@@ -280,15 +360,18 @@ export default function AuditLogs() {
                       {/* Expanded detail */}
                       {isExpanded && (() => {
                         const isUpdate = log.old_data && log.new_data;
+                        const isImport = log.action === "import" && log.new_data?.allocations;
                         const changes = isUpdate ? computeDiff(log.old_data, log.new_data) : [];
-                        const summary = !isUpdate ? summarizeData(log.new_data || log.old_data) : [];
+                        const summary = !isUpdate && !isImport ? summarizeData(log.new_data || log.old_data) : [];
                         return (
                           <div style={{
                             marginTop:10,padding:"12px 14px",borderRadius:"var(--radius-sm)",
                             background:"var(--surface-3)",border:"1px solid var(--border-soft)",
                             fontSize:12,
                           }}>
-                            {isUpdate ? (
+                            {isImport ? (
+                              <ImportDetail data={log.new_data} lookups={lookups} />
+                            ) : isUpdate ? (
                               changes.length === 0 ? (
                                 <div style={{color:"var(--text-dim)",fontStyle:"italic"}}>No field changes detected</div>
                               ) : (

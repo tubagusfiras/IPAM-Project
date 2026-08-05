@@ -2,7 +2,7 @@
 Global Ping Visibility — Ping Engine
 - ICMP ping dari server lokal (asyncio subprocess)
 - HTTP ping via Cloudflare Workers (global edge)
-- Oracle VPS agents (future)
+- Check-host.net (multi-region ping)
 """
 
 import asyncio
@@ -15,6 +15,13 @@ from typing import Optional
 PING_TIMEOUT = 2          # detik per ping
 MAX_CONCURRENT = 40        # max parallel ping
 CF_WORKER_URL = "https://ipam-global-ping.intermerda900.workers.dev/ping"
+CHECK_HOST_BASE = "https://check-host.net"
+CHECK_HOST_HEADERS = {
+    "Accept": "application/json",
+    "User-Agent": "IPAM-SDI/3.0 (network monitoring)",
+}
+# Rate limit: check-host.net max ~30 req/jam, jadi 1 req per 2 detik aman
+CH_RATE_DELAY = 2.0  # detik antar request
 
 # ── ICMP Ping (dari server lokal) ──
 async def icmp_ping(ip: str, timeout: int = PING_TIMEOUT) -> dict:
@@ -141,3 +148,71 @@ async def full_scan(ips: list[str]) -> dict:
             "error": sum(1 for v in combined.values() if v["final_status"] == "error"),
         }
     }
+
+
+# ── Check-host.net (multi-region ping) ──
+# Global rate limiter: 1 request per CH_RATE_DELAY seconds
+_ch_rate_lock = asyncio.Lock()
+_ch_last_request = 0.0
+
+async def check_host_ping(ip: str, timeout: int = 30) -> dict:
+    """Ping IP via check-host.net from multiple global regions.
+    Returns {regions: [{country_code, country_name, status}], request_id}"""
+    global _ch_last_request
+    try:
+        # Rate limit: tunggu minimal CH_RATE_DELAY antar request
+        async with _ch_rate_lock:
+            now = time.monotonic()
+            wait = CH_RATE_DELAY - (now - _ch_last_request)
+            if wait > 0:
+                await asyncio.sleep(wait)
+            _ch_last_request = time.monotonic()
+
+        async with aiohttp.ClientSession(headers=CHECK_HOST_HEADERS) as session:
+            # Start check
+            url = f"{CHECK_HOST_BASE}/check-ping?host={ip}"
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status != 200:
+                    return {"regions": [], "error": f"HTTP {resp.status}"}
+                data = await resp.json()
+
+            request_id = data.get("request_id")
+            nodes = data.get("nodes", {})
+
+            if not request_id:
+                return {"regions": [], "error": "no request_id"}
+
+            # Wait for results (poll up to timeout seconds)
+            result_url = f"{CHECK_HOST_BASE}/check-result/{request_id}"
+            for _ in range(timeout // 3):
+                await asyncio.sleep(3)
+                async with session.get(result_url, timeout=aiohttp.ClientTimeout(total=10)) as rresp:
+                    if rresp.status != 200:
+                        continue
+                    results = await rresp.json()
+
+                if not results:
+                    continue
+
+                # Parse results: {node_name: [[time, status], ...]}
+                regions = []
+                for node_name, checks in results.items():
+                    node_info = nodes.get(node_name, [])
+                    country_code = node_info[0] if len(node_info) > 0 else "??"
+                    country_name = node_info[1] if len(node_info) > 1 else "Unknown"
+
+                    # Status: any successful check = online
+                    statuses = [c[1] for c in checks if c] if isinstance(checks, list) else []
+                    is_online = any(s == 1 for s in statuses) if statuses else False
+                    regions.append({
+                        "country_code": country_code,
+                        "country_name": country_name,
+                        "status": "online" if is_online else "offline",
+                    })
+
+                return {"regions": regions, "request_id": request_id}
+
+            return {"regions": [], "error": "timeout waiting for check-host.net results"}
+
+    except Exception as e:
+        return {"regions": [], "error": str(e)}

@@ -38,6 +38,8 @@ services:
       dockerfile: Dockerfile
     container_name: ipam-api
     restart: unless-stopped
+    volumes:
+      - ../backend/main.py:/app/main.py:ro
     dns:
       - 103.10.121.34
       - 103.10.121.35

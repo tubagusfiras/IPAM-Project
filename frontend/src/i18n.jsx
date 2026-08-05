@@ -47,6 +47,18 @@ const EN = {
   "common.delete": "Delete",
   "common.saving": "Saving…",
   "common.loading": "Loading…",
+
+  // Login
+  "login.title": "Sign in to IPAM",
+  "login.username": "Username",
+  "login.usernamePlaceholder": "Enter username",
+  "login.password": "Password",
+  "login.passwordPlaceholder": "Enter password",
+  "login.submit": "Sign In",
+  "login.processing": "Signing in…",
+  "login.error": "Invalid username or password",
+  "login.rateLimit": "Too many login attempts. Please try again in a few minutes.",
+  "login.footer": "PT Sumber Data Indonesia",
 };
 
 const ID = {
@@ -92,6 +104,18 @@ const ID = {
   "common.delete": "Hapus",
   "common.saving": "Menyimpan…",
   "common.loading": "Memuat…",
+
+  // Login
+  "login.title": "Masuk ke IPAM",
+  "login.username": "Username",
+  "login.usernamePlaceholder": "Masukkan username",
+  "login.password": "Password",
+  "login.passwordPlaceholder": "Masukkan password",
+  "login.submit": "Masuk",
+  "login.processing": "Memproses…",
+  "login.error": "Username atau password salah",
+  "login.rateLimit": "Terlalu banyak percobaan login. Coba lagi dalam beberapa menit.",
+  "login.footer": "PT Sumber Data Indonesia",
 };
 
 const LANG_MAP = { en: EN, id: ID };
