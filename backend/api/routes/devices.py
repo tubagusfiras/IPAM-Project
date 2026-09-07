@@ -230,7 +230,7 @@ async def _ping_scheduler():
 async def get_ping_status(
     status: Optional[str] = Query(None, regex="^(online|offline|error|pending|all)$"),
     search: Optional[str] = Query(None),
-    sort_by: str = Query("scanned_at", regex="^(ip|icmp_status|http_status|customer_name|scanned_at|icmp_rtt)$"),
+    sort_by: str = Query("scanned_at", regex="^(ip|icmp_status|http_status|customer_name|scanned_at|icmp_rtt|regions_online)$"),
     sort_dir: str = Query("DESC", regex="^(ASC|DESC)$"),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
@@ -268,6 +268,7 @@ async def get_ping_status(
         "customer_name": "c_name",
         "scanned_at": "pr.scanned_at",
         "icmp_rtt": "pr.icmp_rtt",
+        "regions_online": "regions_online",
     }
     order_col = sort_map.get(sort_by, "host_ip")
     order_nulls = " NULLS LAST" if order_col in ("pr.scanned_at", "pr.icmp_rtt") else ""
@@ -295,9 +296,7 @@ async def get_ping_status(
         LEFT JOIN customers c ON al.customer_id = c.id
         LEFT JOIN ping_results pr ON pr.ip = sub.host_ip
         WHERE {where}
-        ORDER BY 
-            (SELECT COUNT(*) FROM ping_region_details prd WHERE prd.ip = host_ip) DESC,
-            {order_col} {sort_dir}{order_nulls} 
+        ORDER BY {order_col} {sort_dir}{order_nulls}, (SELECT COUNT(*) FROM ping_region_details prd WHERE prd.ip = host_ip) DESC 
         LIMIT ${len(params)+1} OFFSET ${len(params)+2}
     """
     rows = await db.fetch(query, *params, limit, offset)
@@ -501,7 +500,8 @@ async def _run_scan_and_save_with_pool(ips: list[str]):
                     HAVING MAX(checked_at) > NOW() - INTERVAL '6 hours'
                 """, online_ips)
                 fresh_ips = {str(r["ip"]) for r in need_refresh}
-                to_fetch = [ip for ip in online_ips if ip not in fresh_ips][:100]
+                to_fetch = [ip for ip in online_ips if ip not in fresh_ips]
+                PING_PROGRESS = {"scanned": 0, "total": len(to_fetch), "eta": round(len(to_fetch) * 18 / 60, 1)}
 
                 if to_fetch:
                     print(f"[PingScan] check-host.net: fetching region data untuk {len(to_fetch)} IPs (dari {len(online_ips)} online)...")
@@ -520,17 +520,25 @@ async def _run_scan_and_save_with_pool(ips: list[str]):
                                     cc = reg.get("country_code", "??").lower()
                                     cn = reg.get("country_name", cc)
                                     st = reg.get("status", "unknown")
+                                    rtt = reg.get("rtt_ms")
                                     await db.execute("""
-                                        INSERT INTO ping_region_details (ip, country_code, country_name, status, checked_at)
-                                        VALUES ($1::inet, $2, $3, $4, NOW())
-                                        ON CONFLICT (ip, country_code) DO UPDATE SET status=$4, country_name=$3, checked_at=NOW()
-                                    """, ip, cc, cn, st)
+                                        INSERT INTO ping_region_details (ip, country_code, country_name, status, checked_at, rtt_ms)
+                                        VALUES ($1::inet, $2, $3, $4, NOW(), $5)
+                                        ON CONFLICT (ip, country_code) DO UPDATE SET status=$4, country_name=$3, rtt_ms=$5, checked_at=NOW()
+                                    """, ip, cc, cn, st, rtt)
                                 _ch_results_ok += 1
                             else:
                                 _ch_results_fail += 1
                         except Exception as e2:
                             _ch_results_fail += 1
                             print(f"[PingScan] check-host.net error {ip}: {e2}")
+                        await asyncio.sleep(2.5)  # rate limit check-host.net (~1 req/3s)
+                        PING_PROGRESS["scanned"] += 1
+                        PING_PROGRESS["eta"] = round((len(to_fetch) - PING_PROGRESS["scanned"]) * 18 / 60, 1)
+                        try:
+                            await redis_client.set("ping:progress", json.dumps(PING_PROGRESS, default=str), ex=3600)
+                        except Exception:
+                            pass
 
                     print(f"[PingScan] check-host.net selesai: {_ch_results_ok} OK, {_ch_results_fail} fail")
                 else:
@@ -673,11 +681,11 @@ async def get_ping_region_details(ip: str, force: bool = Query(False), db=Depend
     # Check if we have fresh data
     if not force:
         rows = await db.fetch("""
-            SELECT country_code, country_name, status, checked_at
-            FROM ping_region_details
-            WHERE ip = $1::inet AND checked_at > NOW() - INTERVAL '1 hour'
-            ORDER BY country_code
-        """, ip)
+SELECT country_code, country_name, status, rtt_ms, checked_at
+        FROM ping_region_details
+        WHERE ip = $1::inet AND checked_at > NOW() - INTERVAL '1 hour'
+        ORDER BY country_code
+    """, ip)
         if rows:
             return {"ip": ip, "regions": [dict(r) for r in rows], "source": "cache"}
 
@@ -691,16 +699,17 @@ async def get_ping_region_details(ip: str, force: bool = Query(False), db=Depend
             await db.execute("DELETE FROM ping_region_details WHERE ip = $1::inet", ip)
             for r in result["regions"]:
                 await db.execute("""
-                    INSERT INTO ping_region_details (ip, country_code, country_name, status, checked_at)
-                    VALUES ($1::inet, $2, $3, $4, NOW())
+                    INSERT INTO ping_region_details (ip, country_code, country_name, status, checked_at, rtt_ms)
+                    VALUES ($1::inet, $2, $3, $4, NOW(), $5)
                     ON CONFLICT (ip, country_code) DO UPDATE SET
                         country_name = EXCLUDED.country_name,
                         status = EXCLUDED.status,
+                        rtt_ms = EXCLUDED.rtt_ms,
                         checked_at = EXCLUDED.checked_at
-                """, ip, r["country_code"], r["country_name"], r["status"])
+                """, ip, r["country_code"], r["country_name"], r["status"], r.get("rtt_ms"))
 
     rows = await db.fetch("""
-        SELECT country_code, country_name, status, checked_at
+        SELECT country_code, country_name, status, rtt_ms, checked_at
         FROM ping_region_details
         WHERE ip = $1::inet
         ORDER BY country_code

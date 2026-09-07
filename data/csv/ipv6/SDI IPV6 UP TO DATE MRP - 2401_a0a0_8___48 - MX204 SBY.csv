@@ -1,0 +1,14 @@
+2401:a0a0:8::/48,,
+,,
+,ls-agg-ipt,2401:a0a0:8::2/127
+,ls-agg-ipt,2401:a0a0:8::3/127
+,ls-agg-multiix,2401:a0a0:8::4/127
+,ls-agg-multiix,2401:a0a0:8::5/127
+,ls-agg-local-exchange,2401:a0a0:8::6/127
+,ls-agg-local-exchange,2401:a0a0:8::7/127
+,PT Anugrah Media Nusantara,2401:a0a0:8::8/127
+,PT Anugrah Media Nusantara,2401:a0a0:8::9/127
+,ls0agg-multi-ix-lintas,2401:a0a0:8::10/127
+,ls0agg-multi-ix-lintas,2401:a0a0:8::11/127
+,ldn,2401:a0a0:8::12/127
+,ldn,2401:a0a0:8::13/127

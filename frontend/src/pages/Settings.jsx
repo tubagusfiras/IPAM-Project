@@ -45,8 +45,8 @@ function UserModal({ user, onClose, onSaved, isNew }) {
   };
 
   return (
-    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div className="modal" style={{maxWidth:420}}>
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey&&!e.ctrlKey&&!e.altKey&&e.target.tagName!=="TEXTAREA"&&e.target.tagName!=="BUTTON"&&e.target.tagName!=="SELECT"){e.preventDefault();e.stopPropagation();save();}}}>
+      <div className="modal" style={{maxWidth:420}} onSubmit={e=>{e.preventDefault();save();}}>
         <div className="modal-header">
           <div style={{fontWeight:700,fontSize:15,color:"var(--text)"}}>
             {isNew ? t("settings.createUser") : `Edit ${user.username}`}
@@ -109,19 +109,19 @@ function ResetPasswordModal({ user, onClose, onSaved }) {
     if (!password || password.length < 8) return setErr(t("settings.passwordMinLength"));
     setSaving(true); setErr(null);
     try {
-      const res = await authFetch(`/api/v1/users/${user.id}/reset-password`, {
-        method: "POST", headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({ new_password: password }),
+      const res = await authFetch(`/api/v1/users/${user.id}/password`, {
+        method: "PUT", headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ password }),
       });
-      if (!res.ok) throw new Error((await res.json()).detail || "Failed to reset password");
+      if (!res.ok) throw new Error((await res.json()).detail || "Failed");
       onSaved();
     } catch(e) { setErr(e.message); }
     setSaving(false);
   };
 
   return (
-    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div className="modal" style={{maxWidth:380}}>
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey&&!e.ctrlKey&&!e.altKey&&e.target.tagName!=="TEXTAREA"&&e.target.tagName!=="BUTTON"&&e.target.tagName!=="SELECT"){e.preventDefault();e.stopPropagation();save();}}}>
+      <div className="modal" style={{maxWidth:380}} onSubmit={e=>{e.preventDefault();save();}}>
         <div className="modal-header">
           <div style={{fontWeight:700,fontSize:15,color:"var(--text)"}}>{t("settings.resetPassword")}</div>
           <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",
@@ -211,7 +211,7 @@ export default function Settings({ dark, onToggleDark }) {
   };
 
   return (
-    <div style={{display:"flex",flexDirection:"column",gap:20}}>
+    <div className="page-enter" style={{display:"flex",flexDirection:"column",gap:20}}>
       <PageHeader title={t("settings.title")} />
 
       {/* Tabs */}

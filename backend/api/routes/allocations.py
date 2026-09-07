@@ -8,6 +8,22 @@ from core.audit import log_audit, get_client_ip
 
 router = APIRouter(tags=["Allocations"])
 
+async def _enrich_alloc(db, row):
+    """Add customer_name, vlan_vid, end_device_xc etc. from raw RETURNING * row."""
+    if not row: return row
+    d = dict(row)
+    d["prefix"] = str(row["prefix"])
+    if row.get("customer_id"):
+        c = await db.fetchrow("SELECT name,code FROM customers WHERE id=$1::uuid", row["customer_id"])
+        if c: d["customer_name"] = c["name"]
+    if row.get("vlan_id"):
+        v = await db.fetchrow("SELECT vid,name FROM vlans WHERE id=$1::uuid", row["vlan_id"])
+        if v: d["vlan_vid"] = v["vid"]
+    if row.get("block_id"):
+        b = await db.fetchrow("SELECT prefix::text FROM ip_blocks WHERE id=$1::uuid", row["block_id"])
+        if b: d["block_prefix"] = b["prefix"]
+    return d
+
 @router.get("/api/v1/allocations")
 async def list_allocations(
     search: Optional[str]=Query(None),
@@ -123,13 +139,23 @@ async def list_allocations_cursor(
     return {"items": items, "next_cursor": next_cursor, "has_more": has_more}
 
 async def _maybe_rename_vlan(db, vlan_id, owner_name):
-    """Auto-name a VLAN from the allocation's Owner/Customer value, but only
-    if the VLAN doesn't already have a name — never overwrites an existing
-    name, whether it was set automatically before or typed in manually."""
+    """Auto-name a VLAN from the allocation's Owner/Customer value. Renames if:
+    - VLAN has no name (empty/null), OR
+    - VLAN name is still the auto-generated 'VLAN {vid}' pattern (never overwritten
+      once a user has given it a meaningful name)."""
     if not vlan_id or not owner_name:
         return
-    vlan_row = await db.fetchrow("SELECT name FROM vlans WHERE id=$1::uuid", vlan_id)
-    if vlan_row and not vlan_row["name"]:
+    vlan_row = await db.fetchrow("SELECT vid, name FROM vlans WHERE id=$1::uuid", vlan_id)
+    if not vlan_row:
+        return
+    current_name = vlan_row["name"]
+    vid = vlan_row["vid"]
+    # Rename if empty OR still auto-generated "VLAN {vid}"
+    should_rename = (
+        not current_name
+        or current_name == f"VLAN {vid}"
+    )
+    if should_rename and owner_name != current_name:
         await db.execute("UPDATE vlans SET name=$1 WHERE id=$2::uuid", owner_name, vlan_id)
 
 
@@ -185,7 +211,7 @@ async def create_allocation(body: AllocIn, request: Request, db=Depends(get_db),
         changed_by=current_user.get("username","admin"), ip_address=get_client_ip(request),
         customer_id=str(body.customer_id) if body.customer_id else None,
         vlan_id=str(body.vlan_id) if body.vlan_id else None)
-    return {**dict(row), "prefix": str(row["prefix"])}
+    return await _enrich_alloc(db, row)
 
 @router.put("/api/v1/allocations/{alloc_id}")
 async def update_allocation(alloc_id: str, body: AllocIn, request: Request, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
@@ -211,7 +237,7 @@ async def update_allocation(alloc_id: str, body: AllocIn, request: Request, db=D
         changed_by=current_user.get("username","admin"), ip_address=get_client_ip(request),
         customer_id=str(body.customer_id) if body.customer_id else None,
         vlan_id=str(body.vlan_id) if body.vlan_id else None)
-    return {**dict(row), "prefix": str(row["prefix"])}
+    return await _enrich_alloc(db, row)
 
 @router.delete("/api/v1/allocations/{alloc_id}", status_code=204)
 async def delete_allocation(alloc_id: str, request: Request, db=Depends(get_db), current_user: dict = Depends(get_current_user)):

@@ -116,21 +116,45 @@ export function validateSubnet(prefix, allocations, blockPrefix) {
   }
 }
 
-export function changeMaskAligned(ip, oldPlen, newPlen) {
-  // Only works for IPv4 right now
-  if (!ip.includes(".")) return null;
-  const oldSize = Math.pow(2, 32-oldPlen);
-  const newSize = Math.pow(2, 32-newPlen);
-  if (newSize > oldSize) return null; // must be smaller or equal
-
-  const ipInt = ipToInt(ip);
-  const aligned = Math.floor(ipInt / newSize) * newSize;
-  return intToIp(aligned>>>0);
+export function changeMaskAligned(currentPrefix, newPlen, allocations) {
+  if (!currentPrefix) return `0.0.0.0/${newPlen}`;
+  try {
+    const [ip] = String(currentPrefix).split("/");
+    const snapped = snapToBoundary(ip, newPlen);
+    const size   = Math.pow(2, 32-newPlen);
+    const ipInt  = ipToInt(snapped);
+    const ipEnd  = (ipInt+size-1)>>>0;
+    let overlaps = false;
+    for (const a of (allocations||[])) {
+      if (a.status === "available") continue;
+      try {
+        const [aAddr,aPlen] = (a.prefix||"").split("/");
+        if (!aAddr) continue;
+        const aStart = ipToInt(aAddr);
+        const aEnd   = (aStart+Math.pow(2,32-parseInt(aPlen))-1)>>>0;
+        if (ipInt<=aEnd && ipEnd>=aStart) { overlaps=true; break; }
+      } catch {}
+    }
+    if (!overlaps) return `${snapped}/${newPlen}`;
+    const next = nextValidBoundary(snapped, newPlen, allocations);
+    return next ? `${next}/${newPlen}` : `${snapped}/${newPlen}`;
+  } catch {
+    return `0.0.0.0/${newPlen}`;
+  }
 }
 
 export function ipv6ToBigIntBD(addr) {
   try {
-    const hex = addr.split(":").map(p => p||"0").join("");
+    // Handle :: compression
+    let full = addr;
+    const dblColon = full.indexOf("::");
+    if (dblColon !== -1) {
+      const left = full.slice(0, dblColon).split(":").filter(Boolean);
+      const right = full.slice(dblColon+2).split(":").filter(Boolean);
+      const missing = 8 - left.length - right.length;
+      full = [...left, ...Array(missing).fill("0"), ...right].join(":").replace(/::+/g, ":");
+    }
+    const hex = full.split(":").map(p => p.padStart(4,"0")).join("");
     return BigInt("0x" + hex);
   } catch {
     return 0n;
@@ -144,7 +168,27 @@ export function bigIntToIPv6BD(bn) {
     for (let i=0; i<32; i+=4) {
       parts.push(hex.slice(i,i+4));
     }
-    return parts.join(":");
+    // Compress: cari run terpanjang dari "0000" (RFC 5952)
+    let bestStart = -1, bestLen = 0;
+    let curStart = -1, curLen = 0;
+    for (let i=0; i<parts.length; i++) {
+      if (parts[i] === "0000") {
+        if (curStart === -1) curStart = i;
+        curLen++;
+        if (curLen > bestLen) { bestLen = curLen; bestStart = curStart; }
+      } else {
+        curStart = -1; curLen = 0;
+      }
+    }
+    let out;
+    if (bestLen >= 2) {
+      const before = parts.slice(0, bestStart).map(p=>p.replace(/^0+/,"")||"0");
+      const after  = parts.slice(bestStart+bestLen).map(p=>p.replace(/^0+/,"")||"0");
+      out = (before.length?before.join(":"):"") + "::" + (after.length?after.join(":"):"");
+    } else {
+      out = parts.map(p=>p.replace(/^0+/,"")||"0").join(":");
+    }
+    return out;
   } catch {
     return "::";
   }
@@ -157,15 +201,17 @@ export function calcUsableRange(prefix) {
     const plen = parseInt(plenStr);
 
     if (addr.includes(":")) {
-      // IPv6
+      // IPv6: semua address usable (tidak ada network/broadcast reserved)
       if (plen === 128) return `${addr} (single)`;
       if (plen === 127) {
         const start = ipv6ToBigIntBD(addr);
         const end   = start + 1n;
         return `${addr} - ${bigIntToIPv6BD(end)}`;
       }
-      const start = ipv6ToBigIntBD(addr) + 1n;
-      const end   = start + (1n << BigInt(128-plen)) - 3n;
+      const mask = plen === 0 ? 0n : (~0n << BigInt(128-plen)) & ((1n<<128n)-1n);
+      const base = ipv6ToBigIntBD(addr) & mask;
+      const start = base;
+      const end   = base + (1n << BigInt(128-plen)) - 1n;
       return `${bigIntToIPv6BD(start)} - ${bigIntToIPv6BD(end)}`;
     }
 

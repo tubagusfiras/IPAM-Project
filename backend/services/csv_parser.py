@@ -273,7 +273,13 @@ def parse_ipv4_csv(content: str, filename: str = None):
 
 
 def parse_ipv6_csv(content: str, filename: str = None):
-    """Parse IPv6 list-format CSV from SDI spreadsheets."""
+    """Parse IPv6 list-format CSV from SDI spreadsheets.
+    
+    Supports two formats:
+    Format A: ,iface_address,customer    (col1=IPv6 address, col2=customer)
+    Format B: ,customer,prefix           (col1=customer/name, col2=IPv6 prefix)
+    First row: prefix,,                  (col0=prefix for meta detection)
+    """
     lines = content.splitlines()
     meta = {"asn": None, "router": None, "operator": None, "prefix": None, "name": None}
     allocations = []
@@ -282,53 +288,83 @@ def parse_ipv6_csv(content: str, filename: str = None):
         cols = [c.strip() for c in line.split(",")]
         if len(cols) < 2:
             continue
-        col1 = cols[1].strip()
-        if not col1:
-            continue
 
+        # Detect meta prefix dari col0 ATAU col1.
+        # Format asli SDI: ,2404:fd00:36::/48  - LS ZETTA Connect Plus,
+        # Prefix bisa di col0 (baris meta) atau col1 (baris blok).
         if meta["prefix"] is None:
-            parts = col1.split(None, 1)
-            col1_addr = parts[0].split("(")[0].strip()
-            try:
-                net = ipaddress.ip_network(col1_addr, strict=False)
+            for mci in [0, 1]:
+                if mci >= len(cols) or not cols[mci].strip():
+                    continue
+                val = cols[mci].strip()
+                # Ambil bagian sebelum " - " atau "-" (nama blok kadang nempel)
+                cand = val.split("  -")[0].split(" -")[0].strip()
+                try:
+                    net = ipaddress.ip_network(cand, strict=False)
+                except ValueError:
+                    continue
                 if net.version == 6 and net.prefixlen <= 48:
                     meta["prefix"] = str(net)
-                    if " - " in col1:
-                        meta["name"] = col1.split(" - ", 1)[1].strip()
-                    elif len(parts) > 1:
-                        meta["name"] = parts[1].strip(" -")
-                    continue
+                    # Nama blok dari sisa string setelah prefix, fallback ke filename
+                    name = val[len(cand):].strip().lstrip("- ").strip()
+                    meta["name"] = name or (filename.rsplit(".", 1)[0] if filename else None)
+                    break
+
+        # Try both columns for IPv6 prefix/address
+        for ci in [1, 2]:
+            if ci >= len(cols) or not cols[ci].strip():
+                continue
+            val = cols[ci].strip()
+
+            # Try as prefix (e.g. "2401:a0a0:5::2/127")
+            try:
+                net = ipaddress.ip_network(val, strict=False)
+                if net.version == 6:
+                    prefix = str(net)
+                    # Customer is the OTHER column
+                    customer = cols[2].strip() if ci == 1 and len(cols) > 2 and cols[2].strip() else None
+                    if ci == 2 and len(cols) > 1 and cols[1].strip():
+                        customer = cols[1].strip()
+                    status = "active" if customer else "available"
+                    desc = customer or ""
+                    allocations.append({
+                        "prefix": prefix,
+                        "customer": customer,
+                        "vlan": None,
+                        "description": desc,
+                        "notes": "",
+                        "status": status,
+                    })
+                    break
             except ValueError:
                 pass
-            continue
 
-        col1_clean = col1.split("(")[0].strip()
-        side = None
-        if "(" in col1 and ")" in col1:
-            side = col1[col1.index("(") + 1:col1.index(")")]
-
-        try:
-            iface = ipaddress.ip_interface(col1_clean)
-        except ValueError:
-            continue
-
-        if iface.version != 6:
-            continue
-
-        prefix = f"{iface.ip}/{iface.network.prefixlen}"
-        customer = cols[2].strip() if len(cols) > 2 and cols[2].strip() else None
-        status = "active" if customer else "available"
-        desc = customer or ""
-        if side:
-            desc = f"{customer} [{side}]" if customer else f"[{side}]"
-
-        allocations.append({
-            "prefix": prefix,
-            "customer": customer,
-            "vlan": None,
-            "description": desc,
-            "notes": side or "",
-            "status": status,
-        })
+            # Try as interface (e.g. "2401:a0a0:5::2/127 (A)")
+            try:
+                clean = val.split("(")[0].strip()
+                side = None
+                if "(" in val and ")" in val:
+                    side = val[val.index("(") + 1:val.index(")")]
+                iface = ipaddress.ip_interface(clean)
+                if iface.version == 6:
+                    prefix = f"{iface.ip}/{iface.network.prefixlen}"
+                    customer = cols[2].strip() if ci == 1 and len(cols) > 2 and cols[2].strip() else None
+                    if ci == 2 and len(cols) > 1 and cols[1].strip():
+                        customer = cols[1].strip()
+                    status = "active" if customer else "available"
+                    desc = customer or ""
+                    if side:
+                        desc = f"{customer} [{side}]" if customer else f"[{side}]"
+                    allocations.append({
+                        "prefix": prefix,
+                        "customer": customer,
+                        "vlan": None,
+                        "description": desc,
+                        "notes": side or "",
+                        "status": status,
+                    })
+                    break
+            except ValueError:
+                pass
 
     return meta, allocations

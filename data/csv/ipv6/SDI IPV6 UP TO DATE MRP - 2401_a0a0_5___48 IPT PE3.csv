@@ -1,0 +1,52 @@
+2401:a0a0:5::/48,,
+,,
+,fibernet-v6,2401:a0a0:5::2/127
+,fibernet-v6,2401:a0a0:5::3/127
+,gmedia-v6,2401:a0a0:5::4/127
+,gmedia-v6,2401:a0a0:5::5/127
+,jdn-v6,2401:a0a0:5::6/127
+,jdn-v6,2401:a0a0:5::7/127
+,media-indocyber-v6,2401:a0a0:5::8/127
+,media-indocyber-v6,2401:a0a0:5::9/127
+,mentari-ipv6,2401:a0a0:5::10/127
+,mentari-ipv6,2401:a0a0:5::11/127
+,samudra-kilat-v6,2401:a0a0:5::12/127
+,samudra-kilat-v6,2401:a0a0:5::13/127
+,tachyon-migrasi-v6,2401:a0a0:5::14/127
+,tachyon-migrasi-v6,2401:a0a0:5::15/127
+,mro1,2401:a0a0:5::16/127
+,mro1,2401:a0a0:5::17/127
+,mro2,2401:a0a0:5::18/127
+,mro2,2401:a0a0:5::19/127
+,LS Internal Exchange,2401:a0a0:5::20/127
+,LS Internal Exchange,2401:a0a0:5::21/127
+,sdi-batam-v6,2401:a0a0:5::22/127
+,sdi-batam-v6,2401:a0a0:5::23/127
+,sdi-bdg-ipv6,2401:a0a0:5::24/127
+,sdi-bdg-ipv6,2401:a0a0:5::25/127
+,sdi-kediri-mx204-via-fs-v6,2401:a0a0:5::26/127
+,sdi-kediri-mx204-via-fs-v6,2401:a0a0:5::27/127
+,sdi-kediri-mx204-via-iforte-v6,2401:a0a0:5::28/127
+,sdi-kediri-mx204-via-iforte-v6,2401:a0a0:5::29/127
+,sdi-transit-v6,2401:a0a0:5::30/127
+,sdi-transit-v6,2401:a0a0:5::31/127
+,transit-multiconnect-2-ipv6,2401:a0a0:5::32/127
+,transit-multiconnect-2-ipv6,2401:a0a0:5::33/127
+,multiconnect-P0,2401:a0a0:5::34/127
+,multiconnect-P0,2401:a0a0:5::35/127
+,LS FNA PE1,2401:a0a0:5::36/127
+,LS FNA PE1,2401:a0a0:5::37/127
+,SDIX,2401:a0a0:5::38/127
+,SDIX,2401:a0a0:5::39/127
+,IPT2 MX204,2401:a0a0:5::40/127
+,IPT2 MX204,2401:a0a0:5::41/127
+,tachyon-migrasi-v6,2401:a0a0:5::42/127
+,tachyon-migrasi-v6,2401:a0a0:5::43/127
+,,2401:a0a0:5::44/127
+,,2401:a0a0:5::45/127
+,4 LS UPS,2401:a0a0:5::46/127
+,,2401:a0a0:5::47/127
+,greenet,2401:a0a0:5::48/127
+,greenet,2401:a0a0:5::49/127
+,artha-lintas(MRP),2401:a0a0:5::50/127
+,artha-lintas(Client),2401:a0a0:5::51/127

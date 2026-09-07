@@ -91,6 +91,7 @@ export const getCustomersLookup = () => request(`/customers/lookup`);
 export const createVlan      = (b)    => request("/vlans", json("POST", b));
 export const updateVlan      = (id,b) => request(`/vlans/${id}`, json("PUT", b));
 export const deleteVlan      = (id)   => request(`/vlans/${id}`, { method:"DELETE" });
+export const getFreeVlanId    = (site_id="") => request(`/vlans/free-id${site_id?"?site_id="+site_id:""}`);
 
 // Batch allocation lookups (avoid N+1 requests for router placements)
 export const getAllocationsByCustomerIds = (ids) => ids.length ? request(`/allocations?customer_id=${ids.join(",")}&limit=1000`) : Promise.resolve({items:[]});

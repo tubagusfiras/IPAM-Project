@@ -202,14 +202,14 @@ async def check_host_ping(ip: str, timeout: int = 30) -> dict:
                     country_name = node_info[1] if len(node_info) > 1 else "Unknown"
 
                     # Status: check-host.net returns nested arrays like [[['OK', time, ip], ['OK', time], ...]]
-                    # Any 'OK' string in first element = online, parse RTT from second element
+                    # checks = [[ inner_array ]] where inner_array = [['OK', time, ip?], ['OK', time], ...]
                     is_online = False
                     rtt_values = []
                     if isinstance(checks, list) and len(checks) > 0:
-                        # Flatten nested structure: checks is [[inner_array]]
+                        # checks is [[inner_array]], get inner_array
                         inner = checks[0] if checks else []
                         if isinstance(inner, list):
-                            # Each item in inner is like ['OK', time, ip?] or ['Error', ...]
+                            # Each item in inner is like ['OK', time_in_seconds, ip?] or ['Error', ...]
                             for item in inner:
                                 if isinstance(item, list) and len(item) > 0:
                                     status_str = str(item[0]).lower()

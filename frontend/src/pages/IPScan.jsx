@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { getBlocks, authFetch} from "../api.js";
-import { Btn, Loading, EmptyState, PageHeader, Icons, Badge, Alert, Card, Toolbar } from "../components/ui.jsx";
+import { Btn, Loading, EmptyState, PageHeader, Icons, Alert, Card, Toolbar } from "../components/ui.jsx";
+import useModalKeys from "../hooks/useModalKeys.js";
 
 function formatEta(sec) {
   if (!sec || sec <= 0) return "";
@@ -137,8 +138,14 @@ export default function IPScan() {
     setConfirmDel(null);
   };
 
-  // Bulk delete helpers — only active when filterType==="ghost"
-  const toggleGhostAlloc = (prefix) => {
+  useModalKeys({
+    onClose: () => setConfirmDel(null),
+    onSubmit: confirmDel ? () => doAction("delete", confirmDel.alloc_id, confirmDel.alloc_prefix) : undefined,
+    open: !!confirmDel,
+  });
+
+  // Bulk delete helpers — pilih per netmask (prefix), berlaku di semua filter
+  const toggleAllocPrefix = (prefix) => {
     setBulkDel(prev => {
       const s = new Set(prev);
       if (s.has(prefix)) s.delete(prefix); else s.add(prefix);
@@ -146,12 +153,8 @@ export default function IPScan() {
     });
   };
 
-  const toggleGhostPrefix = (prefix) => {
-    toggleGhostAlloc(prefix);
-  };
-
-  const selectAllGhosts = () => {
-    const allPrefixes = [...new Set(ghosts.map(g => g.alloc_prefix))];
+  const selectAllAllocs = () => {
+    const allPrefixes = [...new Set(allResults.map(r => r.alloc_prefix).filter(Boolean))];
     setBulkDel(prev => {
       const s = new Set(prev);
       const allSelected = allPrefixes.every(p => s.has(p));
@@ -163,19 +166,18 @@ export default function IPScan() {
 
   const doBulkDelete = async () => {
     if (!bulkDel.length) return;
-    if (!confirm(`Delete ${bulkDel.length} ghost allocation(s)? This cannot be undone.`)) return;
-    for (const prefix of bulkDel) {
-      const allocs = ghosts.filter(g => g.alloc_prefix === prefix);
-      for (const alloc of allocs) {
-        try {
-          await authFetch("/api/v1/scan/action", {
-            method: "POST", headers: {"Content-Type":"application/json"},
-            body: JSON.stringify({action:"delete", alloc_id: alloc.alloc_id}),
-          });
-        } catch(e) { console.error(e); }
-      }
+    if (!confirm(`Delete ${bulkDel.length} allocation(s)? This cannot be undone.`)) return;
+    const targets = allResults.filter(r => r.alloc_id && bulkDel.includes(r.alloc_prefix));
+    const uniqueAllocIds = [...new Set(targets.map(t => t.alloc_id))];
+    for (const alloc_id of uniqueAllocIds) {
+      try {
+        await authFetch("/api/v1/scan/action", {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({action:"delete", alloc_id}),
+        });
+      } catch(e) { console.error(e); }
     }
-    setActionMsg({type:"delete", text:`Deleted ${bulkDel.length} allocation(s)`});
+    setActionMsg({type:"delete", text:`Deleted ${uniqueAllocIds.length} allocation(s)`});
     setTimeout(() => setActionMsg(null), 3500);
     setBulkDel([]);
     pollStatus(scanData.scan_id);
@@ -200,7 +202,7 @@ export default function IPScan() {
     return status === filterType;
   });
   const idleCount = allResults.filter(r=>getRowStatus(r)==="idle").length;
-  const allUniquePrefixes = [...new Set(ghosts.map(g => g.alloc_prefix).filter(Boolean))];
+  const allUniquePrefixes = [...new Set(allResults.map(r => r.alloc_prefix).filter(Boolean))];
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:20}}>
@@ -371,11 +373,11 @@ export default function IPScan() {
                     </button>
                   )}
                 </div>
-                {filterType==="ghost" && bulkDel.length > 0 && (
+                {bulkDel.length > 0 && (
                   <div style={{padding:"8px 12px",background:"rgba(239,68,68,0.08)",borderTop:"1px solid var(--danger-border)",display:"flex",alignItems:"center",gap:10,fontSize:12}}>
                     <span style={{color:"var(--danger)",fontWeight:600}}>{bulkDel.length} selected</span>
-                    <button onClick={selectAllGhosts} className="btn btn-ghost btn-sm" style={{fontSize:11}}>
-                      {bulkDel.length === [...new Set(ghosts.map(g=>g.alloc_prefix))].length ? "Deselect All" : "Select All"}
+                    <button onClick={selectAllAllocs} className="btn btn-ghost btn-sm" style={{fontSize:11}}>
+                      {bulkDel.length === allUniquePrefixes.length ? "Deselect All" : "Select All"}
                     </button>
                     <button onClick={doBulkDelete} className="btn btn-sm"
                       style={{background:"rgba(239,68,68,0.15)",color:"rgb(239,68,68)",border:"1px solid rgba(239,68,68,0.3)",padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer"}}>
@@ -386,10 +388,10 @@ export default function IPScan() {
                 <table style={{width:"100%",borderCollapse:"collapse"}}>
                   <thead>
                     <tr>
-                      {filterType==="ghost" && (
+                      {allUniquePrefixes.length > 0 && (
                         <th className="table-header" style={{width:36,textAlign:"center"}}>
                           <input type="checkbox" checked={bulkDel.length===allUniquePrefixes.length && allUniquePrefixes.length>0}
-                            onChange={selectAllGhosts}
+                            onChange={selectAllAllocs}
                             style={{cursor:"pointer",accentColor:"var(--accent)",width:13,height:13}}/>
                         </th>
                       )}
@@ -408,11 +410,13 @@ export default function IPScan() {
                       return (
                         <tr key={r.ip} className="table-row"
                           style={{background:i%2===0?"var(--surface-1)":"var(--surface-2)"}}>
-                          {filterType==="ghost" && (
+                          {allUniquePrefixes.length > 0 && (
                             <td className="table-cell" style={{width:36,textAlign:"center"}}>
-                              <input type="checkbox" checked={isChecked}
-                                onChange={()=>{if(ghostPrefix)toggleGhostAlloc(ghostPrefix)}}
-                                style={{cursor:"pointer",accentColor:"var(--accent)",width:13,height:13}}/>
+                              <input type="checkbox"
+                                checked={isChecked}
+                                disabled={!r.alloc_prefix}
+                                onChange={()=>toggleAllocPrefix(r.alloc_prefix)}
+                                style={{cursor:r.alloc_prefix?"pointer":"not-allowed",accentColor:"var(--accent)",width:13,height:13,opacity:r.alloc_prefix?1:0.25}}/>
                             </td>
                           )}
                           <td className="table-cell">

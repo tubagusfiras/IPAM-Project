@@ -14,10 +14,10 @@ router = APIRouter(tags=["Import"])
 @limiter.limit("10/minute")
 async def preview_import(request: Request, file: UploadFile = File(...), db=Depends(get_db)):
     if not file.filename.lower().endswith((".csv", ".xls", ".xlsx", ".txt")):
-        raise HTTPException(400, "Hanya file CSV yang didukung")
+        raise HTTPException(400, "Only CSV files are supported")
     content = await file.read()
     if len(content) > 10_000_000:
-        raise HTTPException(413, "File terlalu besar (max 10MB)")
+        raise HTTPException(413, "File too large (max 10MB)")
     text = content.decode("utf-8", errors="replace").replace("\r\n", "\n").replace("\r", "\n")
 
     # Auto detect format
@@ -61,7 +61,7 @@ async def preview_import(request: Request, file: UploadFile = File(...), db=Depe
                 except ValueError:
                     pass
             if len(allocs) > block_capacity:
-                block_warnings.append(f"Jumlah allocation ({len(allocs)}) melebihi kapasitas block (max {block_capacity})")
+                block_warnings.append(f"Allocation count ({len(allocs)}) exceeds block capacity (max {block_capacity})")
         except ValueError:
             pass
 
@@ -121,7 +121,7 @@ async def confirm_import(request: Request, body: dict, db=Depends(get_db)):
         raise HTTPException(400, f"{len(out_of_range)} allocation(s) di luar range block {meta['prefix']}: {', '.join(out_of_range[:10])}{'...' if len(out_of_range) > 10 else ''}")
 
     if len(valid_allocs) > block_capacity:
-        raise HTTPException(400, f"Jumlah allocation ({len(valid_allocs)}) melebihi kapasitas block {meta['prefix']} (max {block_capacity})")
+        raise HTTPException(400, f"Allocation count ({len(valid_allocs)}) exceeds block capacity {meta['prefix']} (max {block_capacity})")
 
     allocs = valid_allocs
     imported = 0
@@ -181,16 +181,24 @@ async def confirm_import(request: Request, body: dict, db=Depends(get_db)):
             vlan_id = None
             vlan_vid = alloc.get("vlan")
             if vlan_vid:
+                try:
+                    vlan_vid_int = int(vlan_vid)
+                except (ValueError, TypeError):
+                    skipped += 1
+                    continue
+                if vlan_vid_int < 1 or vlan_vid_int > 4094:
+                    skipped += 1
+                    continue
                 if site_id:
-                    vlan = await db.fetchrow("SELECT id FROM vlans WHERE vid = $1 AND site_id = $2::uuid", vlan_vid, site_id)
+                    vlan = await db.fetchrow("SELECT id FROM vlans WHERE vid = $1 AND site_id = $2::uuid", vlan_vid_int, site_id)
                 else:
-                    vlan = await db.fetchrow("SELECT id FROM vlans WHERE vid = $1 AND site_id IS NULL", vlan_vid)
+                    vlan = await db.fetchrow("SELECT id FROM vlans WHERE vid = $1 AND site_id IS NULL", vlan_vid_int)
                 if vlan:
                     vlan_id = vlan["id"]
                 else:
                     vlan = await db.fetchrow(
                         "INSERT INTO vlans (vid, name, status, site_id) VALUES ($1, $2, $3, $4::uuid) RETURNING id",
-                        vlan_vid, f"VLAN {vlan_vid}", "active", site_id
+                        vlan_vid_int, None, "active", site_id
                     )
                     vlan_id = vlan["id"]
 

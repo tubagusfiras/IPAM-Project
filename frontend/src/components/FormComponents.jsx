@@ -34,7 +34,6 @@ export function AutoInput({ value, onChange, suggestions=[], placeholder, mono, 
         }}
         onKeyDown={e=>{
           if(e.key==="Enter") {
-            e.preventDefault();
             if(blurTimer.current) clearTimeout(blurTimer.current);
             setOpen(false);
             onChange(query);

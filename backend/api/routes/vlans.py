@@ -26,8 +26,11 @@ async def list_vlans(
         params.append(f"%{search}%")
         conditions.append(f"(v.name ILIKE ${len(params)} OR v.vid::text ILIKE ${len(params)})")
     if site_id:
-        params.append(site_id)
-        conditions.append(f"v.site_id = ${len(params)}::uuid")
+        if site_id == "none":
+            conditions.append("v.site_id IS NULL")
+        else:
+            params.append(site_id)
+            conditions.append(f"v.site_id = ${len(params)}::uuid")
     if source:
         params.append(source)
         conditions.append(f"v.source = ${len(params)}")
@@ -41,13 +44,40 @@ async def list_vlans(
                (SELECT array_agg(DISTINCT s2.name) FROM allocations a2
                 JOIN ip_blocks b2 ON a2.block_id=b2.id
                 JOIN sites s2 ON b2.site_id=s2.id
-                WHERE a2.vlan_id=v.id) AS site_names
+                WHERE a2.vlan_id=v.id) AS site_names,
+               (SELECT array_agg(DISTINCT b3.router) FROM allocations a3
+                JOIN ip_blocks b3 ON a3.block_id=b3.id
+                WHERE a3.vlan_id=v.id AND b3.router IS NOT NULL AND b3.router != '') AS router_names
         FROM vlans v LEFT JOIN sites s ON v.site_id=s.id
         WHERE {where} ORDER BY v.vid
         LIMIT ${len(params)-1} OFFSET ${len(params)}
     """, *params)
     total = await db.fetchval(f"SELECT COUNT(*) FROM vlans v WHERE {where}", *params[:-2])
     return {"total": total, "items": [dict(r) for r in rows]}
+
+@router.get("/api/v1/vlans/free-id")
+async def get_free_vlan_id(
+    site_id: Optional[str]=Query(None),
+    db=Depends(get_db)
+):
+    conditions, params = ["1=1"], []
+    if site_id:
+        params.append(site_id)
+        conditions.append(f"v.site_id = ${len(params)}::uuid")
+    else:
+        conditions.append("v.site_id IS NULL")
+    where = " AND ".join(params) if params else "1=1"
+    # Find the smallest unused vid starting from 100
+    used_vids = await db.fetch(f"SELECT vid FROM vlans WHERE {where} ORDER BY vid", *params)
+    used_set = {r["vid"] for r in used_vids}
+    # Try common ranges: 100-999, 1000-1999, 2000-2999, etc.
+    for start in [100, 1000, 2000, 3000, 4000]:
+        for vid in range(start, start + 900):
+            if vid not in used_set:
+                return {"free_vid": vid, "site_id": site_id}
+    # Fallback
+    max_vid = max(used_set) if used_set else 99
+    return {"free_vid": max_vid + 1, "site_id": site_id}
 
 @router.post("/api/v1/vlans", status_code=201)
 async def create_vlan(body: VlanIn, request: Request, db=Depends(get_db), current_user: dict = Depends(get_current_user)):

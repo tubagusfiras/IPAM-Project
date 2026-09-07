@@ -19,6 +19,7 @@ const ImportPage = lazy(()=>import("./pages/Import.jsx"));
 const PingTrace  = lazy(()=>import("./pages/PingTrace.jsx"));
 const SettingsPage = lazy(()=>import("./pages/Settings.jsx"));
 const SubnetCalc = lazy(()=>import("./pages/SubnetCalc.jsx"));
+const VlanCalc   = lazy(()=>import("./pages/VlanCalc.jsx"));
 const GlobalPing = lazy(()=>import("./pages/GlobalPing.jsx"));
 const GlobalPingDetail = lazy(()=>import("./pages/GlobalPingDetail.jsx"));
 const VlanDetail = lazy(()=>import("./pages/VlanDetail.jsx"));
@@ -240,6 +241,7 @@ export default function App() {
       case "ping":      return <PingTrace onNavigate={navigate}/>;
       case "import":    return <ImportPage onNavigate={navigate}/>;
       case "subnet":    return <SubnetCalc onNavigate={navigate}/>;
+      case "vlan-calc": return <VlanCalc onNavigate={navigate}/>;
       case "global-ping": return <GlobalPing onNavigate={navigate}/>;
       case "global-ping-detail": return <GlobalPingDetail onNavigate={navigate}/>;
       case "settings":  return <SettingsPage dark={dark} onToggleDark={toggleDark} onNavigate={navigate}/>;

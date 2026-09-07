@@ -8,7 +8,7 @@ import { createPortal } from "react-dom";
 import { getBlock, updateBlock, getSites, getCustomers, getVlans,
          createAllocation, updateAllocation, deleteAllocation, createCustomer, createVlan, authFetch} from "../api.js";
 import { ipToInt, intToIp, isAligned, snapToBoundary, nextValidBoundary,
-         validateSubnet, changeMaskAligned, ipv6ToBigIntBD, bigIntToIPv6BD,
+         validateSubnet, changeMaskAligned,
          calcUsableRange, calcUsableCount, ownerInfo as ownerInfoHelper } from "../utils/ipHelpers.js";
 
 // ── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -311,7 +311,7 @@ export default function BlockDetail({ blockId, onBack, dark }) {
   if (!data) return null;
 
   return (
-    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+    <div className="page-enter" style={{display:"flex",flexDirection:"column",gap:16}}>
 
       {/* Save toast */}
       {saveMsg && (
@@ -405,8 +405,8 @@ export default function BlockDetail({ blockId, onBack, dark }) {
         ) : (
           <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
             <div style={{flex:1,height:6,background:"var(--surface-3)",borderRadius:99,overflow:"hidden"}}>
-              <div style={{width:`${utilPct}%`,height:"100%",background:utilColor,
-                borderRadius:99,transition:"width 0.5s"}}/>
+              <div className="progress-bar-fill" style={{width:`${utilPct}%`,height:"100%",background:utilColor,
+                borderRadius:99,boxShadow:utilPct>85?`0 0 8px rgba(239,68,68,0.3)`:"none"}}/>
             </div>
             <span style={{fontFamily:"var(--font-mono)",fontSize:12,color:utilColor,
               fontWeight:700,minWidth:36,textAlign:"right"}}>{utilPct}%</span>
@@ -442,72 +442,8 @@ export default function BlockDetail({ blockId, onBack, dark }) {
         </div>
       </div>
 
-      {/* IP Map / IPv6 Allocation View */}
+      {/* IP Map */}
       {showGrid && (
-        isV6 ? (
-          <div style={{
-            background:"var(--surface-1)",border:"1px solid var(--border-medium)",
-            borderRadius:"var(--radius)",padding:16,marginBottom:12,
-          }}>
-            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
-              <span style={{fontSize:11,fontWeight:700,color:"var(--text)",letterSpacing:"0.08em",textTransform:"uppercase"}}>IPv6 Allocations</span>
-              <span style={{fontSize:11,color:"var(--text-muted)"}}>
-                {(data.allocations||[]).length} prefix{(data.allocations||[]).length!==1?"es":""}
-              </span>
-            </div>
-            {(data.allocations||[]).length === 0 ? (
-              <div style={{textAlign:"center",padding:"32px 0",color:"var(--text-dim)",fontSize:13}}>
-                No allocations yet — click + Add Allocation to get started
-                (prefix will be pre-filled with block address)
-              </div>
-            ) : (
-              <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                {(data.allocations||[]).sort((a,b)=>a.prefix.localeCompare(b.prefix)).map(a=>{
-                  const typeColors = {
-                    customer:"#3b82f6",infrastructure:"#8b5cf6",
-                    ptp:"#f59e0b",peering:"#a855f7",
-                    management:"#0ea5e9",reserved:"#71717a",
-                  };
-                  const tc = typeColors[a.owner_type]||"#71717a";
-                  const isActive = a.status==="active";
-                  return (
-                    <div key={a.id}
-                      onClick={()=>setAllocModal(a)}
-                      style={{
-                        display:"flex",alignItems:"center",gap:12,
-                        padding:"10px 14px",borderRadius:"var(--radius-sm)",
-                        border:"1px solid var(--border-soft)",
-                        background:"var(--surface-2)",
-                        cursor:"pointer",transition:"all 0.12s",
-                      }}
-                      onMouseEnter={e=>e.currentTarget.style.background="var(--surface-3)"}
-                      onMouseLeave={e=>e.currentTarget.style.background="var(--surface-2)"}
-                    >
-                      <div style={{width:3,height:36,borderRadius:2,background:tc,flexShrink:0}}/>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontFamily:"var(--font-mono)",fontSize:13,fontWeight:600,color:"var(--accent)",marginBottom:2}}>
-                          {a.prefix}
-                        </div>
-                        <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                          <span style={{fontSize:10,color:tc,fontWeight:600,textTransform:"uppercase"}}>{a.owner_type}</span>
-                          {a.customer_name && <span style={{fontSize:11,color:"var(--text-muted)"}}>{a.customer_name}</span>}
-                          {a.vlan_vid && <span style={{fontSize:10,color:"var(--text-dim)",fontFamily:"var(--font-mono)"}}>VLAN {a.vlan_vid}</span>}
-                        </div>
-                      </div>
-                      <span style={{
-                        padding:"2px 8px",borderRadius:99,fontSize:10,fontWeight:600,
-                        background: isActive?"var(--success-surface)":"var(--surface-3)",
-                        color: isActive?"var(--success)":"var(--text-dim)",
-                        border:`1px solid ${isActive?"var(--success-border)":"var(--border-soft)"}`,
-                      }}>{STATUS_STYLE[a.status]?.label || a.status}</span>
-                      <span style={{fontSize:11,color:"var(--text-dim)",opacity:0.6}}>click to edit →</span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        ) : (
           <IPGrid
             blockPrefix={data.prefix}
             allocations={data.allocations||[]}
@@ -515,7 +451,6 @@ export default function BlockDetail({ blockId, onBack, dark }) {
             onEdit={row=>setAllocModal(row)}
             dark={dark}
           />
-        )
       )}
 
       {showCalc && (
@@ -585,7 +520,12 @@ export default function BlockDetail({ blockId, onBack, dark }) {
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
             <thead style={{position:"sticky",top:0,zIndex:10}}>
               <tr style={{background:"var(--surface-2)",borderBottom:"2px solid var(--border-medium)"}}>
-                {["","#","Type","Prefix","Usable Range","Owner / Customer","VLAN","End Device XC","Status",""].map((h,i)=>(
+                <th style={{padding:"8px 10px",width:28,borderRight:"1px solid var(--border-soft)"}}>
+                  <input type="checkbox" checked={allocs.length>0 && selected.size===allocs.length}
+                    onChange={toggleSelectAll}
+                    style={{cursor:"pointer",accentColor:"var(--accent)",width:14,height:14}}/>
+                </th>
+                  {["#","Type","Prefix","Usable Range","Owner / Customer",...(isV6?[]:["VLAN"]),"End Device XC","Status",""].map((h,i)=>(
                   <th key={i} style={{
                     textAlign:"left",padding:"8px 10px",whiteSpace:"nowrap",
                     fontSize:10,fontWeight:600,textTransform:"uppercase",
@@ -724,7 +664,7 @@ export default function BlockDetail({ blockId, onBack, dark }) {
                             onSave={v=>saveField(row.id,"customer_name",v)}/>
                           {row.customer_name && row.customer_id && (
                             <a onClick={e=>{e.preventDefault();e.stopPropagation();onNavigate?.("customer-detail",{id:row.customer_id,from:"block-detail"});}}
-                              href="#" title="View customer"
+                              href={`#customer-detail/${row.customer_id}`} title="View customer"
                               style={{fontSize:9,color:"var(--text-dim)",flexShrink:0,cursor:"pointer",
                                 padding:"1px 2px",lineHeight:1,opacity:0.5,transition:"opacity 0.12s"}}
                               onMouseEnter={e=>{e.currentTarget.style.opacity="1";e.currentTarget.style.color="var(--accent)";}}
@@ -742,7 +682,8 @@ export default function BlockDetail({ blockId, onBack, dark }) {
                       )}
                     </td>
 
-                    {/* VLAN */}
+                    {/* VLAN (hidden utk IPv6) */}
+                    {!isV6 && (
                     <td style={{padding:"4px 8px",borderRight:"1px solid var(--border-soft)"}}>
                       <div style={{display:"flex",alignItems:"center",gap:4}}>
                         <InlineCell value={row.vlan_vid?String(row.vlan_vid):""} placeholder="—"
@@ -750,7 +691,7 @@ export default function BlockDetail({ blockId, onBack, dark }) {
                           onSave={v=>saveField(row.id,"vlan_vid",v)}/>
                         {row.vlan_vid && row.vlan_id && (
                           <a onClick={e=>{e.preventDefault();e.stopPropagation();onNavigate?.("vlan-detail",{id:row.vlan_id,from:"block-detail"});}}
-                            href="#" title="View VLAN"
+                            href={`#vlan-detail/${row.vlan_id}`} title="View VLAN"
                             style={{fontSize:9,color:"var(--text-dim)",flexShrink:0,cursor:"pointer",
                               padding:"1px 2px",lineHeight:1,opacity:0.5,transition:"opacity 0.12s"}}
                             onMouseEnter={e=>{e.currentTarget.style.opacity="1";e.currentTarget.style.color="var(--accent)";}}
@@ -763,6 +704,7 @@ export default function BlockDetail({ blockId, onBack, dark }) {
                         )}
                       </div>
                     </td>
+                    )}
 
                     {/* End Device XC */}
                     <td style={{padding:"4px 8px",borderRight:"1px solid var(--border-soft)",maxWidth:160}}>
@@ -838,10 +780,23 @@ export default function BlockDetail({ blockId, onBack, dark }) {
           </div>
           {/* Table full height */}
           <div style={{flex:1,overflowX:"auto",overflowY:"auto"}}>
+            {/* Bulk actions for fullscreen */}
+            {selected.size > 0 && (
+              <div style={{display:"flex",alignItems:"center",gap:8,padding:"6px 20px",background:"var(--danger-surface)",borderBottom:"1px solid var(--danger-border)",flexShrink:0}}>
+                <span style={{fontSize:12,color:"var(--danger)",fontWeight:600}}>{selected.size} selected</span>
+                <button onClick={()=>setSelected(new Set())} style={{padding:"3px 8px",fontSize:11,background:"transparent",border:"1px solid var(--danger-border)",color:"var(--text-muted)",borderRadius:4,cursor:"pointer"}}>Clear</button>
+                <button onClick={bulkDelete} style={{padding:"3px 8px",fontSize:11,background:"var(--danger)",border:"none",color:"#fff",borderRadius:4,cursor:"pointer",fontWeight:600}}>Delete Selected</button>
+              </div>
+            )}
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
               <thead style={{position:"sticky",top:0,zIndex:10}}>
                 <tr style={{background:"var(--surface-2)",borderBottom:"2px solid var(--border-medium)"}}>
-                  {["","#","Type","Prefix","Usable Range","Owner / Customer","VLAN","End Device XC","Status",""].map((h,i)=>(
+                  <th style={{padding:"8px 10px",width:28,borderRight:"1px solid var(--border-soft)"}}>
+                    <input type="checkbox" checked={allocs.length>0 && selected.size===allocs.length}
+                      onChange={toggleSelectAll}
+                      style={{cursor:"pointer",accentColor:"var(--accent)",width:14,height:14}}/>
+                  </th>
+                {["#","Type","Prefix","Usable Range","Owner / Customer",...(isV6?[]:["VLAN"]),"End Device XC","Status",""].map((h,i)=>(
                     <th key={i} style={{textAlign:"left",padding:"8px 10px",whiteSpace:"nowrap",
                       fontSize:10,fontWeight:600,textTransform:"uppercase",
                       letterSpacing:"0.07em",color:"var(--text-muted)",
@@ -918,7 +873,7 @@ export default function BlockDetail({ blockId, onBack, dark }) {
                             <InlineCell value={row.description} placeholder="description" onSave={v=>saveFieldOptimistic(row.id,"description",v)}/>
                           )}
                         </td>
-                        <td style={{padding:"4px 8px",borderRight:"1px solid var(--border-soft)"}}><InlineCell value={row.vlan_vid?String(row.vlan_vid):""} placeholder="—" suggestions={vlanVids} mono onSave={v=>saveField(row.id,"vlan_vid",v)}/></td>
+                        {!isV6 && (<td style={{padding:"4px 8px",borderRight:"1px solid var(--border-soft)"}}><InlineCell value={row.vlan_vid?String(row.vlan_vid):""} placeholder="—" suggestions={vlanVids} mono onSave={v=>saveField(row.id,"vlan_vid",v)}/></td>)}
                         <td style={{padding:"4px 8px",borderRight:"1px solid var(--border-soft)",maxWidth:160}}><InlineCell value={row.description} placeholder="—" onSave={v=>saveFieldOptimistic(row.id,"description",v)}/></td>
                         <td style={{padding:"6px 8px",borderRight:"1px solid var(--border-soft)"}}>
                           <select value={row.status} onChange={e=>saveField(row.id,"status",e.target.value)} onClick={e=>e.stopPropagation()}
@@ -957,34 +912,58 @@ export default function BlockDetail({ blockId, onBack, dark }) {
           prefillPrefix={allocModal?.prefix}
           customers={customers} vlans={vlans}
           onClose={()=>setAllocModal(null)}
-          onSaved={()=>{
-            setAllocModal(null); load();
+          onSaved={(newAlloc)=>{
+            setAllocModal(null);
+            if (newAlloc && !allocModal?.id) {
+              // Smooth optimistic add — append new alloc to state, no reload
+              setData(prev => {
+                if (!prev) return prev;
+                const updatedAllocations = [...prev.allocations, newAlloc];
+                const activeCount = updatedAllocations.filter(a => a.status === "active").length;
+                const usedIps = updatedAllocations
+                  .filter(a => a.status === "active")
+                  .reduce((sum, a) => {
+                    try {
+                      const [, plen] = a.prefix.split("/");
+                      return sum + Math.pow(2, 32 - parseInt(plen));
+                    } catch { return sum; }
+                  }, 0);
+                return {
+                  ...prev,
+                  allocations: updatedAllocations,
+                  used_ips: String(usedIps),
+                  active_allocations: activeCount
+                };
+              });
+              setSaveMsg("Added ✓"); setTimeout(()=>setSaveMsg(null),1500);
+            } else {
+              load();
+            }
             getCustomers("",500).then(d=>setCustomers(d.items||[]));
             getVlans("","",500).then(d=>setVlans(d.items||[]));
           }}/>,
         document.body
       )}
-      {confirm && (
+      {confirm && createPortal(
         <Confirm
+          zIndex={2000}
           message={confirm.bulk ? confirm.message : `Delete allocation ${confirm.prefix}?`}
           onConfirm={async()=>{
-            // Optimistic delete: remove from local state first, no page refresh
             setConfirm(null);
             if (confirm.bulk) {
               const ids = new Set(confirm.ids);
               setData(prev => prev ? {...prev, allocations: prev.allocations.filter(a => !ids.has(a.id))} : prev);
               setSelected(new Set());
-              // Background: delete from API
               for (const id of confirm.ids) {
                 try { await deleteAllocation(id); } catch(e) { console.error(e); }
               }
             } else {
               setData(prev => prev ? {...prev, allocations: prev.allocations.filter(a => a.id !== confirm.id)} : prev);
-              // Background: delete from API
               try { await deleteAllocation(confirm.id); } catch(e) { console.error(e); }
             }
           }}
-          onCancel={()=>setConfirm(null)}/>
+          onCancel={()=>setConfirm(null)}/>,
+        document.body
       )}
     </div>
   );

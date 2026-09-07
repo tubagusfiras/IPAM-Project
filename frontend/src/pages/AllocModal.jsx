@@ -4,7 +4,7 @@ import { ALLOC_STATUS_OPTS } from "../constants.js";
 import { Confirm } from "../components/ui.jsx";
 import InlineCell from "../components/InlineCell.jsx";
 import { ipToInt, intToIp } from "../utils/ip.js";
-import { isAligned, snapToBoundary, nextValidBoundary, expandIPv6, ipv6ToBigInt, isValidIPv6, ipv6InBlock, ipv6Overlaps, validateSubnet, changeMaskAligned, bigIntToIPv6, calcUsableRange, calcUsableCount, ownerInfo, OWNER_TYPES } from "../utils/ipValidation.js";
+import { isAligned, snapToBoundary, nextValidBoundary, nextValidBoundaryV6, expandIPv6, ipv6ToBigInt, isValidIPv6, ipv6InBlock, ipv6Overlaps, validateSubnet, changeMaskAligned, bigIntToIPv6, calcUsableRange, calcUsableCount, ownerInfo, OWNER_TYPES } from "../utils/ipValidation.js";
 import AutoInput from "../components/AutoInput.jsx";
 
 const STATUS_OPTS = ALLOC_STATUS_OPTS;
@@ -72,20 +72,20 @@ function AllocModal({ alloc, blockId, blockPrefix, prefillPrefix, customers, vla
 
 
   const save = async () => {
+    console.log("[AllocModal] save() called, prefix:", prefix);
     if (!prefix) return setErr("Prefix is required");
     const vr = validateSubnet(prefix, allocations, blockPrefix);
     if (vr && !vr.valid) {
       const errMsg = vr.errors[0] || "Invalid prefix";
-      // Cari rekomendasi: next valid boundary dengan mask yang sama
       try {
         const plen = parseInt(prefix.split("/")[1]);
-        const rec = nextValidBoundary(0, plen, allocations);
-        if (rec !== null) {
-          const parts = blockPrefix.split(".");
-          const base = (parseInt(parts[0])<<24)|(parseInt(parts[1])<<16)|(parseInt(parts[2])<<8);
-          const ip = base + rec;
-          const recIp = `${(ip>>24)&255}.${(ip>>16)&255}.${(ip>>8)&255}.${ip&255}`;
-          return setErr(`${errMsg} — coba: ${recIp}/${plen}`);
+        const ipPart = prefix.split("/")[0];
+        if (ipPart.includes(":")) {
+          const rec = nextValidBoundaryV6(blockPrefix?.split("/")[0] || "::", plen, allocations);
+          if (rec) return setErr(`${errMsg} — try: ${rec}/${plen}`);
+        } else {
+          const rec = nextValidBoundary(blockPrefix?.split("/")[0] || "0.0.0.0", plen, allocations);
+          if (rec) return setErr(`${errMsg} — try: ${rec}/${plen}`);
         }
       } catch {}
       return setErr(errMsg);
@@ -127,9 +127,10 @@ function AllocModal({ alloc, blockId, blockPrefix, prefillPrefix, customers, vla
         notes: "",
       };
 
+      let result;
       if (isEdit) await updateAllocation(alloc.id, payload);
-      else        await createAllocation(payload);
-      onSaved();
+      else        result = await createAllocation(payload);
+      onSaved(result || null);
     } catch(e) { setErr(e.message); }
     setSaving(false);
   };
@@ -137,8 +138,8 @@ function AllocModal({ alloc, blockId, blockPrefix, prefillPrefix, customers, vla
   // LabelRow moved outside
 
   return (
-    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div className="modal" style={{maxWidth:560}}>
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey&&!e.ctrlKey&&!e.altKey&&e.target.tagName!=="TEXTAREA"&&e.target.tagName!=="BUTTON"&&e.target.tagName!=="SELECT"){e.preventDefault();e.stopPropagation();save();}}}>
+      <div className="modal" style={{maxWidth:560}} onSubmit={e=>{console.log("[AllocModal] form submit");e.preventDefault();save();}}>
         <div className="modal-header">
           <div>
             <div style={{fontWeight:700,fontSize:15,color:"var(--text)"}}>
@@ -244,11 +245,13 @@ function AllocModal({ alloc, blockId, blockPrefix, prefillPrefix, customers, vla
               </LabelRow>
             )}
 
-            {/* VLAN */}
+            {/* VLAN — hidden utk IPv6 */}
+            {!isV6 && (
             <LabelRow label="VLAN ID">
               <AutoInput value={vlanVid} onChange={setVlanVid}
                 suggestions={vlanVids} placeholder="e.g. 1336" mono/>
             </LabelRow>
+            )}
 
             {/* Status */}
             <LabelRow label="Status">
@@ -335,8 +338,8 @@ function BlockEditModal({ block, sites, onClose, onSaved }) {
 
 
   return (
-    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div className="modal" style={{maxWidth:520}}>
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey&&!e.ctrlKey&&!e.altKey&&e.target.tagName!=="TEXTAREA"&&e.target.tagName!=="BUTTON"&&e.target.tagName!=="SELECT"){e.preventDefault();e.stopPropagation();save();}}}>
+      <div className="modal" style={{maxWidth:520}} onSubmit={e=>{e.preventDefault();save();}}>
         <div className="modal-header">
           <div style={{fontWeight:700,fontSize:15,color:"var(--text)"}}>Edit IP Block</div>
           <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-muted)",fontSize:18,padding:4}}>✕</button>

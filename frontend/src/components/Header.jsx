@@ -14,6 +14,19 @@ export function Header({ title, subtitle, onBack, dark, onToggleDark, collapsed,
   const initials = (user?.username || "??").slice(0,2).toUpperCase();
   const roleLabel = user?.role === "admin" ? "Administrator" : "User";
 
+  // Ctrl+K focus search
+  useEffect(() => {
+    const handler = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        document.getElementById("global-search")?.focus();
+      }
+      if (e.key === "Escape") { setSearch(""); document.getElementById("global-search")?.blur(); }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, []);
+
   // Debounced search
   useEffect(() => {
     if (search.length < 2) { setSearchResults(null); return; }
@@ -122,16 +135,19 @@ export function Header({ title, subtitle, onBack, dark, onToggleDark, collapsed,
           <span style={{position:"absolute",left:10,color:"var(--text-dim)",pointerEvents:"none",zIndex:1}}>
             {searching ? <span style={{fontSize:12}}>⟳</span> : <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>}
           </span>
-          <input value={search} onChange={e=>setSearch(e.target.value)}
+          <input id="global-search" value={search} onChange={e=>setSearch(e.target.value)}
             placeholder="Search IP, Network, Customer..."
             style={{
-              width:220,height:34,paddingLeft:32,paddingRight:10,fontSize:13,outline:"none",
+              width:220,height:34,paddingLeft:32,paddingRight:search ? 10 : 50,fontSize:13,outline:"none",
               background:"var(--input-bg)",border:"1px solid var(--input-border)",borderRadius:"var(--radius-sm)",
               color:"var(--text)",fontFamily:"var(--font-main)",
               transition:"width 0.2s, border-color 0.15s",
             }}
             onFocus={e=>{e.target.style.width="280px";e.target.style.borderColor="var(--accent)"}}
             onBlur={e=>{e.target.style.width="220px";e.target.style.borderColor="var(--input-border)"}}/>
+          {!search && (
+            <span style={{position:"absolute",right:8,pointerEvents:"none",fontSize:10,color:"var(--text-dim)",border:"1px solid var(--border-medium)",borderRadius:3,padding:"1px 5px",fontFamily:"monospace",letterSpacing:"0.03em"}}>⌘K</span>
+          )}
         </div>
         {searchResults && (
           <div style={{position:"absolute",top:"calc(100% + 4px)",right:0,width:420,maxHeight:480,overflowY:"auto",background:"var(--surface-1)",border:"1px solid var(--border-soft)",borderRadius:"var(--radius)",boxShadow:"var(--shadow-lg)",overflow:"hidden",zIndex:100}}>
@@ -178,7 +194,10 @@ export function Header({ title, subtitle, onBack, dark, onToggleDark, collapsed,
               ) : null;
             })}
             {Object.values(searchResults).flat().length === 0 && (
-              <div style={{padding:"12px",textAlign:"center",fontSize:12,color:"var(--text-dim)"}}>No results</div>
+              <div style={{padding:"20px 12px",textAlign:"center",fontSize:12,color:"var(--text-dim)",display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="20" height="20" style={{opacity:0.4}}><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                No results for "{search}"
+              </div>
             )}
           </div>
         )}

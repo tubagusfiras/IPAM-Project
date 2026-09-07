@@ -5,7 +5,7 @@ import { Btn, Loading, EmptyState, PageHeader, Icons, Card } from "../components
 function formatTime(ts) {
   if (!ts) return "—";
   const d = new Date(ts);
-  return d.toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleString("en-US", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
 function formatEta(sec) {
@@ -53,6 +53,8 @@ export default function GlobalPing({ onNavigate }) {
   const [lastScan, setLastScan] = useState(null);
   const [page, setPage] = useState(0);
   const LIMIT = 100;
+  const [sortBy, setSortBy] = useState("regions_online");
+  const [sortDir, setSortDir] = useState("ASC");
   const pollRef = useRef(null);
   const scanStartRef = useRef(null);
 
@@ -85,10 +87,13 @@ export default function GlobalPing({ onNavigate }) {
   }, [items, total, lastScan, scanProgress]);
 
   const loadResults = useCallback(async () => {
+    setLoading(true);
     try {
       const params = new URLSearchParams({ limit: String(LIMIT), offset: String(page * LIMIT) });
       if (statusFilter !== "all") params.set("status", statusFilter);
       if (search) params.set("search", search);
+      params.set("sort_by", sortBy);
+      params.set("sort_dir", sortDir);
       const res = await authFetch(`/api/v1/ping/status?${params}`);
       const data = await res.json();
       setItems(data.items || []);
@@ -108,7 +113,7 @@ export default function GlobalPing({ onNavigate }) {
       }
     } catch (e) { console.error(e); }
     setLoading(false);
-  }, [search, statusFilter, page]);
+  }, [search, statusFilter, page, sortBy, sortDir]);
 
   const loadSummary = useCallback(async () => {
     try {
@@ -119,7 +124,7 @@ export default function GlobalPing({ onNavigate }) {
 
   useEffect(() => {
     if (autoLoad) { loadResults(); loadSummary(); }
-  }, [autoLoad, search, statusFilter, page]);
+  }, [autoLoad, search, statusFilter, page, sortBy, sortDir]);
 
   useEffect(() => {
     if (scanning) {
@@ -129,6 +134,12 @@ export default function GlobalPing({ onNavigate }) {
       return () => { if (pollRef.current) clearInterval(pollRef.current); };
     }
   }, [scanning]);
+
+  const toggleSort = (col) => {
+    if (sortBy === col) { setSortDir(sortDir === "ASC" ? "DESC" : "ASC"); }
+    else { setSortBy(col); setSortDir("ASC"); }
+    setPage(0);
+  };
 
   const handleRunScan = async () => {
     scanStartRef.current = Date.now();
@@ -232,7 +243,7 @@ export default function GlobalPing({ onNavigate }) {
       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <div style={{ position: "relative", flex: 1, minWidth: 200, maxWidth: 320 }}>
           <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--text-dim)", pointerEvents: "none" }}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x1="16.65" y2="16.65"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           </span>
           <input value={search} onChange={e => { setSearch(e.target.value); setPage(0); }}
             placeholder="Search IP address..."
@@ -252,9 +263,28 @@ export default function GlobalPing({ onNavigate }) {
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
-              {["IP", "Customer", "Block / Site", "ICMP", "Regions", "Last Check"].map(h => (
-                <th key={h} className="table-header">{h}</th>
-              ))}
+              {[
+  { label: "IP", key: "ip", sortable: true },
+  { label: "Customer", key: "customer_name", sortable: true },
+  { label: "Block / Site", key: "block", sortable: false },
+  { label: "ICMP", key: "icmp_status", sortable: true },
+  { label: "Regions", key: "regions_online", sortable: true },
+  { label: "Last Check", key: "scanned_at", sortable: true }
+].map(h => (
+  <th key={h.label} className="table-header" 
+      onClick={() => h.sortable ? toggleSort(h.key) : null}
+      style={{ cursor: h.sortable ? "pointer" : "default", userSelect: "none" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+      {h.label}
+      {h.sortable && sortBy === h.key && (
+        <span style={{ fontSize: 10, opacity: 0.7 }}>{sortDir === "ASC" ? "▲" : "▼"}</span>
+      )}
+      {h.sortable && sortBy !== h.key && (
+        <span style={{ fontSize: 10, opacity: 0.2 }}>↕</span>
+      )}
+    </div>
+  </th>
+))}
             </tr>
           </thead>
           <tbody>
@@ -307,19 +337,30 @@ export default function GlobalPing({ onNavigate }) {
           </tbody>
         </table>
         {total > LIMIT && (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
-            padding: "12px 16px", borderTop: "1px solid var(--border-soft)" }}>
-            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
-              Showing {page * LIMIT + 1}–{Math.min((page + 1) * LIMIT, total)} of {total}
-            </span>
-            <div style={{ display: "flex", gap: 6 }}>
-              <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
-                className="btn btn-secondary btn-sm">← Prev</button>
-              <button onClick={() => setPage(p => p + 1)} disabled={(page + 1) * LIMIT >= total}
-                className="btn btn-secondary btn-sm">Next →</button>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderTop: "1px solid var(--border-soft)", flexWrap: "wrap", gap: "10px" }}>
+              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                Showing {page * LIMIT + 1}–{Math.min((page + 1) * LIMIT, total)} of {total}
+              </span>
+              <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="btn btn-secondary btn-sm" style={{ padding: "4px 10px" }}>Prev</button>
+                {Array.from({ length: Math.ceil(total / LIMIT) }).map((_, idx) => {
+                  const totalPages = Math.ceil(total / LIMIT);
+                  if (totalPages > 7) {
+                    if (idx === 0 || idx === totalPages - 1 || (idx >= page - 1 && idx <= page + 1)) {
+                      return <button key={idx} onClick={() => setPage(idx)} className="btn btn-sm" style={{ padding: "4px 10px", background: page === idx ? "var(--accent)" : "transparent", color: page === idx ? "#fff" : "var(--text)", border: "1px solid var(--border)", borderRadius: "4px", cursor: "pointer" }}>{idx + 1}</button>;
+                    } else if (idx === page - 2 || idx === page + 2) {
+                      return <span key={idx} style={{ padding: "4px 4px", color: "var(--text-muted)" }}>...</span>;
+                    }
+                    return null;
+                  }
+                  return (
+                    <button key={idx} onClick={() => setPage(idx)} className="btn btn-sm" style={{ padding: "4px 10px", background: page === idx ? "var(--accent)" : "transparent", color: page === idx ? "#fff" : "var(--text)", border: "1px solid var(--border)", borderRadius: "4px", cursor: "pointer" }}>{idx + 1}</button>
+                  );
+                })}
+                <button onClick={() => setPage(p => p + 1)} disabled={(page + 1) * LIMIT >= total} className="btn btn-secondary btn-sm" style={{ padding: "4px 10px" }}>Next</button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
       </div>
     </div>
   );

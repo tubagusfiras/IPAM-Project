@@ -2,6 +2,15 @@ import { useState, useEffect } from "react";
 import { getDashboardStats } from "../api.js";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Btn, Loading, EmptyState, PageHeader, Icons, Card } from "../components/ui.jsx";
+import useCountUp from "../hooks/useCountUp.js";
+
+function AnimatedValue({ value }) {
+  const numeric = typeof value === "string" && value.endsWith("%")
+    ? parseInt(value) : (typeof value === "number" ? value : parseInt(String(value)) || 0);
+  const isPercent = typeof value === "string" && value.endsWith("%");
+  const animated = useCountUp(numeric, 900);
+  return <>{isPercent ? `${animated}%` : animated.toLocaleString()}</>;
+}
 
 // ── Tokens (CSS variables = auto dark/light) ────────────
 const ACCENT = "var(--accent)";
@@ -122,7 +131,7 @@ export default function Dashboard({ onNavigate }) {
   const barData = (recent_blocks||[]).map(b => ({ name: b.prefix.split("/")[0].split(".").slice(-2).join(".")+"/"+b.prefix.split("/")[1], full: b.prefix, active: b.active_allocations, total: b.total_allocations }));
 
   return (
-    <div style={{display:"flex",flexDirection:"column",gap:16,fontFamily:"Inter,system-ui,sans-serif"}}>
+    <div className="page-enter" style={{display:"flex",flexDirection:"column",gap:16,fontFamily:"Inter,system-ui,sans-serif"}}>
 
       {/* ── HEADER ── */}
       <PageHeader title="Dashboard" count={total_blocks} />
@@ -150,7 +159,7 @@ export default function Dashboard({ onNavigate }) {
                 strokeDasharray={`${utilPct*3.27} 327`} strokeLinecap="round" transform="rotate(-90 65 65)" style={{transition:"stroke-dasharray 1s ease"}}/>
             </svg>
             <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
-              <span style={{fontSize:"28px",fontWeight:700,color:TEXT,fontVariantNumeric:"tabular-nums"}}>{utilPct}%</span>
+              <span style={{fontSize:"28px",fontWeight:700,color:TEXT,fontVariantNumeric:"tabular-nums"}}><AnimatedValue value={`${utilPct}%`}/></span>
               <span style={{fontSize:"11px",color:MUTED,marginTop:-2}}>Utilized</span>
             </div>
           </div>
@@ -275,8 +284,7 @@ export default function Dashboard({ onNavigate }) {
                   return (
                     <tr key={i} style={{cursor:"pointer",borderTop:i===0?"none":`1px solid ${BORDER}`}}
                       onClick={()=>onNavigate?.("ipv4")}
-                      onMouseEnter={e=>e.currentTarget.style.background="#1a2744"}
-                      onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                      className="table-hover">
                       <td style={{padding:"8px 12px"}}>
                         <div style={{fontWeight:600,color:TEXT,fontFamily:"ui-monospace,monospace"}}>{b.prefix}</div>
                         <div style={{fontSize:"10px",color:DIM,marginTop:1}}>{b.ip_version}</div>
@@ -286,7 +294,7 @@ export default function Dashboard({ onNavigate }) {
                       <td style={{padding:"8px 12px"}}>
                         <div style={{display:"flex",alignItems:"center",gap:6,minWidth:60}}>
                           <div style={{flex:1,height:4,background:BORDER,borderRadius:99,overflow:"hidden"}}>
-                            <div style={{width:`${pct}%`,height:"100%",background:barClr,borderRadius:99}}/>
+                            <div className="progress-bar-fill" style={{width:`${pct}%`,height:"100%",background:barClr,borderRadius:99}}/>
                           </div>
                           <span style={{fontWeight:600,color:barClr,minWidth:24,textAlign:"right",fontVariantNumeric:"tabular-nums"}}>{pct}%</span>
                         </div>

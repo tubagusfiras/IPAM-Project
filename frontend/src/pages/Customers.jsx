@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { getCustomers, createCustomer, updateCustomer, deleteCustomer, getAllocationsByCustomerIds } from "../api.js";
-import { Btn, SearchBar, Loading, EmptyState, PageHeader, Icons, Badge, Confirm } from "../components/ui.jsx";
+import { Btn, SearchBar, Loading, EmptyState, PageHeader, Icons, Confirm } from "../components/ui.jsx";
 
 function FieldInput({ label, value, onChange, placeholder, mono, type="text" }) {
   return (
@@ -40,8 +40,8 @@ function CustomerModal({ customer, onClose, onSaved }) {
   };
 
   return (
-    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div className="modal" style={{maxWidth:520}}>
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey&&!e.ctrlKey&&!e.altKey&&e.target.tagName!=="TEXTAREA"&&e.target.tagName!=="BUTTON"&&e.target.tagName!=="SELECT"){e.preventDefault();e.stopPropagation();save();}}}>
+      <div className="modal" style={{maxWidth:520}} onSubmit={e=>{e.preventDefault();save();}}>
         <div className="modal-header">
           <div>
             <div style={{fontWeight:700,fontSize:15,color:"var(--text)"}}>
@@ -185,7 +185,7 @@ export default function Customers({ onNavigate }) {
   const activeCount = items.filter(c=>c.is_active).length;
 
   return (
-    <div style={{display:"flex",flexDirection:"column",gap:20}}>
+    <div className="page-enter" style={{display:"flex",flexDirection:"column",gap:20}}>
 
       {/* Header */}
       <PageHeader title="Customers" count={total}>
@@ -222,16 +222,16 @@ export default function Customers({ onNavigate }) {
         <table style={{width:"100%",borderCollapse:"collapse"}}>
           <thead>
             <tr>
-              {["Customer","Customer ID","Contact","Allocations","VLANs","Router Placements","Status",""].map(h=>(
+              {["Customer","Contact","Allocations","VLANs","Router Placements","Status",""].map(h=>(
                 <th key={h} className="table-header">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={8} style={{padding:0}}><Loading message="Loading customers..." /></td></tr>
+              <tr><td colSpan={7} style={{padding:0}}><Loading message="Loading customers..." /></td></tr>
             ) : items.length===0 ? (
-              <tr><td colSpan={8}>
+              <tr><td colSpan={7}>
                 <EmptyState icon={Icons.wireless} title="No customers found"
                   message={search?"Try a different search term":"Add your first customer"}
                   action={!search?"Add Customer":null} onAction={!search?()=>setModal("add"):null} />
@@ -251,7 +251,7 @@ export default function Customers({ onNavigate }) {
                     <div>
                       <div style={{fontSize:13,fontWeight:600,color:"var(--text)",display:"flex",alignItems:"center",gap:6}}>
                         <a onClick={e=>{e.preventDefault();e.stopPropagation();onNavigate&&onNavigate("customer-detail",{id:c.id,from:"customers"});}}
-                          href="#" style={{textDecoration:"none",color:"var(--text)",cursor:"pointer"}}
+                          href={`#customer-detail/${c.id}`} style={{textDecoration:"none",color:"var(--text)",cursor:"pointer"}}
                           onMouseEnter={e=>e.currentTarget.style.color="var(--accent)"}
                           onMouseLeave={e=>e.currentTarget.style.color="var(--text)"}>{c.name}</a>
                       </div>
@@ -263,14 +263,6 @@ export default function Customers({ onNavigate }) {
                       )}
                     </div>
                   </div>
-                </td>
-
-                {/* Code */}
-                <td className="table-cell">
-                  <span style={{fontFamily:"var(--font-mono)",fontSize:12,
-                    color:c.code?"var(--text-muted)":"var(--text-dim)"}}>
-                    {c.code||"—"}
-                  </span>
                 </td>
 
                 {/* Contact */}
@@ -319,7 +311,7 @@ export default function Customers({ onNavigate }) {
                         );
                         return vlanId ? (
                           <a key={vid} onClick={e=>{e.preventDefault();e.stopPropagation();onNavigate&&onNavigate("vlan-detail",{id:vlanId,from:"customers"});}}
-                            href="#" style={{textDecoration:"none"}}
+                            href={`#vlan-detail/${vlanId}`} style={{textDecoration:"none"}}
                             onMouseEnter={e=>e.currentTarget.querySelector("span").style.color="var(--accent)"}
                             onMouseLeave={e=>e.currentTarget.querySelector("span").style.color="var(--text-muted)"}>
                             {tag}
@@ -375,20 +367,37 @@ export default function Customers({ onNavigate }) {
         </table>
 
         {/* Pagination */}
-        {total > LIMIT && (
+        {total > LIMIT && (() => {
+          const totalPages = Math.ceil(total / LIMIT);
+          return (
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",
-            padding:"12px 16px",borderTop:"1px solid var(--border-soft)"}}>
+            padding:"12px 16px",borderTop:"1px solid var(--border-soft)",flexWrap:"wrap",gap:10}}>
             <span style={{fontSize:12,color:"var(--text-muted)"}}>
               Showing {page*LIMIT+1}–{Math.min((page+1)*LIMIT,total)} of {total}
             </span>
-            <div style={{display:"flex",gap:6}}>
+            <div style={{display:"flex",gap:4,alignItems:"center"}}>
               <button onClick={()=>setPage(p=>Math.max(0,p-1))} disabled={page===0}
-                className="btn btn-secondary btn-sm">← Prev</button>
+                className="btn btn-secondary btn-sm" style={{padding:"4px 10px"}}>Prev</button>
+              {Array.from({length:totalPages}).map((_,idx)=>{
+                if (totalPages > 7) {
+                  if (idx===0||idx===totalPages-1||(idx>=page-1&&idx<=page+1))
+                    return <button key={idx} onClick={()=>setPage(idx)} className="btn btn-sm"
+                      style={{padding:"4px 10px",background:page===idx?"var(--accent)":"transparent",
+                        color:page===idx?"#fff":"var(--text)",border:"1px solid var(--border)",borderRadius:4,cursor:"pointer"}}>{idx+1}</button>;
+                  if (idx===page-2||idx===page+2)
+                    return <span key={idx} style={{padding:"4px 4px",color:"var(--text-muted)"}}>...</span>;
+                  return null;
+                }
+                return <button key={idx} onClick={()=>setPage(idx)} className="btn btn-sm"
+                  style={{padding:"4px 10px",background:page===idx?"var(--accent)":"transparent",
+                    color:page===idx?"#fff":"var(--text)",border:"1px solid var(--border)",borderRadius:4,cursor:"pointer"}}>{idx+1}</button>;
+              })}
               <button onClick={()=>setPage(p=>p+1)} disabled={(page+1)*LIMIT>=total}
-                className="btn btn-secondary btn-sm">Next →</button>
+                className="btn btn-secondary btn-sm" style={{padding:"4px 10px"}}>Next</button>
             </div>
           </div>
-        )}
+          );
+        })()}
       </div>
 
       {modal&&<CustomerModal customer={modal==="add"?null:modal}

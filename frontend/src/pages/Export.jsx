@@ -85,19 +85,31 @@ export default function Export({ dark }) {
 
   const theme = dark ? "dark" : "light";
 
+  const downloadBlob = async (url, fallbackName) => {
+    const res = await authFetch(url);
+    if (!res.ok) throw new Error(`Export failed (${res.status})`);
+    const blob = await res.blob();
+    const disp = res.headers.get("Content-Disposition") || "";
+    const fname = (disp.match(/filename="?([^";\n]+)"?/) || [])[1] || fallbackName;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = fname;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
   const doExport = async (type) => {
     setExporting(true);
     try {
       if (type==="single-pdf" && preview) {
-        window.location.href = `/api/v1/export/block/${preview.id}/pdf?theme=${theme}`;
+        await downloadBlob(`/api/v1/export/block/${preview.id}/pdf?theme=${theme}`, "export.pdf");
       } else if (type==="multi-pdf") {
-        // Multi block PDF — generate per block, download satu per satu
         for (const id of selectedIds) {
-          window.open(`/api/v1/export/block/${id}/pdf?theme=${theme}`, "_blank");
+          await downloadBlob(`/api/v1/export/block/${id}/pdf?theme=${theme}`, `${id}.pdf`);
           await new Promise(r=>setTimeout(r,300));
         }
       } else if (type==="summary-pdf") {
-        window.location.href = `/api/v1/export/summary/pdf?theme=${theme}`;
+        await downloadBlob(`/api/v1/export/summary/pdf?theme=${theme}`, "summary.pdf");
       }
     } catch(e) { console.error(e); }
     setExporting(false);
@@ -129,7 +141,7 @@ export default function Export({ dark }) {
   ];
 
   return (
-    <div style={{padding:24, maxWidth:1200, margin:"0 auto"}}>
+    <div className="page-enter" style={{padding:24, maxWidth:1200, margin:"0 auto"}}>
       {/* Page header */}
       <PageHeader title="Export" count={blocks.length}>
         <Btn variant="secondary" size="sm" icon={Icons.edit} onClick={()=>doExport("summary-pdf")} disabled={exporting}>Summary PDF</Btn>

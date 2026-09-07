@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { getVlans, getSites, createVlan, updateVlan, deleteVlan, getAllocationsByVlanIds } from "../api.js";
+import { getVlans, getSites, createVlan, updateVlan, deleteVlan, getAllocationsByVlanIds, getFreeVlanId } from "../api.js";
 import { VLAN_STATUS_OPTS } from "../constants.js";
-import { Btn, SearchBar, Loading, EmptyState, PageHeader, Icons, Badge, StatusBadge, Tag, Confirm } from "../components/ui.jsx";
+import { Btn, SearchBar, Loading, EmptyState, PageHeader, Icons, StatusBadge, Tag, Confirm } from "../components/ui.jsx";
 
 const STATUS_STYLE = {
   active:     { color:"var(--success)", bg:"var(--success-surface)", border:"var(--success-border)" },
@@ -20,7 +20,17 @@ function VlanModal({ vlan, sites, onClose, onSaved }) {
   });
   const [saving, setSaving] = useState(false);
   const [err,    setErr]    = useState(null);
+  const [generating, setGenerating] = useState(false);
   const set = k => v => setForm(f=>({...f,[k]:v}));
+
+  const generateFreeId = async () => {
+    setGenerating(true);
+    try {
+      const d = await getFreeVlanId(form.site_id);
+      if (d.free_vid) setForm(f=>({...f, vid: String(d.free_vid)}));
+    } catch(e) { setErr("Failed to generate ID"); }
+    setGenerating(false);
+  };
 
   const save = async () => {
     if (!form.vid) return setErr("VLAN ID is required");
@@ -35,8 +45,8 @@ function VlanModal({ vlan, sites, onClose, onSaved }) {
   };
 
   return (
-    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div className="modal" style={{maxWidth:480}}>
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey&&!e.ctrlKey&&!e.altKey&&e.target.tagName!=="TEXTAREA"&&e.target.tagName!=="BUTTON"&&e.target.tagName!=="SELECT"){e.preventDefault();e.stopPropagation();save();}}}>
+      <div className="modal" style={{maxWidth:480}} onSubmit={e=>{e.preventDefault();save();}}>
         <div className="modal-header">
           <div>
             <div style={{fontWeight:700,fontSize:15,color:"var(--text)"}}>
@@ -60,8 +70,16 @@ function VlanModal({ vlan, sites, onClose, onSaved }) {
             <div>
               <label style={{display:"block",fontSize:10,fontWeight:700,textTransform:"uppercase",
                 letterSpacing:"0.08em",color:"var(--text-dim)",marginBottom:6}}>VLAN ID *</label>
-              <input type="number" value={form.vid} onChange={e=>set("vid")(e.target.value)}
-                placeholder="e.g. 100" className="input" style={{fontFamily:"var(--font-mono)"}}/>
+              <div style={{display:"flex",gap:6}}>
+                <input type="number" value={form.vid} onChange={e=>set("vid")(e.target.value)}
+                  placeholder="e.g. 100" className="input" style={{flex:1}}
+                  disabled={saving}/>
+                {!isEdit && <button type="button" onClick={generateFreeId} disabled={generating}
+                  className="btn btn-secondary" style={{fontSize:11,whiteSpace:"nowrap",padding:"6px 10px"}}
+                  title="Generate next available VLAN ID for this site">
+                  {generating?"...":"Auto"}
+                </button>}
+              </div>
             </div>
             <div>
               <label style={{display:"block",fontSize:10,fontWeight:700,textTransform:"uppercase",
@@ -82,9 +100,10 @@ function VlanModal({ vlan, sites, onClose, onSaved }) {
               <label style={{display:"block",fontSize:10,fontWeight:700,textTransform:"uppercase",
                 letterSpacing:"0.08em",color:"var(--text-dim)",marginBottom:6}}>Site</label>
               <select value={form.site_id} onChange={e=>set("site_id")(e.target.value)} className="select">
-                <option value="">— All Sites —</option>
+                <option value="">— Unassigned —</option>
                 {sites.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
+              <div style={{fontSize:10,color:"var(--text-dim)",marginTop:4}}>Same VLAN ID on different sites is OK</div>
             </div>
             <div style={{gridColumn:"1/-1"}}>
               <label style={{display:"block",fontSize:10,fontWeight:700,textTransform:"uppercase",
@@ -95,7 +114,7 @@ function VlanModal({ vlan, sites, onClose, onSaved }) {
           </div>
         </div>
         <div className="modal-footer">
-          <button onClick={onClose} className="btn btn-secondary">Cancel</button>
+          <button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button>
           <button onClick={save} disabled={saving} className="btn btn-primary">
             {saving?"Saving…":isEdit?"Save Changes":"Add VLAN"}
           </button>
@@ -119,6 +138,7 @@ export default function Vlans({ onNavigate }) {
   const [confirm,   setConfirm]   = useState(null);
   const [allocCountMap, setAllocCountMap] = useState({});
   const [customerMap, setCustomerMap] = useState({}); // customer_name → customer_id
+  const [siteTabCounts, setSiteTabCounts] = useState({});
   const LIMIT = 100;
 
   const load = useCallback(() => {
@@ -134,6 +154,18 @@ export default function Vlans({ onNavigate }) {
     return ()=>clearTimeout(t);
   },[load]);
   useEffect(()=>{ getSites("",100).then(d=>setSites(d.items||d||[])); },[]);
+
+  // Fetch total counts per site for tab badges (independent of current filter)
+  useEffect(()=>{
+    getVlans("", "", 500, 0, "").then(d=>{
+      const counts = { _total: (d.items||[]).length };
+      (d.items||[]).forEach(v => {
+        const sname = v.site_name || "Unassigned";
+        counts[sname] = (counts[sname] || 0) + 1;
+      });
+      setSiteTabCounts(counts);
+    }).catch(()=>{});
+  },[]);
 
   // Fetch allocation counts per VLAN (used for delete-impact preview)
   useEffect(()=>{
@@ -165,13 +197,47 @@ export default function Vlans({ onNavigate }) {
   const filteredItems = items;
   const activeCount = items.filter(v=>v.status==="active").length;
 
+  // Use pre-fetched tab counts (stable across filter changes)
+  const siteCounts = siteTabCounts;
+
   return (
-    <div style={{display:"flex",flexDirection:"column",gap:20}}>
+    <div className="page-enter" style={{display:"flex",flexDirection:"column",gap:20}}>
 
       {/* Header */}
       <PageHeader title="VLANs" count={total}>
+        <Btn icon={Icons.calc} onClick={()=>onNavigate("vlan-calc")} variant="secondary">VLAN Calculator</Btn>
         <Btn icon={Icons.plus} onClick={()=>setModal("add")}>Add VLAN</Btn>
       </PageHeader>
+
+      {/* Site Tabs */}
+      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+        <button onClick={()=>{setSiteFilter("");setPage(0);}}
+          style={{padding:"6px 14px",borderRadius:8,border:"1px solid",fontSize:12,fontWeight:600,cursor:"pointer",transition:"all 0.15s",
+            background:siteFilter===""?"var(--accent)":"var(--surface-1)",color:siteFilter===""?"#fff":"var(--text-muted)",
+            borderColor:siteFilter===""?"var(--accent)":"var(--border-medium)"}}>
+          All <span style={{opacity:0.7,marginLeft:4}}>{total}</span>
+        </button>
+        {sites.map(s => {
+          const cnt = (siteCounts[s.name] || 0);
+          const active = siteFilter === s.id;
+          return (
+            <button key={s.id} onClick={()=>{setSiteFilter(active?"":s.id);setPage(0);}}
+              style={{padding:"6px 14px",borderRadius:8,border:"1px solid",fontSize:12,fontWeight:600,cursor:"pointer",transition:"all 0.15s",
+                background:active?"var(--accent)":"var(--surface-1)",color:active?"#fff":"var(--text-muted)",
+                borderColor:active?"var(--accent)":"var(--border-medium)"}}>
+              {s.name} <span style={{opacity:0.7,marginLeft:4}}>{cnt}</span>
+            </button>
+          );
+        })}
+        {siteCounts["Unassigned"] > 0 && (
+          <button onClick={()=>{setSiteFilter("none");setPage(0);}}
+            style={{padding:"6px 14px",borderRadius:8,border:"1px solid",fontSize:12,fontWeight:600,cursor:"pointer",transition:"all 0.15s",
+              background:siteFilter==="none"?"var(--warning)":"var(--surface-1)",color:siteFilter==="none"?"#fff":"var(--text-muted)",
+              borderColor:siteFilter==="none"?"var(--warning)":"var(--border-medium)"}}>
+            Unassigned <span style={{opacity:0.7,marginLeft:4}}>{siteCounts["Unassigned"]}</span>
+          </button>
+        )}
+      </div>
 
       {/* Toolbar */}
       <div className="card" style={{padding:"10px 14px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
@@ -215,9 +281,9 @@ export default function Vlans({ onNavigate }) {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={7} style={{padding:0}}><Loading message="Loading VLANs..." /></td></tr>
+              <tr><td colSpan={8} style={{padding:0}}><Loading message="Loading VLANs..." /></td></tr>
             ) : filteredItems.length===0 ? (
-              <tr><td colSpan={7}>
+              <tr><td colSpan={8}>
                 <EmptyState icon={Icons.network} title="No VLANs found"
                   message={search?"Try a different search":"Add your first VLAN"} />
               </td></tr>
@@ -229,7 +295,7 @@ export default function Vlans({ onNavigate }) {
 
                   {/* VLAN ID */}
                   <td className="table-cell">
-                    <a href="#" onClick={e=>{e.preventDefault();e.stopPropagation();onNavigate&&onNavigate("vlan-detail",{id:v.id,from:"vlans"});}}
+                    <a href={`#vlan-detail/${v.id}`} onClick={e=>{e.preventDefault();e.stopPropagation();onNavigate&&onNavigate("vlan-detail",{id:v.id,from:"vlans"});}}
                       style={{textDecoration:"none",fontFamily:"var(--font-mono)",fontSize:15,fontWeight:700,
                         color:"var(--accent)",fontVariantNumeric:"tabular-nums",cursor:"pointer",transition:"opacity 0.12s"}}
                       onMouseEnter={e=>e.currentTarget.style.opacity="0.7"}
@@ -283,7 +349,7 @@ export default function Vlans({ onNavigate }) {
                         {v.customer_names.slice(0,2).map((name,i)=>{
                           const cid = customerMap[name];
                           return cid ? (
-                            <a key={i} href="#" onClick={e=>{e.preventDefault();e.stopPropagation();onNavigate&&onNavigate("customer-detail",{id:cid,from:"vlans"});}}
+                            <a key={i} href={`#customer-detail/${cid}`} onClick={e=>{e.preventDefault();e.stopPropagation();onNavigate&&onNavigate("customer-detail",{id:cid,from:"vlans"});}}
                               style={{fontSize:11,color:"var(--text-muted)",textDecoration:"none",cursor:"pointer",transition:"color 0.12s"}}
                               onMouseEnter={e=>e.currentTarget.style.color="var(--accent)"}
                               onMouseLeave={e=>e.currentTarget.style.color="var(--text-muted)"}>
@@ -306,6 +372,23 @@ export default function Vlans({ onNavigate }) {
                       <span style={{width:5,height:5,borderRadius:"50%",background:sc.color}}/>
                       {v.status}
                     </span>
+                  </td>
+
+                  {/* Router Placements */}
+                  <td className="table-cell" style={{minWidth:140}}>
+                    {(v.router_names||[]).length === 0 ? (
+                      <span style={{color:"var(--text-dim)",fontSize:11}}>—</span>
+                    ) : (
+                      <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+                        {v.router_names.map((name,i)=>(
+                          <span key={i} style={{
+                            fontSize:10,fontWeight:500,padding:"2px 7px",borderRadius:4,
+                            background:"var(--surface-3)",color:"var(--text-muted)",
+                            border:"1px solid var(--border-soft)",
+                          }}>{name}</span>
+                        ))}
+                      </div>
+                    )}
                   </td>
 
                   {/* End Device XC */}
@@ -333,20 +416,37 @@ export default function Vlans({ onNavigate }) {
         </table>
 
         {/* Pagination */}
-        {total > LIMIT && (
+        {total > LIMIT && (() => {
+          const totalPages = Math.ceil(total / LIMIT);
+          return (
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",
-            padding:"12px 16px",borderTop:"1px solid var(--border-soft)"}}>
+            padding:"12px 16px",borderTop:"1px solid var(--border-soft)",flexWrap:"wrap",gap:10}}>
             <span style={{fontSize:12,color:"var(--text-muted)"}}>
               Showing {page*LIMIT+1}–{Math.min((page+1)*LIMIT,total)} of {total}
             </span>
-            <div style={{display:"flex",gap:6}}>
+            <div style={{display:"flex",gap:4,alignItems:"center"}}>
               <button onClick={()=>setPage(p=>Math.max(0,p-1))} disabled={page===0}
-                className="btn btn-secondary btn-sm">← Prev</button>
+                className="btn btn-secondary btn-sm" style={{padding:"4px 10px"}}>Prev</button>
+              {Array.from({length:totalPages}).map((_,idx)=>{
+                if (totalPages > 7) {
+                  if (idx===0||idx===totalPages-1||(idx>=page-1&&idx<=page+1))
+                    return <button key={idx} onClick={()=>setPage(idx)} className="btn btn-sm"
+                      style={{padding:"4px 10px",background:page===idx?"var(--accent)":"transparent",
+                        color:page===idx?"#fff":"var(--text)",border:"1px solid var(--border)",borderRadius:4,cursor:"pointer"}}>{idx+1}</button>;
+                  if (idx===page-2||idx===page+2)
+                    return <span key={idx} style={{padding:"4px 4px",color:"var(--text-muted)"}}>...</span>;
+                  return null;
+                }
+                return <button key={idx} onClick={()=>setPage(idx)} className="btn btn-sm"
+                  style={{padding:"4px 10px",background:page===idx?"var(--accent)":"transparent",
+                    color:page===idx?"#fff":"var(--text)",border:"1px solid var(--border)",borderRadius:4,cursor:"pointer"}}>{idx+1}</button>;
+              })}
               <button onClick={()=>setPage(p=>p+1)} disabled={(page+1)*LIMIT>=total}
-                className="btn btn-secondary btn-sm">Next →</button>
+                className="btn btn-secondary btn-sm" style={{padding:"4px 10px"}}>Next</button>
             </div>
           </div>
-        )}
+          );
+        })()}
       </div>
 
       {modal&&<VlanModal vlan={modal==="add"?null:modal} sites={sites}

@@ -1,0 +1,33 @@
+2401:a0a0::/48,,,
+,,,
+,,,
+,,Google SG to CIX,2401:a0a0::a/127
+,,Google SG to CIX,2401:a0a0::b/127
+,,Google SG to MCPlus,2401:a0a0::c/127
+,,Google SG to MCPlus,2401:a0a0::d/127
+,,Multi-IX-PE2,2401:a0a0::e/127
+,,Multi-IX-PE2,2401:a0a0::f/127
+,,IPT-PE3,2401:a0a0::0/127
+,,IPT-PE3,2401:a0a0::1/127
+,,Kediri,2401:a0a0::2/127
+,,Kediri,2401:a0a0::3/127
+,,IPT2 SGIX ONLY,2401:a0a0::4/127
+,,IPT2 SGIX ONLY,2401:a0a0::5/127
+,,SDIX,2401:a0a0::6/127
+,,SDIX,2401:a0a0::7/127
+,,PE0,2401:a0a0::8/127
+,,PE0,2401:a0a0::9/127
+,,Paket B,2401:a0a0::10/127
+,,Paket B,2401:a0a0::11/127
+,,Paket C,2401:a0a0::12/127
+,,Paket C,2401:a0a0::13/127
+,,MC PE2,2401:a0a0::14/127
+,,MC PE2,2401:a0a0::15/127
+,,IPT2 MX204,2401:a0a0::16/127
+,,IPT2 MX204,2401:a0a0::17/127
+,,LS MR,2401:a0a0::18/127
+,,LS MR,2401:a0a0::19/127
+,,SDI Connect,2401:a0a0::20/127
+,,SDI Connect,2401:a0a0::21/127
+,,SDIX,2401:a0a0::22/127
+,,SDIX,2401:a0a0::23/127

@@ -64,6 +64,8 @@ services:
     restart: unless-stopped
     ports:
       - "0.0.0.0:8100:80"
+    volumes:
+      - ../frontend/dist:/usr/share/nginx/html:ro
     depends_on:
       - api
     networks:

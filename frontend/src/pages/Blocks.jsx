@@ -90,8 +90,8 @@ function BlockFormModal({ block, sites, onClose, onSaved }) {
   // Field defined outside — see top of file
 
   return (
-    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div className="modal" style={{maxWidth:560}}>
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey&&!e.ctrlKey&&!e.altKey&&e.target.tagName!=="TEXTAREA"&&e.target.tagName!=="BUTTON"&&e.target.tagName!=="SELECT"){e.preventDefault();e.stopPropagation();save();}}}>
+      <div className="modal" style={{maxWidth:560}} onSubmit={e=>{e.preventDefault();save();}}>
         <div className="modal-header">
           <div>
             <div style={{fontWeight:700,fontSize:15,color:"var(--text)"}}>
@@ -188,6 +188,7 @@ export default function Blocks({ ipVersion="", onSelectBlock, initialStatus="" }
   const [sites,     setSites]     = useState([]);
   const [selected,  setSelected]  = useState(new Set());
   const [selectAll, setSelectAll] = useState(false);
+  const [sortBy, setSortBy] = useState("");
 
   useEffect(() => { setStatusFilter(initialStatus||""); }, [initialStatus]);
 
@@ -240,10 +241,31 @@ export default function Blocks({ ipVersion="", onSelectBlock, initialStatus="" }
     setConfirm(null);
   };
 
+  const filteredItems = items.filter(b => {
+    if (statusFilter && b.status !== statusFilter) return false;
+    return true;
+  });
+
+  const sortedItems = [...filteredItems].sort((a,b) => {
+    switch(sortBy) {
+      case "utilization-asc":  return (parseFloat(a.used_ips||0)/parseFloat(a.total_ips||1)) - (parseFloat(b.used_ips||0)/parseFloat(b.total_ips||1));
+      case "utilization-desc": return (parseFloat(b.used_ips||0)/parseFloat(b.total_ips||1)) - (parseFloat(a.used_ips||0)/parseFloat(a.total_ips||1));
+      case "prefix-asc":      return a.prefix.localeCompare(b.prefix);
+      case "prefix-desc":     return b.prefix.localeCompare(a.prefix);
+      case "name-asc":        return (a.name||"").localeCompare(b.name||"");
+      case "name-desc":       return (b.name||"").localeCompare(a.name||"");
+      case "alloc-asc":       return (a.active_allocations||0) - (b.active_allocations||0);
+      case "alloc-desc":      return (b.active_allocations||0) - (a.active_allocations||0);
+      case "status-asc":      return (a.status||"").localeCompare(b.status||"");
+      case "status-desc":     return (b.status||"").localeCompare(a.status||"");
+      default:                return 0;
+    }
+  });
+
   const ipv = ipVersion || "All";
 
   return (
-    <div style={{display:"flex",flexDirection:"column",gap:20}}>
+    <div className="page-enter" style={{display:"flex",flexDirection:"column",gap:20}}>
 
       {/* Page header */}
       <PageHeader title={ipVersion ? `${ipVersion} Networks` : "IP Networks"} count={total}>
@@ -279,11 +301,35 @@ export default function Blocks({ ipVersion="", onSelectBlock, initialStatus="" }
           <Badge label={`${items.filter(b=>b.ip_version==='IPv4').length} IPv4`} style={{background:"var(--accent-dim)",color:"var(--accent)",border:"1px solid var(--accent-border)"}}/>
           <Badge label={`${items.filter(b=>b.ip_version==='IPv6').length} IPv6`} style={{background:"var(--success-surface)",color:"var(--success)",border:"1px solid var(--success-border)"}}/>
           <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}
-            className="select" style={{height:32,fontSize:12,minWidth:120,marginLeft:"auto"}}>
+            className="select" style={{height:32,fontSize:12,minWidth:120}}>
             <option value="">All Statuses</option>
             {["active","reserved","deprecated"].map(s=>(
               <option key={s} value={s} style={{textTransform:"capitalize"}}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>
             ))}
+          </select>
+          <select value={sortBy} onChange={e=>setSortBy(e.target.value)}
+            className="select" style={{height:32,fontSize:12,minWidth:140}}>
+            <option value="">Sort: Default</option>
+            <optgroup label="Utilization">
+              <option value="utilization-asc">Utilization ↑ (0→100%)</option>
+              <option value="utilization-desc">Utilization ↓ (100→0%)</option>
+            </optgroup>
+            <optgroup label="Prefix">
+              <option value="prefix-asc">Prefix A→Z</option>
+              <option value="prefix-desc">Prefix Z→A</option>
+            </optgroup>
+            <optgroup label="Name">
+              <option value="name-asc">Name A→Z</option>
+              <option value="name-desc">Name Z→A</option>
+            </optgroup>
+            <optgroup label="Allocations">
+              <option value="alloc-asc">Allocations ↑</option>
+              <option value="alloc-desc">Allocations ↓</option>
+            </optgroup>
+            <optgroup label="Status">
+              <option value="status-asc">Status A→Z</option>
+              <option value="status-desc">Status Z→A</option>
+            </optgroup>
           </select>
         </div>
       </div>
@@ -327,7 +373,7 @@ export default function Blocks({ ipVersion="", onSelectBlock, initialStatus="" }
                   </div>
                 </td>
               </tr>
-            ) : items.map(block => {
+            ) : sortedItems.map(block => {
               const vc = VERSION_COLOR[block.ip_version] || VERSION_COLOR.IPv4;
               const sc = STATUS_COLOR[block.status]      || STATUS_COLOR.active;
               return (

@@ -1,8 +1,8 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
 
 /* ── CSS Variables — sync dengan SDI Monitoring v2 ── */
 :root {
@@ -100,7 +100,7 @@
   --surface-3:     #212c3f;
   --surface-4:     rgba(59,130,246,0.08);
   --surface-5:     rgba(59,130,246,0.14);
-  --modal-bg:      #111827;
+  --modal-bg:      #1e293b;
   --modal-border:  rgba(255,255,255,0.12);
   --input-bg:      #0b1120;
   --input-border:  rgba(255,255,255,0.12);
@@ -146,7 +146,7 @@
   --surface-3:     #212c3f;
   --surface-4:     rgba(59,130,246,0.08);
   --surface-5:     rgba(59,130,246,0.14);
-  --modal-bg:      #111827;
+  --modal-bg:      #1e293b;
   --modal-border:  rgba(255,255,255,0.12);
   --input-bg:      #0b1120;
   --input-border:  rgba(255,255,255,0.12);
@@ -415,7 +415,13 @@
 
   /* ── Modal ── */
   .modal-overlay {
-    @apply fixed inset-0 z-50 flex items-center justify-center p-4;
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
     background: var(--overlay-bg);
     backdrop-filter: blur(4px);
   }
@@ -430,13 +436,18 @@
     overflow-y: auto;
   }
   .modal-header {
-    @apply flex items-center justify-between;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     padding: 1rem 1.25rem;
     border-bottom: 1px solid var(--border-subtle);
   }
   .modal-body   { padding: 1.25rem; }
   .modal-footer {
-    @apply flex items-center justify-end gap-2;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
     padding: 1rem 1.25rem;
     border-top: 1px solid var(--border-subtle);
   }
@@ -652,22 +663,9 @@
     min-width: 600px;
   }
   
-  th, td { 
-    white-space: nowrap; 
+  th, td {
+    white-space: nowrap;
     padding: 6px 8px !important;
-  }
-
-  /* Modal Fullscreen on Mobile */
-  .modal {
-    position: fixed !important;
-    inset: 0 !important;
-    width: 100% !important;
-    height: 100% !important;
-    max-width: 100% !important;
-    max-height: 100% !important;
-    margin: 0 !important;
-    border-radius: 0 !important;
-    overflow-y: auto !important;
   }
 
   /* Prevent iOS zoom on input focus */
@@ -762,8 +760,8 @@
 }
 
 @keyframes fadeUp {
-  from { transform: translateY(10px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes scan-pulse {
@@ -782,4 +780,69 @@
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
+
+/* ── Enhanced Micro-Interactions ── */
+.card-glow:hover {
+  border-color: var(--border-hover);
+  box-shadow: 0 0 0 1px var(--border-hover), 0 8px 24px rgba(0,0,0,0.12);
+}
+.dark .card-glow:hover {
+  box-shadow: 0 0 0 1px var(--border-hover), 0 8px 24px rgba(59,130,246,0.08);
+}
+
+.stat-animate {
+  animation: pageEnterFade 0.5s ease both;
+}
+.stat-animate:nth-child(2) { animation-delay: 0.08s; }
+.stat-animate:nth-child(3) { animation-delay: 0.16s; }
+.stat-animate:nth-child(4) { animation-delay: 0.24s; }
+.stat-animate:nth-child(5) { animation-delay: 0.32s; }
+
+@keyframes numberReveal {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.progress-bar-fill {
+  transition: width 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Focus ring */
+*:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Smooth page entrance — opacity only, no transform (transform breaks position:fixed modals) */
+.page-enter {
+  animation: pageEnterFade 0.35s ease both;
+}
+@keyframes pageEnterFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Table row hover effect */
+.table-hover {
+  transition: background 0.12s ease;
+}
+.table-hover:hover {
+  background: var(--surface-2) !important;
+}
+
+/* Badge pulse for live/active indicators */
+@keyframes livePulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.7; transform: scale(1.5); }
+}
+.live-dot {
+  animation: livePulse 2s ease-in-out infinite;
+}
+
+/* Scrollbar improvement */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb); }
 

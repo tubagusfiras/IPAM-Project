@@ -110,10 +110,12 @@ export function Sidebar({ active, onNavigate, collapsed, onToggle, user }) {
                   border:"none", borderRadius:"var(--radius-sm)",
                   color: active===item.id ? "var(--accent)" : "var(--text-muted)",
                   transition:"all 0.15s",
+                  position:"relative",
                 }}
                 onMouseEnter={e=>{if (active!==item.id) e.currentTarget.style.background="var(--surface-3)"}}
                 onMouseLeave={e=>{if (active!==item.id) e.currentTarget.style.background="transparent"}}
               >
+                {active===item.id && <span className="live-dot" style={{position:"absolute",left:collapsed?"50%":0,top:"50%",transform:collapsed?"translate(-50%,-50%)":"translateY(-50%)",width:collapsed?6:3,height:collapsed?6:20,borderRadius:99,background:"var(--accent)"}}/>}
                 <Icon id={item.icon} size={16}/>
                 {!collapsed && <span style={{flex:1,textAlign:"left",fontSize:13,fontWeight:500}}>{item.label}</span>}
                 {!collapsed && item.soon && (

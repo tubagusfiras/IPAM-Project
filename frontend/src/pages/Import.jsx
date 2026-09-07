@@ -72,6 +72,7 @@ export default function ImportPage() {
   const [err, setErr] = useState(null);
   const [step, setStep] = useState("upload");
   const [dismissed, setDismissed] = useState({});
+  const [ipVersion, setIpVersion] = useState("ipv4");
 
   useEffect(() => { getSites().then(setSites).catch(() => {}); }, []);
 
@@ -87,7 +88,7 @@ export default function ImportPage() {
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.detail || "Preview failed");
-      if (!d.allocations?.length) throw new Error("Tidak ada allocation ditemukan di CSV. Pastikan format sesuai template.");
+      if (!d.allocations?.length) throw new Error("No allocations found in CSV. Make sure the format matches the template.");
       setPreview(d);
       setEditMeta({
         prefix: d.meta.prefix || "", name: d.meta.name || d.meta.prefix || "",
@@ -135,7 +136,7 @@ export default function ImportPage() {
   const outOfRangeSet = new Set(outOfRangePrefixes);
 
   return (
-    <div>
+    <div className="page-enter">
       <PageHeader title="Import CSV" count={result?.imported || null} />
 
       {/* Global error */}
@@ -148,7 +149,28 @@ export default function ImportPage() {
       {/* ── UPLOAD STEP ── */}
       {step === "upload" && (
         <div className="card" style={{ padding: 24, maxWidth: 600 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: TEXT, marginBottom: 16 }}>Upload File</div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: TEXT }}>Upload File</div>
+            <div style={{ display: "flex", gap: 2, background: "var(--surface-3)", borderRadius: 6, padding: 2 }}>
+              {[
+                { key: "ipv4", label: "IPv4" },
+                { key: "ipv6", label: "IPv6" },
+              ].map(t => (
+                <button key={t.key} onClick={() => { setIpVersion(t.key); setFile(null); setPreview(null); setErr(null); }}
+                  style={{
+                    padding: "4px 14px", borderRadius: 5, fontSize: 11, fontWeight: 600, border: "none", cursor: "pointer",
+                    background: ipVersion === t.key ? "var(--accent)" : "transparent",
+                    color: ipVersion === t.key ? "#fff" : "var(--text-muted)",
+                    transition: "all 0.15s",
+                  }}>{t.label}</button>
+              ))}
+            </div>
+          </div>
+          {ipVersion === "ipv6" && (
+            <MessageBar type="info">
+              <strong>IPv6 import</strong> — Format CSV harus punya kolom prefix dengan notasi CIDR (contoh: <code style={{fontFamily:"var(--font-mono)"}}>2001:db8::/32</code>)
+            </MessageBar>
+          )}
           <div
             style={{ border: `2px dashed ${BORDER}`, borderRadius: 8, padding: 40, textAlign: "center", marginBottom: 16, background: "var(--surface-2)", cursor: "pointer", transition: "border-color 0.15s" }}
             onClick={() => document.getElementById("csvInput").click()}
@@ -162,14 +184,14 @@ export default function ImportPage() {
                 </div>
                 <div style={{ fontSize: 13, fontWeight: 600, color: TEXT, marginBottom: 2 }}>{file.name}</div>
                 <div style={{ fontSize: 11, color: MUTED }}>{formatSize(file.size)}</div>
-                <div style={{ fontSize: 11, color: ACCENT, marginTop: 8, cursor: "pointer" }}>Click atau drop file lain</div>
+                <div style={{ fontSize: 11, color: ACCENT, marginTop: 8, cursor: "pointer" }}>Click or drop another file</div>
               </div>
             ) : (
               <div>
                 <div style={{ fontSize: 28, marginBottom: 8, color: DIM }}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" width="32" height="32" style={{ display: "inline" }}><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                 </div>
-                <div style={{ fontSize: 13, color: MUTED }}>Drag & drop CSV atau <span style={{ color: ACCENT, fontWeight: 600 }}>browse</span></div>
+                <div style={{ fontSize: 13, color: MUTED }}>Drag & drop CSV or <span style={{ color: ACCENT, fontWeight: 600 }}>browse</span></div>
                 <div style={{ fontSize: 11, color: DIM, marginTop: 4 }}>Format: .csv, .txt — max 10MB</div>
               </div>
             )}
@@ -220,11 +242,11 @@ export default function ImportPage() {
           {/* Out of range warning */}
           {preview.has_out_of_range && !dismissed.out_of_range && (
             <MessageBar type="danger" onDismiss={() => setDismissed(d => ({ ...d, out_of_range: true }))}>
-              <strong>{preview.out_of_range.length} allocation(s) di luar range block {editMeta.prefix}:</strong><br />
+              <strong>{preview.out_of_range.length} allocation(s) out of range for block {editMeta.prefix}:</strong><br />
               <span style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>
-                {preview.out_of_range.slice(0, 8).join(", ")}{preview.out_of_range.length > 8 ? ` +${preview.out_of_range.length - 8} lainnya` : ""}
+                {preview.out_of_range.slice(0, 8).join(", ")}{preview.out_of_range.length > 8 ? ` +${preview.out_of_range.length - 8} more` : ""}
               </span>
-              <div style={{ marginTop: 4, fontSize: 11, opacity: 0.8 }}>Allocation ini otomatis di-exclude dari import. Edit prefix di CSV agar sesuai block range.</div>
+              <div style={{ marginTop: 4, fontSize: 11, opacity: 0.8 }}>These allocations are automatically excluded from import. Edit the prefix in CSV to match the block range.</div>
             </MessageBar>
           )}
 
@@ -238,7 +260,7 @@ export default function ImportPage() {
           {/* Overlap warning */}
           {preview.has_overlaps && !dismissed.overlaps && (
             <MessageBar type="warning" onDismiss={() => setDismissed(d => ({ ...d, overlaps: true }))}>
-              <strong>{preview.overlaps.length} overlap(s) ditemukan</strong> — allocation yang overlap tidak akan di-import.
+              <strong>{preview.overlaps.length} overlap(s) found</strong> — overlapping allocations will not be imported.
               {preview.overlaps.slice(0, 3).map((o, i) => (
                 <div key={i} style={{ fontSize: 11, fontFamily: "var(--font-mono)", marginTop: 2 }}>{o.a} &harr; {o.b}</div>
               ))}
@@ -275,7 +297,7 @@ export default function ImportPage() {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                 <thead>
                   <tr>
-                    {["", "#", "Prefix", "Customer", "VLAN", "Notes", "Status"].map(h => (
+                    {["", "#", "Prefix", "Customer", ...(ipVersion === "ipv6" ? [] : ["VLAN"]), "Notes", "Status"].map(h => (
                       <th key={h} style={{ padding: "6px 10px", textAlign: "left", color: DIM, fontWeight: 600, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: `1px solid ${BORDER}`, background: "var(--surface-2)", position: "sticky", top: 0 }}>{h}</th>
                     ))}
                   </tr>
@@ -301,7 +323,9 @@ export default function ImportPage() {
                           <input value={a.customer || ""} placeholder="—" onChange={e => setEditAllocs(prev => prev.map((x, j) => j === i ? { ...x, customer: e.target.value || null } : x))}
                             style={{ background: "transparent", border: "none", color: a.customer ? TEXT : DIM, fontSize: 12, width: "100%", outline: "none" }} />
                         </td>
+                        {ipVersion !== "ipv6" && (
                         <td style={{ padding: "5px 10px", color: DIM, fontFamily: "var(--font-mono)", fontSize: 11 }}>{a.vlan || "—"}</td>
+                        )}
                         <td style={{ padding: "5px 10px", color: DIM, fontSize: 11 }}>{a.notes || "—"}</td>
                         <td style={{ padding: "5px 10px" }}>
                           <span style={{ fontSize: 10, fontWeight: 600, padding: "1px 6px", borderRadius: 99, background: a.status === "active" ? "var(--success-surface)" : "var(--surface-3)", color: a.status === "active" ? SUCCESS : MUTED, border: `1px solid ${a.status === "active" ? "var(--success-border)" : "var(--border-soft)"}` }}>{a.status}</span>
@@ -342,7 +366,7 @@ export default function ImportPage() {
 
           {result.skipped > 0 && (
             <div style={{ padding: "10px 14px", borderRadius: 8, background: "var(--warning-surface)", border: "1px solid var(--warning-border)", fontSize: 12, color: WARN, marginBottom: 16 }}>
-              <strong>{result.skipped} allocation(s) di-skip</strong> — kemungkinan sudah ada di database atau status "available".
+              <strong>{result.skipped} allocation(s) skipped</strong> — likely already in database or status "available".
             </div>
           )}
 

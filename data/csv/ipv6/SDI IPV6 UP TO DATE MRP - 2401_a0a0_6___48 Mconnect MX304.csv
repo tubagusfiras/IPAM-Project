@@ -1,0 +1,82 @@
+2401:a0a0:6::/48,,
+,,
+,v1981-ipp-mx304-ls-agg-ipt,2401:a0a0:6::2/127
+,v1981-ipp-mx304-ls-agg-ipt,2401:a0a0:6::3/127
+,v1982-ipp-mx304-sdix-ambil-akam,2401:a0a0:6::4/127
+,v1982-ipp-mx304-sdix-ambil-akam,2401:a0a0:6::5/127
+,v1983-ipp-mx304-ls-sgix-mro2,2401:a0a0:6::6/127
+,v1983-ipp-mx304-ls-sgix-mro2,2401:a0a0:6::7/127
+,v1984-ipp-mx304-ls-eie-mro1,2401:a0a0:6::8/127
+,v1984-ipp-mx304-ls-eie-mro1,2401:a0a0:6::9/127
+,v1985-ipp-mx304-google-sg-pe1,2401:a0a0:6::10/127
+,v1985-ipp-mx304-google-sg-pe1,2401:a0a0:6::11/127
+,v1986-ipp-mx304-google-cloud-pe1,2401:a0a0:6::12/127
+,v1986-ipp-mx304-google-cloud-pe1,2401:a0a0:6::13/127
+,v1987-ipp-mx304-fna-pe1,2401:a0a0:6::14/127
+,v1987-ipp-mx304-fna-pe1,2401:a0a0:6::15/127
+,v1988-ipp-mx304-facebook-pe1,2401:a0a0:6::16/127
+,v1988-ipp-mx304-facebook-pe1,2401:a0a0:6::17/127
+,v1989-ipp-mx304-mro-2,2401:a0a0:6::18/127
+,v1989-ipp-mx304-mro-2,2401:a0a0:6::19/127
+,sbp,2401:a0a0:6::20/127
+,sbp,2401:a0a0:6::21/127
+,argon-internet-amariqindo,2401:a0a0:6::22/127
+,argon-internet-amariqindo,2401:a0a0:6::23/127
+,asia-akses-utama,2401:a0a0:6::24/127
+,asia-akses-utama,2401:a0a0:6::25/127
+,asriglobal,2401:a0a0:6::26/127
+,asriglobal,2401:a0a0:6::27/127
+,dian nuswantoro,2401:a0a0:6::28/127
+,dian nuswantoro,2401:a0a0:6::29/127
+,estiko ramanda,2401:a0a0:6::30/127
+,estiko ramanda,2401:a0a0:6::31/127
+,fiberlink,2401:a0a0:6::32/127
+,fiberlink,2401:a0a0:6::33/127
+,gading bhakti utama,2401:a0a0:6::34/127
+,gading bhakti utama,2401:a0a0:6::35/127
+,gmedia-BIP,2401:a0a0:6::36/127
+,gmedia-BIP,2401:a0a0:6::37/127
+,infotama ilg,2401:a0a0:6::38/127
+,infotama ilg,2401:a0a0:6::39/127
+,inovasi teknologi pintar,2401:a0a0:6::40/127
+,inovasi teknologi pintar,2401:a0a0:6::41/127
+,inter medialink solusi,2401:a0a0:6::42/127
+,inter medialink solusi,2401:a0a0:6::43/127
+,internet tjepat,2401:a0a0:6::44/127
+,internet tjepat,2401:a0a0:6::45/127
+,jaringan rtrw,2401:a0a0:6::46/127
+,jaringan rtrw,2401:a0a0:6::47/127
+,laxo,2401:a0a0:6::48/127
+,laxo,2401:a0a0:6::49/127
+,loveika host nusantara,2401:a0a0:6::50/127
+,loveika host nusantara,2401:a0a0:6::51/127
+,runnet,2401:a0a0:6::52/127
+,runnet,2401:a0a0:6::53/127
+,sandya sistem indonesia,2401:a0a0:6::54/127
+,sandya sistem indonesia,2401:a0a0:6::55/127
+,solusi basis teknologi,2401:a0a0:6::56/127
+,solusi basis teknologi,2401:a0a0:6::57/127
+,Golden Network,2401:a0a0:6::58/127
+,Golden Network,2401:a0a0:6::59/127
+,syawal atlantik,2401:a0a0:6::60/127
+,syawal atlantik,2401:a0a0:6::61/127
+,PT Linea Global Teknologi,2401:a0a0:6::62/127
+,PT Linea Global Teknologi,2401:a0a0:6::63/127
+,TELEMEDIA KOMUNIKASI PRATAMA,2401:a0a0:6::64/127
+,TELEMEDIA KOMUNIKASI PRATAMA,2401:a0a0:6::65/127
+,pni-304,2401:a0a0:6::66/127
+,pni-304,2401:a0a0:6::67/127
+,LS UPS 4 304,2401:a0a0:6::68/127
+,,2401:a0a0:6::69/127
+,TKP,2401:a0a0:6::70/127
+,TKP,2401:a0a0:6::71/127
+,Maxlink,2401:a0a0:6::72/127
+,Maxlink,2401:a0a0:6::73/127
+,palapa,2401:a0a0:6::74/127
+,palapa,2401:a0a0:6::75/127
+,subnet,2401:a0a0:6::76/127
+,subnet,2401:a0a0:6::77/127
+,GlobalTT,2401:a0a0:6::78/127
+,GlobalTT,2401:a0a0:6::79/127
+,Artha Lintas Data,2401:a0a0:6::80/127
+,Artha Lintas Data,2401:a0a0:6::81/127

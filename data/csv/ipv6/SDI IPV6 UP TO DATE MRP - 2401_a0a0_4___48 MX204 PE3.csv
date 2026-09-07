@@ -1,0 +1,16 @@
+2401:a0a0:4::/48,,
+,,
+,LS AGG LE to LE,2401:a0a0:4::2/127
+,LS AGG LE to LE,2401:a0a0:4::3/127
+,LS AGG Multi-ix to Multi-ix,2401:a0a0:4::4/127
+,LS AGG Multi-ix to Multi-ix,2401:a0a0:4::5/127
+,LS AGG IPT to MRO-1,2401:a0a0:4::6/127
+,LS AGG IPT to MRO-1,2401:a0a0:4::7/127
+,LS AGG IPT to 2-transit-sg,2401:a0a0:4::8/127
+,LS AGG IPT to 2-transit-sg,2401:a0a0:4::9/127
+,LS AGG IPT to LS IPT Kediri via Icon,2401:a0a0:4::10/127
+,LS AGG IPT to LS IPT Kediri via Icon,2401:a0a0:4::11/127
+,LS AGG IPT to LS IPT Kediri via FS,2401:a0a0:4::12/127
+,LS AGG IPT to LS IPT Kediri via FS,2401:a0a0:4::13/127
+,LS-AGG IPT to LS NAP,2401:a0a0:4::14/127
+,LS-AGG IPT to LS NAP,2401:a0a0:4::15/127

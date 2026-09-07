@@ -19,11 +19,11 @@ function timeAgo(dateStr) {
   if (diffMin < 60) return `${diffMin}m ago`;
   if (diffHr < 24) return `${diffHr}h ago`;
   if (diffDay < 7) return `${diffDay}d ago`;
-  return date.toLocaleDateString("id-ID");
+  return date.toLocaleDateString("en-US");
 }
 
 function formatDateTime(dateStr) {
-  return new Date(dateStr).toLocaleString("id-ID", {
+  return new Date(dateStr).toLocaleString("en-US", {
     day:"2-digit", month:"short", year:"numeric",
     hour:"2-digit", minute:"2-digit"
   });

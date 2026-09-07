@@ -4,7 +4,7 @@ import { Btn, Loading, EmptyState, PageHeader, Icons, Card, Tag, StatusBadge } f
 
 function formatTime(ts) {
   if (!ts) return "—";
-  return new Date(ts).toLocaleString("id-ID", {
+  return new Date(ts).toLocaleString("en-US", {
     day: "numeric", month: "short", year: "numeric",
     hour: "2-digit", minute: "2-digit",
   });
@@ -51,7 +51,7 @@ export default function VlanDetail({ vlanId, onBack, onNavigate }) {
   const sites      = [...new Set(allocs.map(a=>a.site_name).filter(Boolean))];
 
   return (
-    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+    <div className="page-enter" style={{display:"flex",flexDirection:"column",gap:16}}>
       {/* Header */}
       <PageHeader title={`VLAN ${data.vid}${data.name ? ` — ${data.name}` : ""}`} icon={Icons.network}>
         <Btn variant="ghost" size="sm" icon={Icons.arrowLeft} onClick={onBack}>Back to VLANs</Btn>
@@ -96,14 +96,14 @@ export default function VlanDetail({ vlanId, onBack, onNavigate }) {
 
             {data.description && <>
               <span style={{color:"var(--text-muted)"}}>Description</span>
-              <span style={{color:"var(--text-muted)"}}>{data.description}</span>
+              <span style={{fontSize:12,lineHeight:1.5}}>{data.description}</span>
             </>}
 
             <span style={{color:"var(--text-muted)"}}>Created</span>
-            <span style={{color:"var(--text-muted)",fontSize:11}}>{formatTime(data.created_at)}</span>
+            <span style={{fontSize:11}}>{formatTime(data.created_at)}</span>
 
             <span style={{color:"var(--text-muted)"}}>Updated</span>
-            <span style={{color:"var(--text-muted)",fontSize:11}}>{formatTime(data.updated_at)}</span>
+            <span style={{fontSize:11}}>{formatTime(data.updated_at)}</span>
           </div>
         </Card>
 
@@ -121,7 +121,7 @@ export default function VlanDetail({ vlanId, onBack, onNavigate }) {
                 : <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
                     {customers.map(c => (
                       <a key={c.id} onClick={e=>{e.preventDefault();onNavigate?.("customer-detail", {id:c.id, from:"vlan-detail"});}}
-                        href="#" style={{textDecoration:"none"}}>
+                        href={`#customer-detail/${c.id}`} style={{textDecoration:"none"}}>
                         <Tag color="var(--accent)">{c.name}</Tag>
                       </a>
                     ))}
@@ -193,13 +193,18 @@ export default function VlanDetail({ vlanId, onBack, onNavigate }) {
                         {a.prefix}
                       </td>
                       <td style={{padding:"7px 12px",color:"var(--text-muted)"}}>
-                        <span style={{fontFamily:"var(--font-mono)",fontSize:11}}>{a.block_prefix}</span>
-                        {a.block_name && <span style={{color:"var(--text-dim)",marginLeft:6}}>{a.block_name}</span>}
+                        <a onClick={e=>{e.preventDefault();onNavigate?.("block-detail",{id:a.block_id,from:"vlan-detail"});}}
+                          href={`#block-detail/${a.block_id}`} style={{textDecoration:"none",color:"var(--text-muted)",cursor:"pointer",transition:"color 0.12s"}}
+                          onMouseEnter={e=>e.currentTarget.style.color="var(--accent)"}
+                          onMouseLeave={e=>e.currentTarget.style.color="var(--text-muted)"}>
+                          <span style={{fontFamily:"var(--font-mono)",fontSize:11}}>{a.block_prefix}</span>
+                          {a.block_name && <span style={{color:"var(--text-dim)",marginLeft:6}}>{a.block_name}</span>}
+                        </a>
                       </td>
                       <td style={{padding:"7px 12px"}}>
                         {a.customer_id ? (
                           <a onClick={e=>{e.preventDefault();onNavigate?.("customer-detail", {id:a.customer_id, from:"vlan-detail"});}}
-                            href="#" style={{textDecoration:"none"}}>
+                            href={`#customer-detail/${a.customer_id}`} style={{textDecoration:"none"}}>
                             <span style={{color:"var(--accent)",cursor:"pointer"}}>{a.customer_name}</span>
                           </a>
                         ) : (

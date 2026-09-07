@@ -4,7 +4,7 @@ import { Btn, Loading, EmptyState, PageHeader, Icons, Card, Tag } from "../compo
 
 function formatTime(ts) {
   if (!ts) return "—";
-  return new Date(ts).toLocaleString("id-ID", {
+  return new Date(ts).toLocaleString("en-US", {
     day: "numeric", month: "short", year: "numeric",
     hour: "2-digit", minute: "2-digit",
   });
@@ -54,7 +54,7 @@ export default function CustomerDetail({ customerId, onBack, onNavigate }) {
   const vlans = [...vlanMap.values()];
 
   return (
-    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+    <div className="page-enter" style={{display:"flex",flexDirection:"column",gap:16}}>
       {/* Header */}
       <PageHeader title={data.name} icon={Icons.customers}>
         <Btn variant="ghost" size="sm" icon={Icons.arrowLeft} onClick={onBack}>Back to Customers</Btn>
@@ -96,14 +96,14 @@ export default function CustomerDetail({ customerId, onBack, onNavigate }) {
 
             {data.description && <>
               <span style={{color:"var(--text-muted)"}}>Description</span>
-              <span style={{color:"var(--text-muted)"}}>{data.description}</span>
+              <span style={{fontSize:12,lineHeight:1.5}}>{data.description}</span>
             </>}
 
             <span style={{color:"var(--text-muted)"}}>Created</span>
-            <span style={{color:"var(--text-muted)",fontSize:11}}>{formatTime(data.created_at)}</span>
+            <span style={{fontSize:11}}>{formatTime(data.created_at)}</span>
 
             <span style={{color:"var(--text-muted)"}}>Updated</span>
-            <span style={{color:"var(--text-muted)",fontSize:11}}>{formatTime(data.updated_at)}</span>
+            <span style={{fontSize:11}}>{formatTime(data.updated_at)}</span>
           </div>
         </Card>
 
@@ -156,7 +156,7 @@ export default function CustomerDetail({ customerId, onBack, onNavigate }) {
                 <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
                   {vlans.map(v => (
                     <a key={v.id} onClick={e=>{e.preventDefault();onNavigate?.("vlan-detail", {id:v.id, from:"customer-detail"});}}
-                      href="#" style={{textDecoration:"none"}}>
+                      href={`#vlan-detail/${v.id}`} style={{textDecoration:"none"}}>
                       <Tag color="var(--accent)" mono>
                         {v.vid}{v.name ? ` — ${v.name}` : ""}
                       </Tag>
@@ -196,13 +196,18 @@ export default function CustomerDetail({ customerId, onBack, onNavigate }) {
                         {a.prefix}
                       </td>
                       <td style={{padding:"7px 12px",color:"var(--text-muted)"}}>
-                        <span style={{fontFamily:"var(--font-mono)",fontSize:11}}>{a.block_prefix}</span>
-                        {a.block_name && <span style={{color:"var(--text-dim)",marginLeft:6}}>{a.block_name}</span>}
+                        <a onClick={e=>{e.preventDefault();onNavigate?.("block-detail",{id:a.block_id,from:"customer-detail"});}}
+                          href={`#block-detail/${a.block_id}`} style={{textDecoration:"none",color:"var(--text-muted)",cursor:"pointer",transition:"color 0.12s"}}
+                          onMouseEnter={e=>e.currentTarget.style.color="var(--accent)"}
+                          onMouseLeave={e=>e.currentTarget.style.color="var(--text-muted)"}>
+                          <span style={{fontFamily:"var(--font-mono)",fontSize:11}}>{a.block_prefix}</span>
+                          {a.block_name && <span style={{color:"var(--text-dim)",marginLeft:6}}>{a.block_name}</span>}
+                        </a>
                       </td>
                       <td style={{padding:"7px 12px"}}>
                         {a.vlan_id ? (
                           <a onClick={e=>{e.preventDefault();onNavigate?.("vlan-detail", {id:a.vlan_id, from:"customer-detail"});}}
-                            href="#" style={{textDecoration:"none"}}>
+                            href={`#vlan-detail/${a.vlan_id}`} style={{textDecoration:"none"}}>
                             <span style={{fontFamily:"var(--font-mono)",fontWeight:600,color:"var(--accent)",cursor:"pointer"}}>
                               {a.vlan_vid}{a.vlan_name ? ` — ${a.vlan_name}` : ""}
                             </span>

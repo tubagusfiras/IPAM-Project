@@ -4,7 +4,7 @@ import { Btn, Loading, EmptyState, PageHeader, Icons, Card } from "../components
 
 function formatTime(ts) {
   if (!ts) return "—";
-  return new Date(ts).toLocaleString("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return new Date(ts).toLocaleString("en-US", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 const FLAGS = {
@@ -207,7 +207,7 @@ export default function GlobalPingDetail({ ip: ipProp, onNavigate }) {
                   }
                   return a.country_code.localeCompare(b.country_code);
                 }).map((r, i) => {
-                  const flag = FLAGS[r.country_code] || "🏳️";
+                  const safeCode = (r.country_code || "").toLowerCase(); const flag = r.country_code ? <img src={`https://flagcdn.com/w40/${r.country_code.toLowerCase()}.png`} width="26" style={{ borderRadius: "2px", verticalAlign: "middle", boxShadow: "0 0 2px rgba(0,0,0,0.2)" }} alt={r.country_code} title={r.country_code.toUpperCase()} /> : "🏳️"; console.log("Cek Code:", r.country_code, "-> Safe:", safeCode, "-> Flag:", flag);
                   const isOnline = r.status === "online";
                   const latency = r.rtt_ms ? `${r.rtt_ms.toFixed(1)}ms` : "—";
                   

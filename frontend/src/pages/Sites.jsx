@@ -25,6 +25,7 @@ function SiteModal({ site, onClose, onSaved }) {
     setSaving(false);
   };
 
+
   const renderField = (label, k, placeholder) => (
     <div key={k}>
       <label style={{display:"block",fontSize:10,fontWeight:700,textTransform:"uppercase",
@@ -35,8 +36,8 @@ function SiteModal({ site, onClose, onSaved }) {
   );
 
   return (
-    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div className="modal" style={{maxWidth:440}}>
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey&&!e.ctrlKey&&!e.altKey&&e.target.tagName!=="TEXTAREA"&&e.target.tagName!=="BUTTON"&&e.target.tagName!=="SELECT"){e.preventDefault();e.stopPropagation();save();}}}>
+      <div className="modal" style={{maxWidth:440}} onSubmit={e=>{e.preventDefault();save();}}>
         <div className="modal-header">
           <div>
             <div style={{fontWeight:700,fontSize:15,color:"var(--text)"}}>
@@ -234,7 +235,7 @@ export default function Sites() {
                   )}
                   <div style={{marginLeft:"auto",fontSize:10,color:"var(--text-dim)",
                     fontFamily:"var(--font-mono)"}}>
-                    {new Date(s.created_at).toLocaleDateString("id-ID")}
+                    {new Date(s.created_at).toLocaleDateString("en-US")}
                   </div>
                 </div>
               </div>

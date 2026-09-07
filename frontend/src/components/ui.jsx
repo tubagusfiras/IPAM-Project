@@ -1,3 +1,5 @@
+import useModalKeys from "../hooks/useModalKeys.js";
+
 // ── TOKENS — CSS variables (auto-adapt ke light/dark) ────────
 export const C = {
   bg0:     "var(--bg)",
@@ -235,6 +237,7 @@ export function SearchBar({ value, onChange, placeholder, width=260 }) {
 
 // ── MODAL ────────────────────────────────────────────────────
 export function Modal({ title, onClose, children, width=520 }) {
+  useModalKeys({ onClose, open: true });
   return (
     <div style={{ position:"fixed", inset:0, background:"#000c", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center" }}
       onClick={e=>{ if(e.target===e.currentTarget) onClose(); }}>
@@ -254,9 +257,10 @@ export function Modal({ title, onClose, children, width=520 }) {
 }
 
 // ── CONFIRM DIALOG ───────────────────────────────────────────
-export function Confirm({ message, onConfirm, onCancel, title="Confirm Delete", cancelLabel="Cancel", confirmLabel="Delete" }) {
+export function Confirm({ message, onConfirm, onCancel, title="Confirm Delete", cancelLabel="Cancel", confirmLabel="Delete", zIndex }) {
+  useModalKeys({ onClose: onCancel, onSubmit: onConfirm, open: true });
   return (
-    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onCancel()}>
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onCancel()} style={zIndex ? {zIndex} : undefined}>
       <div className="modal" style={{maxWidth:380}}>
         <div className="modal-header">
           <div style={{fontWeight:700,fontSize:15,color:"var(--text)"}}>{title}</div>
@@ -430,13 +434,17 @@ export function EmptyState({ icon, title, message, action, onAction }) {
   return (
     <div style={{ textAlign:"center", padding:"60px 20px", color:C.text2 }}>
       {icon ? (
-        <div style={{ marginBottom:16, opacity:0.3, display:"flex", justifyContent:"center" }}>{icon}</div>
+        <div style={{ marginBottom:16, opacity:0.4, display:"flex", justifyContent:"center", transform:"scale(1.1)" }}>{icon}</div>
       ) : (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="48" height="48" style={{marginBottom:16,opacity:0.3}}><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        <svg viewBox="0 0 80 80" fill="none" width="80" height="80" style={{marginBottom:16,opacity:0.25}}>
+          <circle cx="40" cy="40" r="36" stroke="currentColor" strokeWidth="2" strokeDasharray="4 4"/>
+          <circle cx="40" cy="40" r="12" stroke="currentColor" strokeWidth="1.5"/>
+          <path d="M40 28v24M28 40h24" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.5"/>
+        </svg>
       )}
       {title && <div style={{ fontSize:15, fontWeight:600, color:C.text0, marginBottom:8 }}>{title}</div>}
-      {message && <div style={{ fontSize:13, marginBottom: action ? 16 : 0 }}>{message}</div>}
-      {action && onAction && <Btn variant="ghost" onClick={onAction}>{action}</Btn>}
+      {message && <div style={{ fontSize:13, marginBottom: action ? 16 : 0, color:C.text1, lineHeight:1.5 }}>{message}</div>}
+      {action && onAction && <Btn variant="ghost" onClick={onAction} style={{marginTop:4}}>{action}</Btn>}
     </div>
   );
 }
@@ -445,23 +453,29 @@ export function EmptyState({ icon, title, message, action, onAction }) {
 export function Loading({ message="Loading…" }) {
   return (
     <div style={{ color:C.text2, padding:"48px 0", textAlign:"center", fontSize:13, display:"flex", flexDirection:"column", alignItems:"center", gap:12 }}>
-      <div style={{ width:24, height:24, border:`2px solid ${C.border}`, borderTopColor:C.blue, borderRadius:"50%", animation:"spin 0.8s linear infinite" }} />
-      {message}
+      <div style={{ width:28, height:28, border:`2.5px solid ${C.border}`, borderTopColor:C.blue, borderRadius:"50%", animation:"spin 0.8s linear infinite" }} />
+      <span style={{color:C.text1}}>{message}</span>
     </div>
   );
 }
 
 // ── ALERT ────────────────────────────────────────────────────
 export function Alert({ type="error", message }) {
+  const icons = {
+    error:   <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" strokeWidth="1.5"/><path d="M10 6v5M10 13.5v.5" strokeLinecap="round"/></svg>,
+    success: <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" strokeWidth="1.5"/><path d="M7 10l2 2 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+    info:    <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" strokeWidth="1.5"/><path d="M10 9v4M10 7v.5" strokeLinecap="round"/></svg>,
+  };
   const colors = {
-    error:   { bg:"#1a0505", border:C.red,   text:"#fca5a5" },
-    success: { bg:"#051a0a", border:C.green,  text:"#86efac" },
-    info:    { bg:"#05101a", border:C.blue,   text:"#93c5fd" },
+    error:   { bg:"rgba(239,68,68,0.08)", border:"#ef4444", text:"#fca5a5" },
+    success: { bg:"rgba(34,197,94,0.08)", border:"#22c55e", text:"#86efac" },
+    info:    { bg:"rgba(59,130,246,0.08)", border:"#3b82f6", text:"#93c5fd" },
   };
   const c = colors[type];
   return (
-    <div style={{ background:c.bg, border:`1px solid ${c.border}44`, borderRadius:6, padding:"10px 14px", color:c.text, fontSize:13, marginBottom:12 }}>
-      {message}
+    <div style={{ background:c.bg, border:`1px solid ${c.border}33`, borderRadius:8, padding:"10px 14px", color:c.text, fontSize:13, marginBottom:12, display:"flex", alignItems:"center", gap:8, animation:"fadeUp 0.3s ease" }}>
+      <span style={{flexShrink:0,opacity:0.8}}>{icons[type]}</span>
+      <span style={{lineHeight:1.5}}>{message}</span>
     </div>
   );
 }

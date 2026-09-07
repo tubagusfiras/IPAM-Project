@@ -14,12 +14,25 @@ const OWNER_TYPES = OWNER_TYPE_VALUES.map(o => ({ ...o, ...OWNER_TYPE_STYLE[o.va
 
 // ── SUBNET VALIDATION ───────────────────────────────────────────────────────
 function isAligned(ip, plen) {
+  if (ip.includes(":")) {
+    const ipBn  = ipv6ToBigInt(ip);
+    const shift = BigInt(128 - plen);
+    const mask  = shift === 0n ? 0n : (~0n << shift) & ((1n << 128n) - 1n);
+    return (ipBn & ~mask) === 0n;
+  }
   const size = Math.pow(2, 32-plen);
   const ipInt = ipToInt(ip);
   return (ipInt % size) === 0;
 }
 
 function snapToBoundary(ip, plen) {
+  if (ip.includes(":")) {
+    const ipBn  = ipv6ToBigInt(ip);
+    const shift = BigInt(128 - plen);
+    const size  = 1n << shift;
+    const aligned = (ipBn / size) * size;
+    return bigIntToIPv6(aligned);
+  }
   const size = Math.pow(2, 32-plen);
   const ipInt = ipToInt(ip);
   const aligned = Math.floor(ipInt / size) * size;
@@ -27,6 +40,9 @@ function snapToBoundary(ip, plen) {
 }
 
 function nextValidBoundary(ip, plen, allocations) {
+  if (ip.includes(":")) {
+    return nextValidBoundaryV6(ip, plen, allocations);
+  }
   const size = Math.pow(2, 32-plen);
   let ipInt = ipToInt(ip);
   if (ipInt % size !== 0) ipInt = (Math.floor(ipInt/size)+1)*size;
@@ -44,6 +60,31 @@ function nextValidBoundary(ip, plen, allocations) {
       } catch {}
     }
     if (!overlaps) return intToIp(candidate>>>0);
+  }
+  return null;
+}
+
+function nextValidBoundaryV6(ip, plen, allocations) {
+  const ipBn  = ipv6ToBigInt(ip);
+  const shift = BigInt(128 - plen);
+  const size  = 1n << shift;
+  const aligned = (ipBn / size) * size;
+
+  for (let attempt = 0n; attempt < 256n; attempt++) {
+    const candidate = aligned + (attempt * size);
+    const candEnd   = candidate + size - 1n;
+    let overlaps = false;
+    for (const a of allocations) {
+      try {
+        if (!a.prefix.includes(":")) continue;
+        const [addr, p] = a.prefix.split("/");
+        const aStart = ipv6ToBigInt(addr);
+        const aSize  = 1n << BigInt(128 - parseInt(p));
+        const aEnd   = aStart + aSize - 1n;
+        if (candidate <= aEnd && candEnd >= aStart) { overlaps = true; break; }
+      } catch {}
+    }
+    if (!overlaps) return bigIntToIPv6(candidate);
   }
   return null;
 }
@@ -196,6 +237,31 @@ function changeMaskAligned(currentPrefix, newPlen, allocations) {
   if (!currentPrefix) return `0.0.0.0/${newPlen}`;
   try {
     const [ip] = currentPrefix.split("/");
+    const isV6 = ip.includes(":");
+
+    if (isV6) {
+      const snapped  = snapToBoundary(ip, newPlen);
+      const ipBn     = ipv6ToBigInt(snapped);
+      const shift    = BigInt(128 - newPlen);
+      const size     = 1n << shift;
+      const ipEnd    = ipBn + size - 1n;
+      let overlaps = false;
+      for (const a of (allocations||[])) {
+        if (a.status === "available") continue;
+        if (!a.prefix.includes(":")) continue;
+        try {
+          const [aAddr,aPlenStr] = a.prefix.split("/");
+          const aStart = ipv6ToBigInt(aAddr);
+          const aSize  = 1n << BigInt(128 - parseInt(aPlenStr));
+          const aEnd   = aStart + aSize - 1n;
+          if (ipBn <= aEnd && ipEnd >= aStart) { overlaps = true; break; }
+        } catch {}
+      }
+      if (!overlaps) return `${snapped}/${newPlen}`;
+      const next = nextValidBoundaryV6(snapped, newPlen, allocations);
+      return next ? `${next}/${newPlen}` : `${snapped}/${newPlen}`;
+    }
+
     const snapped = snapToBoundary(ip, newPlen);
     const size   = Math.pow(2, 32-newPlen);
     const ipInt  = ipToInt(snapped);
@@ -250,8 +316,7 @@ function calcUsableRange(prefix) {
       const network = base & mask;
       const bcast   = network | (~mask & ((1n<<128n)-1n));
       if (plen === 128) return addr;
-      if (plen === 127) return `${bigIntToIPv6(network)} — ${bigIntToIPv6(bcast)}`;
-      return `${bigIntToIPv6(network+1n)} — ${bigIntToIPv6(bcast-1n)}`;
+      return `${bigIntToIPv6(network)} — ${bigIntToIPv6(bcast)}`;
     }
     const parts = addr.split(".").map(Number);
     const toInt = p => ((p[0]<<24)|(p[1]<<16)|(p[2]<<8)|p[3])>>>0;
@@ -290,6 +355,7 @@ export {
   isAligned,
   snapToBoundary,
   nextValidBoundary,
+  nextValidBoundaryV6,
   expandIPv6,
   ipv6ToBigInt,
   isValidIPv6,
